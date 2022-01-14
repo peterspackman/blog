@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+    <channel>
+        <title>Peter R. Spackman Blog</title>
+        <link>https://peterspackman.github.io/blog</link>
+        <description>Peter R. Spackman Blog</description>
+        <lastBuildDate>Fri, 14 Jan 2022 00:00:00 GMT</lastBuildDate>
+        <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
+        <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Welcome]]></title>
+            <link>https://peterspackman.github.io/blog/welcome</link>
+            <guid>welcome</guid>
+            <pubDate>Fri, 14 Jan 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Welcome to the blog section. Not much to see yet, but I plan on actually posting on here from time to time.]]></description>
+            <content:encoded><![CDATA[<p>Welcome to the blog section. Not much to see yet, but I plan on actually posting on here from time to time.</p><p>This site is a mix of my personal site, and a wiki for me to write notes and equations related to my research
+in a publicly accessible way.</p><p>Partly so I have something to point people to for exposition, but mostly for my own reference and amusement.</p>]]></content:encoded>
+        </item>
+    </channel>
+</rss>
