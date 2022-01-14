@@ -10,7 +10,7 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'Computational Chemistry',
+    title: 'computational chemistry',
     image: '/img/atom.svg',
     description: (
       <>
@@ -19,7 +19,7 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Molecular Crystals',
+    title: 'molecular crystals',
     image: '/img/urea_crystal.svg',
     description: (
       <>
@@ -29,7 +29,7 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Software',
+    title: 'software development',
     image: '/img/software_vec.svg',
     description: (
       <>

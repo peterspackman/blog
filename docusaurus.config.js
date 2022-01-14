@@ -9,12 +9,13 @@ const katex = require('rehype-katex');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Peter R. Spackman',
-    tagline: 'Computational chemist, software enthusiast.',
-    url: 'https://your-docusaurus-test-site.com',
+    tagline: 'computational chemist & software enthusiast',
+    url: 'https://peterspackman.github.io/',
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'warn',
     favicon: 'img/favicon.ico',
+    trailingSlash: false,
     organizationName: 'peterspackman', // Usually your GitHub org/user name.
     projectName: 'blog', // Usually your repo name.
 
@@ -59,22 +60,28 @@ const config = {
                     type: 'doc',
                     docId: 'software',
                     position: 'left',
-                    label: 'Software',
+                    label: 'software',
                 },
-                {to: '/blog', label: 'Blog', position: 'left'},
+                {
+                    type: 'doc',
+                    docId: 'publications',
+                    position: 'left',
+                    label: 'papers',
+                },
+                {to: '/blog', label: 'blog', position: 'left'},
                 {
                     href: 'https://github.com/peterspackman',
-                    label: 'GitHub',
+                    label: 'github',
                     position: 'right',
                 },
                 {
                     href: 'https://scholar.google.com.au/citations?user=GmSR9oIAAAAJ',
-                    label: 'Google Scholar',
+                    label: 'google scholar',
                     position: 'right',
                 },
                 {
                     href: 'https://orcid.org/0000-0002-6532-8571',
-                    label: 'ORCiD',
+                    label: 'orcid',
                     position: 'right',
                 },
             ],
@@ -86,16 +93,16 @@ const config = {
                     title: 'Software',
                     items: [
                         {
-                            label: 'CrystalExplorer',
-                            to: '/docs/crystalexplorer',
+                            label: 'crystalexplorer',
+                            to: 'https://crystalexplorer.net',
                         },
                         {
                             label: 'chmpy',
-                            to: '/docs/chmpy',
+                            to: 'https://peterspackman.github.io/chmpy/',
                         },
                         {
                             label: 'tonto',
-                            to: '/docs/tonto',
+                            to: 'https://github.com/dylan-jayatilaka/tonto',
                         },
                     ],
                 },
@@ -103,22 +110,36 @@ const config = {
                     title: 'Social',
                     items: [
                         {
-                            label: 'Twitter',
+                            label: 'twitter',
                             href: 'https://twitter.com/prspackman',
                         },
+                        {
+                            label: 'github',
+                            href: 'https://github.com/peterspackman',
+                        },
                     ],
+                    
                 },
                 {
                     title: 'More',
                     items: [
                         {
-                            label: 'Blog',
+                            label: 'blog',
                             to: '/blog',
                         },
                         {
-                            label: 'GitHub',
-                            href: 'https://github.com/peterspackman',
+                            href: 'https://scholar.google.com.au/citations?user=GmSR9oIAAAAJ',
+                            label: 'google scholar',
                         },
+                        {
+                            href: 'https://orcid.org/0000-0002-6532-8571',
+                            label: 'orcid',
+                        },
+                        {
+                            href: 'https://publons.com/researcher/AAA-2424-2020/',
+                            label: 'publons'
+                        }
+
                     ],
                 },
             ],
