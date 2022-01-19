@@ -21,7 +21,7 @@ const config = {
 
     presets: [
         [
-            'classic',
+            '@docusaurus/preset-classic',
             /** @type {import('@docusaurus/preset-classic').Options} */
             ({
                 docs: {
@@ -36,7 +36,7 @@ const config = {
                     customCss: require.resolve('./src/css/custom.css'),
                 },
 
-                googleAnalytics: {
+                gtag: {
                     trackingID: 'G-W51GMN2E4G',
                     anonymizeIP: true,
                 },
