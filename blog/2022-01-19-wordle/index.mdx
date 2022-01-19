@@ -1,0 +1,33 @@
+---
+slug: wordle
+title: Wordle
+authors: [prs]
+tags: [wordle]
+---
+import Spoiler from './wordleSolutions'
+
+[Wordle](https://www.powerlanguage.co.uk/wordle/) is a simple, elegant
+word game which has become massively popular, at least on twitter.
+
+So far, the author hasn't commercialized it, and the social aspect
+of comparing your performance for the same puzzle to others every day
+clearly hits on something very appealing.
+
+
+As when any puzzle gets popular, there has been lots of discussion around
+wordle solvers. You might think "Oh he's changed the date on his computer"
+but it's really nothing at all intelligent on my part.
+Simply thanks to the hacker known as *View Page Source*, 
+I can reveal that it actually has a defined ordered list of words in plain text in
+its source code.
+
+I searched for the word for today in the source and noticed that
+the previous words for the past few days were right there too, so
+it was pretty clear that it indexing into this array of words based
+on date. While the code itself was minified, it was pretty straightforward
+to look for uses of the array and deduce the method.
+
+So without further ado, here's the ultimate strategy for completing wordle
+every day: **cheating**.
+
+<Spoiler></Spoiler>
