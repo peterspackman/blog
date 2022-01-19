@@ -10,7 +10,7 @@ const katex = require('rehype-katex');
 const config = {
     title: 'Peter R. Spackman',
     tagline: 'computational chemist & software enthusiast',
-    url: 'https://prs.wiki/',
+    url: 'https://www.prs.wiki/',
     baseUrl: '/',
     onBrokenLinks: 'throw',
     onBrokenMarkdownLinks: 'warn',
