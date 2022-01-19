@@ -4,9 +4,30 @@
         <title>Peter R. Spackman Blog</title>
         <link>https://prs.wiki/blog</link>
         <description>Peter R. Spackman Blog</description>
-        <lastBuildDate>Fri, 14 Jan 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 19 Jan 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[Wordle]]></title>
+            <link>https://prs.wiki/blog/wordle</link>
+            <guid>wordle</guid>
+            <pubDate>Wed, 19 Jan 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[Wordle is a simple, elegant]]></description>
+            <content:encoded><![CDATA[<p><a href="https://www.powerlanguage.co.uk/wordle/">Wordle</a> is a simple, elegant
+word game which has become massively popular, at least on twitter.</p><p>So far, the author hasn&#x27;t commercialized it, and the social aspect
+of comparing your performance for the same puzzle to others every day
+clearly hits on something very appealing.</p><p>As when any puzzle gets popular, there has been lots of discussion around
+wordle solvers. You might think &quot;Oh he&#x27;s changed the date on his computer&quot;
+but it&#x27;s really nothing at all intelligent on my part.
+Simply thanks to the hacker known as <em>View Page Source</em>,
+I can reveal that it actually has a defined ordered list of words in plain text in
+its source code.</p><p>I searched for the word for today in the source and noticed that
+the previous words for the past few days were right there too, so
+it was pretty clear that it indexing into this array of words based
+on date. While the code itself was minified, it was pretty straightforward
+to look for uses of the array and deduce the method.</p><p>So without further ado, here&#x27;s the ultimate strategy for completing wordle
+every day: <strong>cheating</strong>.</p><div></div>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Welcome]]></title>
             <link>https://prs.wiki/blog/welcome</link>

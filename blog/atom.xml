@@ -2,11 +2,36 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://prs.wiki/blog</id>
     <title>Peter R. Spackman Blog</title>
-    <updated>2022-01-14T00:00:00.000Z</updated>
+    <updated>2022-01-19T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://prs.wiki/blog"/>
     <subtitle>Peter R. Spackman Blog</subtitle>
     <icon>https://prs.wiki/img/favicon.ico</icon>
+    <entry>
+        <title type="html"><![CDATA[Wordle]]></title>
+        <id>wordle</id>
+        <link href="https://prs.wiki/blog/wordle"/>
+        <updated>2022-01-19T00:00:00.000Z</updated>
+        <summary type="html"><![CDATA[Wordle is a simple, elegant]]></summary>
+        <content type="html"><![CDATA[<p><a href="https://www.powerlanguage.co.uk/wordle/">Wordle</a> is a simple, elegant
+word game which has become massively popular, at least on twitter.</p><p>So far, the author hasn&#x27;t commercialized it, and the social aspect
+of comparing your performance for the same puzzle to others every day
+clearly hits on something very appealing.</p><p>As when any puzzle gets popular, there has been lots of discussion around
+wordle solvers. You might think &quot;Oh he&#x27;s changed the date on his computer&quot;
+but it&#x27;s really nothing at all intelligent on my part.
+Simply thanks to the hacker known as <em>View Page Source</em>,
+I can reveal that it actually has a defined ordered list of words in plain text in
+its source code.</p><p>I searched for the word for today in the source and noticed that
+the previous words for the past few days were right there too, so
+it was pretty clear that it indexing into this array of words based
+on date. While the code itself was minified, it was pretty straightforward
+to look for uses of the array and deduce the method.</p><p>So without further ado, here&#x27;s the ultimate strategy for completing wordle
+every day: <strong>cheating</strong>.</p><div></div>]]></content>
+        <author>
+            <name>Peter R. Spackman</name>
+            <uri>https://github.com/peterspackman</uri>
+        </author>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Welcome]]></title>
         <id>welcome</id>
