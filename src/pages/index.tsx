@@ -9,23 +9,23 @@ import HomepageFeatures from '../components/HomepageFeatures';
 function HomepageHeader() {
   const {siteConfig} = useDocusaurusContext();
   return (
-    <header className={clsx('hero hero--primary', styles.heroBanner)}>
-      <div className="container">
+    <header className={clsx('hero', styles.heroBanner)}>
+        <div className={clsx('container', styles.bg)}>
         <h1 className="hero__title">{siteConfig.title}</h1>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <div className={styles.buttons}>
           <Link
-            className="button button--primary button--lg"
+            className={clsx('button', 'button--primary', styles.buttonLink)}
             to="/docs/software">
             software
           </Link>
           <Link
-            className="button button--primary button--lg"
+            className={clsx('button', 'button--primary', styles.buttonLink)}
             to="/docs/publications">
             papers
           </Link>
           <Link
-            className="button button--primary button--lg"
+            className={clsx('button', 'button--primary', styles.buttonLink)}
             to="/blog/">
             blog
           </Link>
