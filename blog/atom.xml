@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-    <id>https://prs.wiki/blog</id>
+    <id>https://www.prs.wiki/blog</id>
     <title>Peter R. Spackman Blog</title>
     <updated>2022-01-19T00:00:00.000Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
-    <link rel="alternate" href="https://prs.wiki/blog"/>
+    <link rel="alternate" href="https://www.prs.wiki/blog"/>
     <subtitle>Peter R. Spackman Blog</subtitle>
-    <icon>https://prs.wiki/img/favicon.ico</icon>
+    <icon>https://www.prs.wiki/img/favicon.ico</icon>
     <entry>
         <title type="html"><![CDATA[Wordle]]></title>
         <id>wordle</id>
-        <link href="https://prs.wiki/blog/wordle"/>
+        <link href="https://www.prs.wiki/blog/wordle"/>
         <updated>2022-01-19T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Wordle is a simple, elegant]]></summary>
         <content type="html"><![CDATA[<p><a href="https://www.powerlanguage.co.uk/wordle/">Wordle</a> is a simple, elegant
@@ -35,7 +35,7 @@ every day: <strong>cheating</strong>.</p><div></div>]]></content>
     <entry>
         <title type="html"><![CDATA[Welcome]]></title>
         <id>welcome</id>
-        <link href="https://prs.wiki/blog/welcome"/>
+        <link href="https://www.prs.wiki/blog/welcome"/>
         <updated>2022-01-14T00:00:00.000Z</updated>
         <summary type="html"><![CDATA[Welcome to the blog section. Not much to see yet, but I plan on actually posting on here from time to time.]]></summary>
         <content type="html"><![CDATA[<p>Welcome to the blog section. Not much to see yet, but I plan on actually posting on here from time to time.</p><p>This site is a mix of my personal site, and a wiki for me to write notes and equations related to my research

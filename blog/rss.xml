@@ -2,14 +2,14 @@
 <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
     <channel>
         <title>Peter R. Spackman Blog</title>
-        <link>https://prs.wiki/blog</link>
+        <link>https://www.prs.wiki/blog</link>
         <description>Peter R. Spackman Blog</description>
         <lastBuildDate>Wed, 19 Jan 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <item>
             <title><![CDATA[Wordle]]></title>
-            <link>https://prs.wiki/blog/wordle</link>
+            <link>https://www.prs.wiki/blog/wordle</link>
             <guid>wordle</guid>
             <pubDate>Wed, 19 Jan 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Wordle is a simple, elegant]]></description>
@@ -30,7 +30,7 @@ every day: <strong>cheating</strong>.</p><div></div>]]></content:encoded>
         </item>
         <item>
             <title><![CDATA[Welcome]]></title>
-            <link>https://prs.wiki/blog/welcome</link>
+            <link>https://www.prs.wiki/blog/welcome</link>
             <guid>welcome</guid>
             <pubDate>Fri, 14 Jan 2022 00:00:00 GMT</pubDate>
             <description><![CDATA[Welcome to the blog section. Not much to see yet, but I plan on actually posting on here from time to time.]]></description>
