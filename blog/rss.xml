@@ -4,9 +4,140 @@
         <title>Peter R. Spackman Blog</title>
         <link>https://www.prs.wiki/blog</link>
         <description>Peter R. Spackman Blog</description>
-        <lastBuildDate>Wed, 19 Jan 2022 00:00:00 GMT</lastBuildDate>
+        <lastBuildDate>Tue, 25 Jan 2022 00:00:00 GMT</lastBuildDate>
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
+        <item>
+            <title><![CDATA[How to rotate MO coefficients]]></title>
+            <link>https://www.prs.wiki/blog/MO_rotation</link>
+            <guid>MO_rotation</guid>
+            <pubDate>Tue, 25 Jan 2022 00:00:00 GMT</pubDate>
+            <description><![CDATA[If you're a masochist like me, and you're writing or have written a quantum chemistry]]></description>
+            <content:encoded><![CDATA[<p>If you&#x27;re a masochist like me, and you&#x27;re writing or have written a quantum chemistry
+program, you&#x27;ll want to rotate molecular orbital (MO) coefficients
+to save yourself recalculating wavefunctions at different positions/orientations.
+Now that I&#x27;ve sufficiently reduced the interested audience for this to the point we
+could fit in the seats of a social-distanced sedan, let me take you on a painful
+but <em>hopefully</em> helpful journey.</p><p>Throughout this I&#x27;m going to assume that all rotations are about some common origin, $\mathbf{O}$,
+but of course you&#x27;re welcome to double the pain and mix in rotations about arbitrary points in space if you wish to be more general. I&#x27;m also going to put aside the various different
+ordering conventions, which will probably make you pull your hair out if you try to
+interoperate between many different programs.</p><p>But first we need a quick refresher on the difference between Cartesian and spherical/pure
+Gaussian basis sets like those used in quantum chemistry.
+Note that throughout this I&#x27;m going to ignore elaboration of the different normalizations
+within contracted Gaussians, because frankly that just makes the equations more verbose...</p><h2>Contracted Gaussian basis sets</h2><p>Contracted Gaussian functions are of the form</p><p>$$
+\chi(\mathbf{r}, \mathbf{r_k}) = \sum_k^K c_k N f(\mathbf{r} - \mathbf{r_k}) e^{-\alpha_k |\mathbf{r} - \mathbf{r_k}|^2}
+$$</p><p>where $K$ is the degree of contraction (i.e. number of primitive Gaussian functions),
+$N$ is the normalization constant we&#x27;re going to ignore for now, $\alpha_k$ is the
+exponent for each primitive basis function and $c_k$ the contraction coefficient.</p><p>Typically these sorts of basis sets will be in some library read in by the QM program of choice,
+e.g. this is an excerpt from the STO-3G basis set in <code>.gbs</code> format, with the left column being
+the $\alpha_k$, and the right column being $c_k$</p><pre><code>H     0 
+S   3   1.00
+      3.42525091             0.15432897       
+      0.62391373             0.53532814       
+      0.16885540             0.44463454   
+</code></pre><p>With the exception of the $f(\mathbf{r} - \mathbf{r_k})$ term, $\chi$ is purely radial.
+However, there are two common choices of $f$: Cartesian and spherical.</p><h2>Cartesian polynomials</h2><p>In a Cartesian Gaussian basis set, $f$ takes the following form based on angular momentum $l$:</p><p>$$
+\mathbf{r} - \mathbf{r_k} = <!-- -->{<!-- -->x,y,z<!-- -->}<!-- -->\<!-- -->
+f(x,y,z) = x^i y^j z^k
+$$</p><p>where $i + j + k = l$ and all of $i,j,k$ are whole numbers.</p><p>Because multiplication is commutative i.e. $x^2 y = y x^2$, for each angular momenta, $l$, there are a number of &#x27;unique&#x27;
+functions e.g.</p><table><thead><tr><th>Label</th><th>Angular momentum</th><th>#</th><th>Components</th></tr></thead><tbody><tr><td>$p$</td><td>$l = 1$</td><td><strong>3</strong></td><td>$x$, $y$. $z$</td></tr><tr><td>$d$</td><td>$l = 2$</td><td><strong>6</strong></td><td>$xx$, $xy$, $xz$, $yz$, $zz$</td></tr><tr><td>$f$</td><td>$l = 3$</td><td><strong>10</strong></td><td>$xxx$, $xxy$, $xxz$, $xyy$, $xyz$, $xzz$, $yyy$, $yyz$, $yzz$, $zzz$</td></tr></tbody></table><p>and so on...</p><h2>Spherical/Pure polynomials</h2><p>In a pure (or spherical) Gaussian basis set, $f$ usually corresponds to the <em>real</em> regular
+solid harmonics, which are directly related to the usual spherical harmonics $Y_l^m$
+These are a bit more of a rabbit hole..</p><p><strong>Spherical harmonics ($Y_l^m$)</strong></p><p>A much better overview of the spherical harmonics and their derivation can be found on
+<a href="https://en.wikipedia.org/wiki/Spherical_harmonics">wikipedia</a> or in any number of other
+places.</p><p>Nevertheless, they take the form:</p><p>$$
+Y_l^m(\theta,\phi) = N e^{im\phi} P_l^m \cos \theta
+$$</p><p>where $N$ is yet another different normalization factor, $\theta$ and $\phi$ are the polar
+angle/colatitude $<!-- -->[0, \pi]<!-- -->$ and the azimuthal angle/longitude $<!-- -->[0, 2 \pi]<!-- -->$ respectively,
+and $P_l^m$ is an  <a href="https://en.wikipedia.org/wiki/Associated_Legendre_polynomials">associated Legendre Polynomial</a></p><p><strong>Regular solid harmonics ($R_l^m$)</strong></p><p>Given the previous definition of the spherical harmonics, the regular solid harmonics
+take the form:</p><p>$$
+R_l^m(r, \theta, \phi) = \sqrt{\frac{4 \pi}{2 l + 1}} r^l Y_l^m(\theta, \phi)
+$$</p><p>or, simplified:
+$$
+R_l^m(r, \theta, \phi) = \sqrt{\frac{(l - m)!}{(l + m)!}} P_l^m(\cos \theta) e^{im\phi}
+$$</p><p><strong><em>Real</em> regular solid harmonics ($R_{l,m}$)</strong></p><p>Finally, the functions $f$ that are actually used are of the form:</p><p>$$
+f(r, \theta, \phi) = C<em>{l,m}(r, \theta, \phi)\ \mathrm{or}\ S</em>{l,m}(r,\theta,\phi)
+$$</p><p>where</p><p>$$
+R<em>{l,0} = C</em>{l,0} = R<em>l^0<!-- -->\<!-- -->
+R</em>{l,m} = C<em>{l,m} = \frac{1}{\sqrt{2}}((-1)^m R_l^m + R_l^{-m})\ \mathrm{where}\ m = 1 \ldots l <!-- -->\<!-- -->
+R</em>{l,m} = S_{l,m} = \frac{1}{i \sqrt{2}}((-1)^m R_l^m + R_l^{-m})\ \mathrm{where}\ m = -1 \ldots -l <!-- -->\<!-- -->
+$$</p><p>This means that there are $2 l + 1$ components for a pure Gaussian basis with angular
+momentum $l$  e.g.: </p><table><thead><tr><th>Label</th><th>Angular momentum</th><th>#</th><th>Components</th></tr></thead><tbody><tr><td>$p$</td><td>$l = 1$</td><td><strong>3</strong></td><td>$C<em>{10} = z$, $C</em>{11} = x$, $S_{11} = y$</td></tr><tr><td>$d$</td><td>$l = 2$</td><td><strong>5</strong></td><td>$C<em>{20}$, $C</em>{21}$, $S<em>{21}$, $C</em>{22}$, $S_{22}$</td></tr><tr><td>$f$</td><td>$l = 3$</td><td><strong>7</strong></td><td>$C<em>{30}$, $C</em>{31}$, $S<em>{31}$, $C</em>{32}$, $S<em>{32}$, $C</em>{33}$, $S_{33}$</td></tr></tbody></table><p>This should give a good idea why they find use in QM programs (fewer basis functions = fewer integrals to compute).</p><h2>Rotating Cartesian Gaussians</h2><p>One way to imagine the molecular orbital coefficients associated
+with a Cartesian Gaussian is as an $l$ rank tensor e.g. a $3 \times 3$
+matrix for a $d$ function, a $3 \times 3 \times 3$ cube for an $f$ etc.</p><p>This obviously is very wasteful, as only the upper triangle (or pyramid)
+is permutationally unique. As such, they&#x27;re typically stored as vectors
+(or columns of a matrix) of length </p><p>$$
+\frac{(l + 1)(l + 2)}{2}
+$$</p><p>This usually renders rotation of these coefficients in real space to be
+done by hand coded routines rather than a simple matrix multiply.</p><p>However, we can convert the rotation matrix into an appropriate matrix
+to perform the conversion via the following algorithm implemented in C++:</p><pre><code class="language-cpp" metastring="title=&quot;cg_rotation_matrix.cpp&quot;" title="&quot;cg_rotation_matrix.cpp&quot;">/*
+ * Result should be R: an MxM rotation matrix for 
+ * P: a MxN set of coordinates
+ * giving results P&#x27; = R P
+ *
+ * Assume that the poorly named power_index_arrays gives
+ * arrays of length l that look like the following:
+ * xy = {0, 1}
+ * xyz = {0, 1, 2}
+ * xxy = {0, 0, 1}
+ * xyx = {0, 1, 0}
+ */
+template &lt;int l&gt;
+Mat cartesian_gaussian_rotation_matrix(const Mat3x3 rotation) {
+    constexpr int num_moments = (l + 1) * (l + 2) / 2;
+    Mat result = Mat::Zero(num_moments, num_moments);
+    auto cg_powers = power_index_arrays&lt;l&gt;();
+    int p1_idx = 0;
+    for (const auto &amp;p1: cg_powers) {
+        int p2_idx = 0;
+        // copy as we&#x27;re permuting p2
+        for (auto p2: cg_powers) {
+            do {
+                double tmp{1.0};
+                for (int k = 0; k &lt; l; k++) {
+                    tmp *= rotation(p2[k], p1[k]);
+                }
+                result(p2_idx, p1_idx) += tmp;
+            } while (std::next_permutation(p2.begin(), p2.end()));
+            p2_idx++;
+        }
+        p1_idx++;
+    }
+    return result;
+}
+</code></pre><p>In essence this is just accounting for all the redundant terms we&#x27;d
+get that arise from the permutations of tensor indices. Going through
+the code line-by-line</p><p>So our rotated column vector (or block of a matrix) of molecular orbital
+coefficients will simply be</p><p>$$
+\mathbf{P}&#x27; = \mathbf{R} \mathbf{P}
+$$</p><h2>Rotating pure Gaussians</h2><p>If you&#x27;ve made it this far, well now we&#x27;re in for the more painful bit.</p><p>Obviously we can&#x27;t directly use the above rotation matrix for a set of
+pure Gaussian molecular orbital coefficients, but we can convert the
+coefficients to their equivalent Cartesian representation, perform the
+rotation, then convert back.</p><p>Frankly, I find this alternative preferable to dealing with <a href="https://en.wikipedia.org/wiki/Wigner_D-matrix">Wigner D matrices</a>,
+<a href="https://en.wikipedia.org/wiki/Clebsch%E2%80%93Gordan_coefficients">Clebsch-Gordan coefficients</a> or any of the other painful aspects of
+rotating spherical harmonics... </p><p><strong>Spherical to Cartesian transformations</strong></p><p>Thankfully, I&#x27;m far from the first person to have wanted to perform this conversion,
+so there are tabulated transforms (along with implementations to generate them) available
+e.g., in <a href="https://theochem.github.io/horton/2.0.2/tech_ref_gaussian_basis.html#transformation-from-cartesian-to-pure-basis-functions">HORTON</a>. Much of this is based on
+the <a href="https://onlinelibrary.wiley.com/doi/10.1002/qua.560540202">Schlegel &amp; Frisch paper</a>
+from the mid 90s.</p><p>This gives us $\mathbf{c}$, a transformation matrix which will convert from Cartesian coefficients
+to pure coefficients. But what of the inverse transform? $\mathbf{c}$ is not an invertible matrix (obviously, as it&#x27;s not square). Thankfully this is mentioned in the Schlegel &amp; Frisch
+paper, and we can find the inverse transformation via:</p><p>$$
+\mathbf{c} \mathbf{S} \mathbf{c}^\intercal = \mathbf{I}
+$$</p><p>$$
+\mathbf{c}^{-1} = \mathbf{S} \mathbf{c}^\intercal
+$$</p><p>Here $\mathbf{S}$ is the matrix of overlap between normalized Cartesian gaussians
+of the same total angular momentum, where (if $i,j,k$ are powers of $x,y,z$ respectively)
+$\mathbf{S}$ can be derived from the following horrible expression:</p><p>$$
+S(i_1, j_1, k_1, i_2, j_2, k_2) = \frac{(i_1 + i_2)! (j_1 + j_2)! (k_1 + k_2)!}{((i_1 + i_2)/2)! ((j_1 + j_2)/2)! ((k_1 + k_2)/2)!}
+\times \sqrt{\frac{i_1 ! j_1 ! k_1 ! i_2 ! j_2 ! k_2 !}{(2 i_1)! (2 j_1)! (2 k_1)! (2 i_2)! (2 j_2)! (2 k_2)!}}
+$$</p><p>where all of $i_1 + i_2$, $j_1 + j_2$ and $k_1 + k_2$ are even, $0$ otherwise.</p><p>The neat part after all of this, is that we can simply transform $\mathbf{R}$, the
+Cartesian Gaussian rotation matrix into $\mathbf{R}&#x27;$, the pure/spherical
+Gaussian rotation matrix as follows:</p><p>$$
+\mathbf{R}&#x27; = \mathbf{c} \mathbf{R} \mathbf{c}^{-1}
+$$</p><p>and perform the rotation directly on the spherical molecular orbital coefficients:</p><p>$$
+\mathbf{P}&#x27; = \mathbf{c} \mathbf{R} \mathbf{c}^{-1} \mathbf{P}
+$$</p><p>Whew... Hopefully I don&#x27;t have any errors in the equations, but if I do feel free
+to name and shame me for being so sloppy.</p>]]></content:encoded>
+        </item>
         <item>
             <title><![CDATA[Wordle]]></title>
             <link>https://www.prs.wiki/blog/wordle</link>

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkblog=self.webpackChunkblog||[]).push([[149],{7259:function(l){l.exports=JSON.parse('{"allTagsPath":"/blog/tags","slug":"/blog/tags/molecular-orbitals","name":"molecular orbitals","count":1,"permalink":"/blog/tags/molecular-orbitals"}')}}]);
