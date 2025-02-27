@@ -1,0 +1,250 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+  background-color: #111827;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  color: #e5e7eb;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: bold;
+  text-align: center;
+  color: white;
+  margin-bottom: 8px;
+}
+
+.gridContainer {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .gridContainer {
+    grid-template-columns: 4fr 1fr 2fr;
+  }
+}
+
+.mainVizWrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvasContainer {
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: black;
+  border: 2px solid #374151;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.infoPanel {
+  margin-top: 12px;
+  background-color: #1f2937;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #374151;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.infoTitle {
+  font-size: 18px;
+  font-weight: 600;
+  color: #93c5fd;
+  margin-bottom: 4px;
+}
+
+.infoLabel {
+  color: #9ca3af;
+}
+
+.infoValue {
+  color: white;
+}
+
+.infoHint {
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.colorScaleWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.colorScaleTitle {
+  color: white;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.colorScaleContainer {
+  position: relative;
+  height: 256px;
+}
+
+.colorScaleImage {
+  height: 100%;
+  border-radius: 4px;
+  border: 1px solid #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.colorScaleLabel {
+  position: absolute;
+  right: 32px;
+  color: white;
+  font-weight: 500;
+}
+
+.colorScaleLabelTop {
+  top: 0;
+}
+
+.colorScaleLabelMiddle {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.colorScaleLabelBottom {
+  bottom: 0;
+}
+
+.phasorWrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.phasorHint {
+  color: #9ca3af;
+  font-size: 14px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.controlsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background-color: #1f2937;
+  border-radius: 8px;
+  border: 1px solid #374151;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.controlsRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.rangeContainer {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 256px;
+}
+
+.rangeLabel {
+  width: 80px;
+  color: white;
+  font-weight: 500;
+}
+
+.rangeInput {
+  flex: 1;
+  margin: 0 8px;
+}
+
+.rangeValue {
+  width: 48px;
+  text-align: center;
+  color: white;
+}
+
+.controlGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.controlGroupTitle {
+  color: white;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.controlOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controlOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controlOptionLabel {
+  color: #e5e7eb;
+}
+
+.explanationContainer {
+  margin-top: 8px;
+  padding: 20px;
+  background-color: #1f2937;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 1px solid #374151;
+}
+
+.explanationTitle {
+  font-size: 20px;
+  font-weight: bold;
+  color: #93c5fd;
+  margin-bottom: 12px;
+}
+
+.explanationText {
+  color: #e5e7eb;
+  line-height: 1.5;
+}
+
+.explanationList {
+  list-style-type: disc;
+  padding-left: 24px;
+  margin-top: 8px;
+  color: #e5e7eb;
+}
+
+.explanationListItem {
+  margin-bottom: 4px;
+}
+
+.explanationNote {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #93c5fd;
+  font-weight: 500;
+}

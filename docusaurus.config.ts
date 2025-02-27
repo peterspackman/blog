@@ -84,6 +84,21 @@ const config: Config = {
         },
         {to : '/blog', label : 'blog', position : 'left'},
         {
+          type: 'dropdown',
+          label: 'QM visualisations',
+          position: 'left',
+          items: [
+            {
+              label: '1D',
+              href: '/qm1d',
+            },
+            {
+              label: '2D',
+              href: '/qm2d',
+            },
+          ],
+        },
+        {
           href : 'https://github.com/peterspackman',
           label : 'github',
           position : 'right',

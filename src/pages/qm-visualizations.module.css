@@ -1,0 +1,116 @@
+.mainContainer {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.header p {
+  font-size: 1.2rem;
+  max-width: 800px;
+  margin: 0 auto 1.5rem;
+}
+
+.toggleButtons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.toggleButton {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--ifm-color-primary);
+  background-color: transparent;
+  color: var(--ifm-color-primary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toggleButton:hover {
+  background-color: var(--ifm-color-primary-lightest);
+}
+
+.activeButton {
+  background-color: var(--ifm-color-primary);
+  color: white;
+}
+
+.visualizationContainer {
+  background-color: var(--ifm-background-surface-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: center; /* Center horizontally */
+  width: 100%;
+}
+
+.visualization {
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Center items vertically within the flex column */
+  width: 100%;
+  max-width: 900px; /* You can adjust this based on your visualization size */
+}
+
+.centeredVisualization {
+  margin: 0 auto;
+  display: block;
+}
+
+.visualization h2 {
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.visualization svg,
+.visualization canvas {
+  margin: 0 auto;
+  display: block;
+  max-width: 100%;
+}
+
+.explanation {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  width: 100%;
+  max-width: 800px;
+}
+
+.explanation h3 {
+  margin-bottom: 1rem;
+}
+
+.explanation p {
+  line-height: 1.6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .mainContainer {
+    padding: 1rem;
+  }
+  
+  .header h1 {
+    font-size: 2rem;
+  }
+  
+  .visualization {
+    overflow-x: auto;
+    width: 100%;
+  }
+}
+
