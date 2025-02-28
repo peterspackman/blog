@@ -161,7 +161,7 @@ const OrbitalMixerImpl = ({ Components }) => {
           time: { value: 0 },
           renderMode: { value: renderMode },
           aspectRatio: { value: 1.0 },
-          edgeThreshold: { value: 0.0001 },
+          edgeThreshold: { value: 0.01 },
           edgeWidth: { value: 0.00001 },
           cameraPos: { value: new THREE.Vector3() },
           cameraDirection: { value: new THREE.Vector3() },
@@ -208,10 +208,10 @@ uniform int orbital_count;
 varying vec2 vUv;
 
 #define PI 3.14159265359
-#define MAX_STEPS 65
-#define STEP_SIZE 0.12
-#define DENSITY_THRESHOLD 0.0002
-#define MAX_DISTANCE 20.0
+#define MAX_STEPS 100
+#define STEP_SIZE 0.5
+#define DENSITY_THRESHOLD 0.00002
+#define MAX_DISTANCE 100.0
 
 // Maximum L value we'll support
 #define MAX_L 4
@@ -230,6 +230,42 @@ varying vec2 vUv;
 #define SQRT_14 3.74166
 #define SQRT_15 3.87298
 #define SQRT_35 5.91608
+
+float factorial(float n) {
+    // For L≤4, the maximum factorial we need is 8! (for L=4, m=4)
+    if (n <= 0.0) return 1.0;
+    else if (n == 1.0) return 1.0;
+    else if (n == 2.0) return 2.0;
+    else if (n == 3.0) return 6.0;
+    else if (n == 4.0) return 24.0;
+    else if (n == 5.0) return 120.0;
+    else if (n == 6.0) return 720.0;
+    else if (n == 7.0) return 5040.0;
+    else if (n == 8.0) return 40320.0;
+    
+    // Fallback computation for larger values (should never be needed with MAX_L=4)
+    float o = 1.0;
+    for (float i = 1.0; i <= n; i++) 
+        o *= i;
+    return o;
+}
+
+// Improved Laguerre function with fixed pointer issue
+float laguerre(float x, float k, float a) {
+    float L0 = 1.;
+    float L1 = 1.+a-x;
+    for (float i = 0.; i < k; i++) {
+        float t = ((2.*i+1.+a-x)*L1-(i+a)*L0)/(i+1.);
+        L0 = L1;
+        L1 = t;
+    }
+    return L1;
+}
+
+// Normalization function kept the same for compatibility
+float normalization(float n, float l) {
+    return sqrt(pow(2./n,3.)/(2.*n)*factorial(n-l-1.)/factorial(n+l));
+}
 
 // Computes spherical harmonic Y_l^m in Cartesian form
 // Input: normalized direction vector (x,y,z)
@@ -405,11 +441,12 @@ vec2 hydrogenOrbitalOptimized(vec3 pos, int n, int l, int m, float phase) {
     // Compute spherical harmonic using optimized Cartesian formula
     vec2 ylm = getYlmCartesian(l, m, dir);
     
-    // Compute radial part
-    float radial = radialFunction(r, n, l);
-    
+    float p = 2.0*length(pos)/float(n);
+    float radial = laguerre(p, float(n-l)-1., 2.*float(l)+1.);
+    radial *= exp(-p*.5)*pow(p, float(l));
+    vec2 result = ylm * radial * normalization(float(n), float(l));
     // Apply phase and return complete wavefunction
-    return applyPhase(ylm * radial, phase);
+    return applyPhase(result, phase);
 }
 
 // Get combined wavefunction at a position (replacing the original function)
@@ -477,7 +514,7 @@ vec4 raymarch(vec3 ro, vec3 rd) {
     
     // Calculate adaptive step size based on camera distance
     float baseStepSize = STEP_SIZE;
-    float maxDistance = min(MAX_DISTANCE, 2.0 * length(cameraPos));
+    float maxDistance = min(MAX_DISTANCE, 10.0 * length(cameraPos));
     
     // Ray-sphere intersection test for early culling
     float b = dot(ro, rd);
@@ -563,18 +600,14 @@ vec4 raymarch(vec3 ro, vec3 rd) {
                 intensity = density * intensityScale;
             }
             
-            // Visual enhancements
-            color = mix(color, vec3(1.0), 0.25 * sqrt(intensity));
-            
             // Soft edges
-            float edgeTransition = edgeWidth * 0.6;
-            float boundaryFactor = smoothstep(edgeThreshold, edgeThreshold + edgeTransition, density);
-            boundaryFactor = sqrt(boundaryFactor);
+            float boundaryFactor = smoothstep(edgeThreshold, edgeThreshold + edgeWidth, density);
+            boundaryFactor = boundaryFactor;
             
             // Alpha and compositing
-            float alpha = min(intensity * boundaryFactor * 2.5, maxAlpha);
+            float alpha = min(intensity * boundaryFactor, maxAlpha);
             float depthFactor = 1.0 - clamp(length(p - ro) / maxDistance, 0.0, 1.0);
-            alpha *= mix(0.7, 1.5, depthFactor);
+            alpha *= mix(0.85, 1.3, depthFactor);
             
             // Create sample
             vec4 samp = vec4(color * intensity * boundaryFactor, alpha);
@@ -585,7 +618,7 @@ vec4 raymarch(vec3 ro, vec3 rd) {
             accum.a += (1.0 - accum.a) * samp.a;
             
             // Early termination if nearly opaque
-            if (accum.a > 0.95) break;
+            if (accum.a > 0.98) break;
         }
         
         // Step along ray
@@ -593,8 +626,8 @@ vec4 raymarch(vec3 ro, vec3 rd) {
     }
     
     // Tone mapping
-    accum.rgb = accum.rgb / (0.5 + accum.rgb);
-    accum.rgb = pow(accum.rgb, vec3(0.8)) * 1.15;
+    accum.rgb = accum.rgb / (0.8 + accum.rgb);
+    accum.rgb = pow(accum.rgb, vec3(0.8)) * 1.7;
     
     return accum;
 }
@@ -694,7 +727,7 @@ void main() {
   };
 
   return (
-    <div style={{ position: 'relative', height: '700px' }}>
+    <div style={{ position: 'relative', height: '500px' }}>
       <div style={{
         position: 'absolute',
         zIndex: 10,
@@ -702,7 +735,7 @@ void main() {
         background: 'rgba(0,0,0,0.7)',
         color: 'white',
         borderRadius: '5px',
-        maxHeight: '650px',
+        maxHeight: '500px',
         overflowY: 'auto',
         width: '300px'
       }}>
@@ -887,13 +920,13 @@ void main() {
 
       <Canvas
         camera={{
-          position: [0, 0, 3],
+          position: [0, 10, 10],
           zoom: 1.5,
           near: 0.1,
           far: 1000,
           orthographic: true
         }}
-        style={{ background: '#111' }}
+        style={{ background: '#111', height: "500px" }}
       >
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} />
