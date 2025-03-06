@@ -85,19 +85,24 @@ const config: Config = {
         { to: '/blog', label: 'blog', position: 'left' },
         {
           type: 'dropdown',
-          label: 'qm visualisations',
+          label: 'visualisations',
           position: 'left',
           items: [
             {
-              label: '1D',
+              label: "Bragg's Law",
+              href: '/bragg',
+            },
+
+            {
+              label: 'QM 1D',
               href: '/qm1d',
             },
             {
-              label: '2D',
+              label: 'QM 2D',
               href: '/qm2d',
             },
             {
-              label: '3D',
+              label: 'QM 3D',
               href: '/qm3d',
             },
           ],
