@@ -67,12 +67,11 @@ const config: Config = {
     navbar: {
       logo: {
         alt: 'Peter R. Spackman',
-        src: 'img/logo.svg',
+        src: 'img/prs.png',
       },
       items: [
         {
-          type: 'doc',
-          docId: 'software',
+          to: '/software',
           position: 'left',
           label: 'software',
         },
@@ -136,11 +135,11 @@ const config: Config = {
             },
             {
               label: 'chmpy',
-              to: 'https://peterspackman.github.io/chmpy/',
+              to: 'https://github.com/peterspackman/chmpy/',
             },
             {
-              label: 'tonto',
-              to: 'https://github.com/dylan-jayatilaka/tonto',
+              label: 'occ',
+              to: 'https://github.com/peterspackman/occ',
             },
           ],
         },

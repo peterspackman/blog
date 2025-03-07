@@ -10,44 +10,46 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'computational chemistry',
-    image: '/img/atom.svg',
+    title: 'Computational Chemistry',
+    image: '/img/repulsion.png',
     description: (
       <>
-        Method development &amp; implementation - quantum chemistry, force-fields and more...
+        Research on method development and implementation in quantum chemistry.
+        Work includes electronic structure theory and molecular modeling approaches.
       </>
     ),
   },
   {
-    title: 'molecular crystals',
+    title: 'Molecular Crystals',
     image: '/img/urea_crystal.svg',
     description: (
       <>
-        Analysis &amp; visualisation, prediction of crystal structure, crystal
-        growth and properties...
+        Analysis and visualization of crystalline structures using CrystalExplorer.
+        Research on crystal structure prediction and property characterization.
       </>
     ),
   },
   {
-    title: 'software development',
-    image: '/img/software_vec.svg',
+    title: 'Scientific Software',
+    image: '/img/urea_dough.png',
     description: (
       <>
-        Predominantly scientific software in mostly python and C++. But also C, javascript, rust &amp; fortran.
+        Development of Open Computational Chemistry (OCC), a molecular quantum mechanics program.
+        Scientific programming in Python, C++, JavaScript, and other languages.
       </>
     ),
   },
 ];
 
-function Feature({title, image, description}: FeatureItem) {
+function Feature({ title, image, description }: FeatureItem) {
   return (
     <div className={clsx('col col--4')}>
       <div className="text--center">
         <img className={styles.featureSvg} alt={title} src={image} />
       </div>
       <div className="text--center padding-horiz--md">
-        <h3>{title}</h3>
-        <p>{description}</p>
+        <h3 className="margin-bottom--sm">{title}</h3>
+        <p className="margin-bottom--lg">{description}</p>
       </div>
     </div>
   );

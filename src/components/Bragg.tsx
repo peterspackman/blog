@@ -288,7 +288,7 @@ const WaveInterferenceVisualization = () => {
                         ref={canvasRef}
                         width={800}
                         height={450}
-                        className="bg-white border border-gray-300 rounded-lg shadow-sm"
+                        className={styles.canvas}
                     />
                 </div>
             </div>

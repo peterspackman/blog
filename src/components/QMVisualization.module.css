@@ -2,71 +2,83 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 24px;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  background-color: var(--ifm-card-background-color, #f9fafb);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  box-shadow: var(--ifm-global-shadow-lw, 0 2px 4px rgba(0, 0, 0, 0.1));
+  margin-bottom: var(--ifm-spacing-vertical, 1.5rem);
+  width: 100%;
 }
 
 .title {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1f2937;
-  margin: 0 0 16px 0;
+  font-size: var(--ifm-h2-font-size, 24px);
+  font-weight: var(--ifm-heading-font-weight, bold);
+  color: var(--ifm-heading-color, #1f2937);
+  margin: 0 0 var(--ifm-spacing-vertical, 16px) 0;
 }
 
 .flexContainer {
   display: flex;
   flex-direction: row;
-  gap: 16px;
+  gap: var(--ifm-spacing-horizontal, 16px);
 }
 
 /* Visualization Layout */
 .visualizationRow {
   display: flex;
   flex-direction: row;
-  gap: 16px;
+  gap: var(--ifm-spacing-horizontal, 16px);
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .mainVisualizationColumn {
   flex: 2;
+  min-width: 320px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ifm-spacing-vertical, 16px);
 }
 
 .phasorColumn {
   flex: 1;
+  min-width: 250px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--ifm-spacing-vertical, 16px);
 }
 
 .canvasContainer {
-  border: 1px solid #d1d5db;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--ifm-color-emphasis-300, #d1d5db);
+  background-color: var(--ifm-background-color, white);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0, 0, 0, 0.05));
   overflow: hidden;
 }
 
 .canvas {
   width: 100%;
   display: block;
+  max-width: 100%;
 }
 
 /* Color scale */
 .colorScaleContainer {
-  margin-top: 8px;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid #eeeeee;
+  margin-top: var(--ifm-spacing-vertical, 8px);
+  padding: var(--ifm-spacing-horizontal, 8px);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  border: 1px solid var(--ifm-color-emphasis-200, #eeeeee);
 }
 
 .colorScaleCanvas {
   width: 100%;
   display: block;
+  max-width: 100%;
+}
+
+.colorScaleLabel {
+  font-size: var(--ifm-small-font-size, 0.875rem);
+  color: var(--ifm-color-content, #374151);
 }
 
 .colorScaleWrapper {
@@ -74,13 +86,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: var(--ifm-spacing-vertical, 8px);
 }
 
 .colorScaleTitle {
-  font-size: 16px;
-  font-weight: 600;
-  color: #4b5563;
+  font-size: var(--ifm-h4-font-size, 16px);
+  font-weight: var(--ifm-font-weight-semibold, 600);
+  color: var(--ifm-color-content, #4b5563);
   margin: 0;
   text-align: center;
 }
@@ -184,23 +196,23 @@
 
 /* Controls Section */
 .controlsSection {
-  margin-top: 16px;
+  margin-top: var(--ifm-spacing-vertical, 16px);
 }
 
 .controlsContainer {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  background-color: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  gap: var(--ifm-spacing-vertical, 16px);
+  padding: var(--ifm-card-padding, 16px);
+  background-color: var(--ifm-background-color, white);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  border: 1px solid var(--ifm-color-emphasis-200, #e5e7eb);
 }
 
 .controlsRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: var(--ifm-spacing-horizontal, 20px);
 }
 
 .controlButton {
@@ -300,90 +312,90 @@
 
 /* Explanation */
 .explanationContainer {
-  margin-top: 24px;
-  padding: 20px;
-  background-color: #eff6ff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  border: 1px solid #dbeafe;
+  margin-top: var(--ifm-spacing-vertical, 24px);
+  padding: var(--ifm-card-padding, 20px);
+  background-color: var(--ifm-color-emphasis-100, #eff6ff);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0, 0, 0, 0.05));
+  border: 1px solid var(--ifm-color-emphasis-200, #dbeafe);
 }
 
 .explanationTitle {
-  font-size: 18px;
-  font-weight: bold;
-  color: #1e40af;
-  margin-bottom: 12px;
+  font-size: var(--ifm-h3-font-size, 18px);
+  font-weight: var(--ifm-heading-font-weight, bold);
+  color: var(--ifm-color-primary-darker, #1e40af);
+  margin-bottom: var(--ifm-heading-margin-bottom, 12px);
 }
 
 .explanationText {
-  color: #1f2937;
-  line-height: 1.5;
-  margin-bottom: 16px;
+  color: var(--ifm-font-color-base, #1f2937);
+  line-height: var(--ifm-line-height-base, 1.5);
+  margin-bottom: var(--ifm-paragraph-margin-bottom, 16px);
 }
 
 .explanationList {
-  margin: 8px 0 16px 20px;
+  margin: var(--ifm-list-margin, 8px 0 16px 20px);
   padding: 0;
-  color: #1f2937;
+  color: var(--ifm-font-color-base, #1f2937);
 }
 
 .explanationListItem {
-  margin-bottom: 8px;
-  line-height: 1.5;
+  margin-bottom: var(--ifm-list-item-margin, 8px);
+  line-height: var(--ifm-line-height-base, 1.5);
 }
 
 .explanationNote {
-  margin-top: 16px;
-  padding: 12px;
-  background-color: #dbeafe;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #2563eb;
-  font-weight: 500;
-  line-height: 1.4;
+  margin-top: var(--ifm-spacing-vertical, 16px);
+  padding: var(--ifm-alert-padding-vertical, 12px) var(--ifm-alert-padding-horizontal, 12px);
+  background-color: var(--ifm-color-info-contrast-background, #dbeafe);
+  border-radius: var(--ifm-alert-border-radius, 6px);
+  font-size: var(--ifm-small-font-size, 14px);
+  color: var(--ifm-color-primary, #2563eb);
+  font-weight: var(--ifm-font-weight-semibold, 500);
+  line-height: var(--ifm-line-height-base, 1.4);
 }
 
 /* State Energies Section */
 .stateEnergiesContainer {
-  margin-top: 20px;
-  padding: 16px;
-  background-color: #f0f9ff;
-  border-radius: 8px;
-  border: 1px solid #bae6fd;
+  margin-top: var(--ifm-spacing-vertical, 20px);
+  padding: var(--ifm-card-padding, 16px);
+  background-color: var(--ifm-color-info-contrast-background, #f0f9ff);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  border: 1px solid var(--ifm-color-emphasis-200, #bae6fd);
 }
 
 .stateEnergiesList {
-  margin: 8px 0 0 20px;
+  margin: var(--ifm-list-margin, 8px 0 0 20px);
   padding: 0;
 }
 
 .stateEnergiesItem {
-  margin-bottom: 8px;
-  line-height: 1.5;
-  color: #0c4a6e;
+  margin-bottom: var(--ifm-list-item-margin, 8px);
+  line-height: var(--ifm-line-height-base, 1.5);
+  color: var(--ifm-color-info-dark, #0c4a6e);
 }
 
 /* Legend */
 .legendContainer {
   width: 250px;
-  border: 1px solid #d1d5db;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  padding: 16px;
+  border: 1px solid var(--ifm-color-emphasis-300, #d1d5db);
+  background-color: var(--ifm-background-color, white);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  box-shadow: var(--ifm-global-shadow-lw, 0 1px 2px rgba(0, 0, 0, 0.05));
+  padding: var(--ifm-card-padding, 16px);
 }
 
 .legendTitle {
-  font-size: 18px;
-  font-weight: 600;
-  color: #4b5563;
-  margin-bottom: 12px;
+  font-size: var(--ifm-h4-font-size, 18px);
+  font-weight: var(--ifm-font-weight-semibold, 600);
+  color: var(--ifm-color-content, #4b5563);
+  margin-bottom: var(--ifm-heading-margin-bottom, 12px);
 }
 
 .legendItems {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ifm-spacing-vertical, 12px);
 }
 
 .legendItem {
@@ -427,11 +439,25 @@
   .controlGroup {
     width: 100%;
   }
+
+  .legendContainer {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
+  }
 }
 
 @media (max-width: 768px) {
   .infoGrid {
     grid-template-columns: 1fr;
+  }
+  
+  .canvas {
+    height: auto;
+  }
+  
+  .container {
+    padding: var(--ifm-spacing-horizontal, 12px);
   }
 }
 

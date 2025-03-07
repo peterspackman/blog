@@ -6,6 +6,20 @@ sidebar_position: 2
 
 Comprehensive list of my peer-reviewed works.
 
+### 2024
+- Cruz-Cabeza, A. J.; Spackman, P. R.; Hall, A. V. The interplay between hydrogen bonds and stacking/T-type interactions in molecular cocrystals. *Communications Chemistry* **2024**, 7, 128. [🔗](https://doi.org/10.1038/s42004-024-01380-3)
+- Spackman, P. R. A solid solution to computational challenges presented by crystal structures exhibiting disorder. *IUCrJ* **2024**, 11(3), 275-276. [🔗](https://doi.org/10.1107/S2052252524003130)
+
+### 2023
+- Spackman, P. R.; Walisinghe, A. J.; Anderson, M. W.; Gale, J. D. CrystalClear: an open, modular protocol for predicting molecular crystal growth from solution. *Chemical Science* **2023**, 14(26), 7192-7207. [🔗](https://doi.org/10.1039/D2SC06761G)
+- Jago, D.; Walkey, M. C.; Gaschk, E. E.; Spackman, P. R.; Piggott, M. J.; Moggach, S. A.; Koutsantonis, G. A. Multistate Switching of Some Ruthenium Alkynyl and Vinyl Spiropyran Complexes. *Inorganic Chemistry* **2023**, 62(31), 12283-12297. [🔗](https://doi.org/10.1021/acs.inorgchem.3c01190)
+- Gillespie, A. A.; Roemer, M.; Jago, D.; Sobolev, A. N.; Nealon, G. L.; Spackman, P. R.; Moggach, S. A.; Koutsantonis, G. A. Functionalised organometallic photoswitches containing dihydropyrene units. *Dalton Transactions* **2023**, 52(40), 14549-14563. [🔗](https://doi.org/10.1039/D3DT02505E)
+- Spackman, P. R.; Spackman, M. A.; Gale, J. D. A transferable quantum mechanical energy model for intermolecular interactions using a single empirical parameter. *IUCrJ* **2023**, 10(6), 754-765. [🔗](https://doi.org/10.1107/S2052252523008941)
+
+### 2022
+- Roemer, M.; Gillespie, A.; Jago, D.; Costa-Milan, D.; Alqahtani, J.; Hurtado-Gallego, J.; Sadeghi, H.; Lambert, C. J.; Spackman, P. R.; Sobolev, A. N.; et al. 2, 7-and 4, 9-Dialkynyldihydropyrene molecular switches: syntheses, properties, and charge transport in single-molecule junctions. *Journal of the American Chemical Society* **2022**, 144(28), 12698-12714. [🔗](https://doi.org/10.1021/jacs.2c03088)
+- O'Shaughnessy, M.; Spackman, P. R.; Little, M.; Catalano, L.; James, A. M.; Day, G. M.; Cooper, A. Targeted design of porous materials without strong, directional interactions. *Chemical Communications* **2022**, 58, 5072-5075. [🔗](https://doi.org/10.1039/D2CC00242F)
+
 ### 2021
 - Gale, J. D.; LeBlanc, L. M.; Spackman, P. R.; Silvestri, A.; Raiteri, P. A Universal Force Field for Materials, Periodic GFN-FF: Implementation and Examination. *J. Chem. Theory Comput.* **2021**, 17 (12), 7827–7849. [🔗](https://doi.org/10.1021/acs.jctc.1c00832)
 - Spackman, P. R.; Grosjean, A.; Thomas, S. P.; Karothu, D. P.; Naumov, P.; Spackman, M. A. Quantifying Mechanical Properties of Molecular Crystals: A Critical Overview of Experimental Elastic Tensors. *Angewandte Chemie* **2021**. [🔗](https://doi.org/10.1002/ange.202110716)

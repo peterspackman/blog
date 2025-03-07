@@ -1,12 +1,14 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding: 24px;
-  background-color: #111827;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-  color: #e5e7eb;
+  gap: var(--ifm-spacing-vertical, 24px);
+  padding: var(--ifm-card-padding, 24px);
+  background-color: var(--ifm-card-background-color, #111827);
+  border-radius: var(--ifm-card-border-radius, 8px);
+  box-shadow: var(--ifm-global-shadow-md, 0 4px 6px rgba(0, 0, 0, 0.2));
+  color: var(--ifm-font-color-base, #e5e7eb);
+  margin-bottom: var(--ifm-spacing-vertical, 1.5rem);
+  width: 100%;
 }
 
 .title {

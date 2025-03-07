@@ -440,26 +440,26 @@ const Particle2DBox = () => {
               ref={colorScaleRef}
               width={512}
               height={40}
-              className="colorScaleCanvas"
+              className={styles.colorScaleCanvas}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginTop: '8px' }}>
               {displayMode === 'probability' ? (
                 <>
-                  <span className="colorScaleLabel">0</span>
-                  <span className="colorScaleLabel">Probability Density</span>
-                  <span className="colorScaleLabel">Max</span>
+                  <span className={styles.colorScaleLabel}>0</span>
+                  <span className={styles.colorScaleLabel}>Probability Density</span>
+                  <span className={styles.colorScaleLabel}>Max</span>
                 </>
               ) : displayMode === 'real' ? (
                 <>
-                  <span className="colorScaleLabel">Min</span>
-                  <span className="colorScaleLabel">0</span>
-                  <span className="colorScaleLabel">Max</span>
+                  <span className={styles.colorScaleLabel}>Min</span>
+                  <span className={styles.colorScaleLabel}>0</span>
+                  <span className={styles.colorScaleLabel}>Max</span>
                 </>
               ) : (
                 <>
-                  <span className="colorScaleLabel">Min</span>
-                  <span className="colorScaleLabel">0</span>
-                  <span className="colorScaleLabel">Max</span>
+                  <span className={styles.colorScaleLabel}>Min</span>
+                  <span className={styles.colorScaleLabel}>0</span>
+                  <span className={styles.colorScaleLabel}>Max</span>
                 </>
               )}
             </div>
@@ -474,7 +474,7 @@ const Particle2DBox = () => {
                 ref={phasorCanvasRef}
                 width={phasorGridSize}
                 height={phasorGridSize}
-                className="canvas"
+                className={styles.canvas}
               />
             </div>
             <p className={styles.phasorHint}>Click on a phasor circle to toggle quantum states</p>
