@@ -299,7 +299,7 @@ const WaveInterferenceVisualization = () => {
                         <div className={styles.controlsRow}>
                             <div className={styles.rangeContainer}>
                                 <label className={styles.rangeLabel}>
-                                    Wavelength (λ): {wavelength} Å
+                                    Wavelength (λ): {wavelength.toFixed(2)} Å
                                 </label>
                                 <input
                                     type="range"
@@ -316,7 +316,7 @@ const WaveInterferenceVisualization = () => {
                         <div className={styles.controlsRow}>
                             <div className={styles.rangeContainer}>
                                 <label className={styles.rangeLabel}>
-                                    Lattice Spacing (d): {latticeSpacing} Å
+                                    Lattice Spacing (d): {latticeSpacing.toFixed(2)} Å
                                 </label>
                                 <input
                                     type="range"
@@ -332,7 +332,7 @@ const WaveInterferenceVisualization = () => {
                         <div className={styles.controlsRow}>
                             <div className={styles.rangeContainer}>
                                 <label className={styles.rangeLabel}>
-                                    Incident Angle (θ): {incidentAngle}°
+                                    Incident Angle (θ): {incidentAngle.toFixed(2)}°
                                 </label>
                                 <input
                                     type="range"

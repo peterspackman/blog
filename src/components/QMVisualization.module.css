@@ -259,9 +259,16 @@
 }
 
 .rangeLabel {
+  display: flex;
+  justify-content: space-between;
+  width: 30%;
   min-width: 60px;
   color: #4b5563;
   font-weight: 500;
+}
+
+.rangeLabelText {
+  width: 70%; /* Adjust as needed */
 }
 
 .rangeInput {
