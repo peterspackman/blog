@@ -101,8 +101,8 @@ const config: Config = {
               href: '/qm2d',
             },
             {
-              label: 'QM 3D',
-              href: '/qm3d',
+              label: 'Spherical Harmonics',
+              href: '/spherical-harmonics',
             },
           ],
         },
