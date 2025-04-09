@@ -315,7 +315,7 @@ const SphericalHarmonicsViewer = () => {
   return (
     <div className={styles.container}>
       <h2 className={styles.title}>
-        Spherical harmonic <MathFormula math={`Y_${l}^${m}`} />
+        Spherical harmonic <MathFormula math={`Y_${l}^{{${m}}}`} />
       </h2>
 
       <div

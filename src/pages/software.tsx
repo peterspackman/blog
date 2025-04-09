@@ -140,9 +140,9 @@ export default function Software(): JSX.Element {
               </div>
 
               <div className={styles.visualizationCard}>
-                <h3>Hydrogen-like Orbitals</h3>
-                <p>3D rendering of hydrogen-like atomic orbitals</p>
-                <Link to="/qm3d" className="button button--outline button--primary">
+                <h3>Spherical harmonics</h3>
+                <p>3D rendering of spherical harmonics</p>
+                <Link to="/spherical-harmonics" className="button button--outline button--primary">
                   View Visualization
                 </Link>
               </div>
