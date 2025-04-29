@@ -104,6 +104,10 @@ const config: Config = {
               label: 'Spherical Harmonics',
               href: '/spherical-harmonics',
             },
+            {
+              label: 'Molecular Dynamics',
+              href: '/md',
+            },
           ],
         },
         {
