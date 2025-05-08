@@ -108,6 +108,10 @@ const config: Config = {
               label: 'Molecular Dynamics',
               href: '/md',
             },
+            {
+              label: 'Crystal Structures',
+              href: '/crystals',
+            },
           ],
         },
         {
