@@ -1,0 +1,19 @@
+.svgContainer {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background-color: var(--ifm-color-emphasis-0);
+  border-radius: var(--ifm-global-radius);
+}
+
+.draggablePoint {
+  cursor: grab;
+}
+
+.draggablePoint:active {
+  cursor: grabbing;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
