@@ -10,12 +10,8 @@ export default function MD(): JSX.Element {
     <Layout
       title="Molecular Dynamics"
       description="Interactive visualizations of molecular dynamics for">
-      <main className={styles.mainContainer}>
-        <div className={styles.visualizationContainer}>
-          <div className={styles.visualization}>
-            <MolecularDynamics className={styles.centeredVisualization} />
-          </div>
-        </div>
+      <main style={{ width: '100%', maxWidth: 'none', padding: 0 }}>
+        <MolecularDynamics />
       </main>
     </Layout>
   );

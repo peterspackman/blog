@@ -1,47 +1,159 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Button from './Button';
-import MathFormula from './MathFormula';
-import styles from './QMVisualization.module.css';
 
-// Main simulation component
+// Import modular systems
+import { BoundaryCondition, BoundaryType, createBoundaryCondition, type Bounds } from './md/BoundaryConditions';
+import { PotentialManager, createDefaultPotentials, LennardJonesPotential, CoulombPotential } from './md/Potentials';
+import { Thermostat, ThermostatType, createThermostat, type ParticleSystemData } from './md/Thermostats';
+import { Barostat, BarostatType, createBarostat, applyBoxScaling, type SystemBox } from './md/Barostats';
+import { AnalyticsEngine } from './md/Analytics';
+import SimulationControls from './md/SimulationControls';
+import AnalyticsPlot from './md/AnalyticsPlot';
+
+interface ParticleData extends ParticleSystemData {
+    oldAccelerations: Float32Array;
+    types: Uint8Array;
+    typeCounts: number[];
+}
+
 const MolecularDynamics = () => {
-    // Canvas settings
-    const canvasRef = useRef(null);
-    const containerRef = useRef(null);
-    const [width, setWidth] = useState(600);
-    const [height, setHeight] = useState(400);
+    // Resizable canvas (must be first)
+    const [canvasWidth, setCanvasWidth] = useState(800);
+    const [canvasHeight, setCanvasHeight] = useState(600);
+    
+    // Canvas and UI refs
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const animationFrameId = useRef<number>(0);
+    
+    // Canvas dimensions (use resizable values)
+    const [width, setWidth] = useState(800);
+    const [height, setHeight] = useState(600);
+    
+    // Initialize canvas size to match container
+    useEffect(() => {
+        if (containerRef.current) {
+            const containerRect = containerRef.current.getBoundingClientRect();
+            const initialWidth = Math.max(400, containerRect.width * 0.75 - 32); // 75% of container minus padding
+            const initialHeight = Math.max(300, Math.min(600, initialWidth * 0.6)); // Maintain reasonable aspect ratio
+            
+            setCanvasWidth(initialWidth);
+            setCanvasHeight(initialHeight);
+        }
+    }, []);
+
+    // Update canvas size when resizable dimensions change
+    useEffect(() => {
+        setWidth(canvasWidth);
+        setHeight(canvasHeight);
+    }, [canvasWidth, canvasHeight]);
 
     // Simulation parameters
     const [temperature, setTemperature] = useState(0.3);
     const [numParticles, setNumParticles] = useState(100);
     const [timeStep, setTimeStep] = useState(0.015);
     const [running, setRunning] = useState(false);
-    const [draggingParticle, setDraggingParticle] = useState(null);
+    const [draggingParticle, setDraggingParticle] = useState<number | null>(null);
     const [stepsPerFrame, setStepsPerFrame] = useState(30);
 
-    // Unit conversion: angstroms to pixels (for visualization)
-    const [visualScale, setVisualScale] = useState(5.0); // pixels per angstrom
-
-    // Particle size in angstroms (actual particle radius)
-    const [baseParticleRadius, setBaseParticleRadius] = useState(1.5); // in angstroms
+    // Fixed coordinate scale for position conversion (angstroms to pixels)
+    const coordinateScale = 5.0; // Fixed scale for positions
+    // Visual scale only affects circle size
+    const [visualScale, setVisualScale] = useState(5.0);
+    const [baseParticleRadius, setBaseParticleRadius] = useState(1.5);
 
     // Particle data using typed arrays
-    const [particleData, setParticleData] = useState(null);
-    const [blueCount, setBlueCount] = useState(0);
+    const [particleData, setParticleData] = useState<ParticleData | null>(null);
 
     // Type definitions and parameters
-    const [numTypes, setNumTypes] = useState(2); // Start with 2 types: blue and orange
+    const [numTypes] = useState(2);
     const [typeColors, setTypeColors] = useState(['rgba(255, 165, 0, 0.8)', 'rgba(0, 0, 255, 0.8)']);
-
-    // Potential parameters - now arrays/matrices for different types
-    const [epsilonMatrix, setEpsilonMatrix] = useState([[1.0, 0.8], [0.8, 1.0]]); // kJ/mol
-    const [sigmaMatrix, setSigmaMatrix] = useState([[3.5, 3.2], [3.2, 3.0]]); // angstroms
-    const [charges, setCharges] = useState([1.0, -1.0]); // elementary charge units
-
-    // Global epsilon and sigma scaling factors (for UI control)
+    const [epsilonMatrix, setEpsilonMatrix] = useState([[1.0, 0.8], [0.8, 1.0]]);
+    const [sigmaMatrix, setSigmaMatrix] = useState([[3.5, 3.2], [3.2, 3.0]]);
+    const [charges, setCharges] = useState([1.0, -1.0]);
     const [epsilonScale, setEpsilonScale] = useState(1.0);
     const [sigmaScale, setSigmaScale] = useState(1.0);
     const [chargeScale, setChargeScale] = useState(1.0);
+
+    // Modular system instances
+    const [potentialManager, setPotentialManager] = useState<PotentialManager | null>(null);
+    const [boundaryCondition, setBoundaryCondition] = useState<BoundaryCondition | null>(null);
+    const [thermostat, setThermostat] = useState<Thermostat | null>(null);
+    const [analytics, setAnalytics] = useState<AnalyticsEngine | null>(null);
+    
+    // Boundary and thermostat types
+    const [boundaryType, setBoundaryType] = useState<BoundaryType>(BoundaryType.REFLECTIVE);
+    const [thermostatType, setThermostatType] = useState<ThermostatType>(ThermostatType.LANGEVIN);
+    
+    // Particle type ratio (orange vs blue)
+    const [orangeRatio, setOrangeRatio] = useState(0.5); // 50% orange, 50% blue
+    
+    // These are now handled by the sub-components
+    
+    // Resize handle
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartPos = useRef({ x: 0, y: 0 });
+    const resizeStartSize = useRef({ width: 0, height: 0 });
+    
+    const handleResizeStart = (e: React.MouseEvent) => {
+        setIsResizing(true);
+        resizeStartPos.current = { x: e.clientX, y: e.clientY };
+        resizeStartSize.current = { width: canvasWidth, height: canvasHeight };
+        e.preventDefault();
+    };
+    
+    const handleResizeMove = (e: MouseEvent) => {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - resizeStartPos.current.x;
+        const deltaY = e.clientY - resizeStartPos.current.y;
+        
+        const newWidth = Math.max(400, Math.min(1200, resizeStartSize.current.width + deltaX));
+        const newHeight = Math.max(300, Math.min(800, resizeStartSize.current.height + deltaY));
+        
+        setCanvasWidth(newWidth);
+        setCanvasHeight(newHeight);
+    };
+    
+    const handleResizeEnd = () => {
+        setIsResizing(false);
+    };
+    
+    useEffect(() => {
+        if (isResizing) {
+            document.addEventListener('mousemove', handleResizeMove);
+            document.addEventListener('mouseup', handleResizeEnd);
+            return () => {
+                document.removeEventListener('mousemove', handleResizeMove);
+                document.removeEventListener('mouseup', handleResizeEnd);
+            };
+        }
+    }, [isResizing]);
+
+    // Proper 2D quasi-random sequence generator (Halton sequence)
+    const generateQuasiRandom = (n: number): number[][] => {
+        const points: number[][] = [];
+        
+        // Halton sequence using bases 2 and 3 for better 2D distribution
+        const halton = (index: number, base: number): number => {
+            let result = 0;
+            let f = 1 / base;
+            let i = index;
+            while (i > 0) {
+                result += f * (i % base);
+                i = Math.floor(i / base);
+                f = f / base;
+            }
+            return result;
+        };
+        
+        for (let i = 0; i < n; i++) {
+            const x = halton(i + 1, 2); // Base 2 for x-coordinate
+            const y = halton(i + 1, 3); // Base 3 for y-coordinate
+            points.push([x, y]);
+        }
+        return points;
+    };
+
 
     // Add this function to your component
     const normalizeCanvasDPI = () => {
@@ -100,53 +212,67 @@ const MolecularDynamics = () => {
         };
     };
 
-    // Potentials and forces - updated to use proper mixing rules
-    const calculateLennardJones = (r, type1, type2) => {
-        // Get epsilon and sigma for this type pair, applying the scale factor
-        const eps = epsilonMatrix[type1][type2] * epsilonScale;
-        const sig = sigmaMatrix[type1][type2] * sigmaScale;
+    // Initialize modular systems
+    useEffect(() => {
+        const manager = createDefaultPotentials(epsilonMatrix, sigmaMatrix, charges);
+        
+        // Update potential parameters when scales change
+        const ljPotential = manager.getPotentials()[0] as LennardJonesPotential;
+        const coulombPotential = manager.getPotentials()[1] as CoulombPotential;
+        
+        ljPotential.updateParameters(epsilonMatrix, sigmaMatrix, epsilonScale, sigmaScale);
+        coulombPotential.updateCharges(charges, chargeScale);
+        
+        setPotentialManager(manager);
+    }, [epsilonMatrix, sigmaMatrix, charges, epsilonScale, sigmaScale, chargeScale]);
 
-        if (r < 0.001) return { potential: 1000, force: 1000 }; // Avoid division by zero
+    // Initialize boundary conditions
+    useEffect(() => {
+        if (width && height) {
+            const physicsScale = 5.0; // Fixed physics scale
+            const bounds: Bounds = {
+                xMin: baseParticleRadius,
+                xMax: width / physicsScale - baseParticleRadius,
+                yMin: baseParticleRadius,
+                yMax: height / physicsScale - baseParticleRadius
+            };
+            const boundary = createBoundaryCondition(boundaryType, bounds);
+            setBoundaryCondition(boundary);
+        }
+    }, [boundaryType, width, height, baseParticleRadius]);
 
-        // LJ calculation with sigma, r in angstroms, epsilon in kJ/mol
-        const sigOverR = sig / r;
-        const sigOverR6 = Math.pow(sigOverR, 6);
+    // Initialize thermostat (only when type changes)
+    useEffect(() => {
+        const thermo = createThermostat(thermostatType, temperature, timeStep);
+        setThermostat(thermo);
+    }, [thermostatType, timeStep]);
 
-        const potential = 4 * eps * (Math.pow(sigOverR6, 2) - sigOverR6);
-        const force = 24 * eps * (sigOverR6 - 2 * Math.pow(sigOverR6, 2)) / r;
+    // Update thermostat target temperature when temperature changes
+    useEffect(() => {
+        if (thermostat) {
+            thermostat.setTargetTemperature(temperature);
+        }
+    }, [temperature, thermostat]);
 
-        return { potential, force };
-    };
+    // Initialize analytics
+    useEffect(() => {
+        const analyticsEngine = new AnalyticsEngine(1.0, 2000, 10.0, 100); // Increased history to 2000 points
+        setAnalytics(analyticsEngine);
+    }, []);
 
-    const calculateCoulomb = (r, q1, q2) => {
-        // Coulomb's constant in units compatible with our system
-        // Using simplified units where charges are scaled
-        const k = 138.935; // (kJ/mol)·Å/e² - Coulomb constant
-
-        if (r < 0.001) return { potential: 1000, force: 1000 }; // Avoid division by zero
-
-        // q1 and q2 are charges in elementary charge units, scaled by chargeScale
-        const scaledQ1 = q1 * chargeScale;
-        const scaledQ2 = q2 * chargeScale;
-
-        const potential = k * scaledQ1 * scaledQ2 / r;
-        const force = -k * scaledQ1 * scaledQ2 / (r * r);
-
-        return { potential, force };
-    };
-
-    // Initialize particles
+    // Initialize particles (only reset for fundamental changes)
     useEffect(() => {
         initializeParticles();
-    }, [numParticles, numTypes]);
+    }, [numParticles, numTypes, orangeRatio, width, height, boundaryType, thermostatType]);
 
     const initializeParticles = () => {
         // Create new typed arrays for particles
         const newParticleData = createParticleArrays(numParticles);
 
-        // Calculate appropriate grid size based on available space
-        const effectiveWidth = width / visualScale;  // convert to angstroms
-        const effectiveHeight = height / visualScale;
+        // Calculate simulation space in angstroms (independent of visual scale)
+        const physicsScale = 5.0; // Fixed physics scale: pixels to angstroms
+        const effectiveWidth = width / physicsScale;
+        const effectiveHeight = height / physicsScale;
 
         // Determine grid dimensions based on aspect ratio
         const aspectRatio = effectiveWidth / effectiveHeight;
@@ -169,24 +295,30 @@ const MolecularDynamics = () => {
         // Reset type counters
         newParticleData.typeCounts.fill(0);
 
-        // Distribute particles of different types
+        // Generate quasi-random positions for better distribution
+        const quasiPoints = generateQuasiRandom(numParticles);
+        
+        // Calculate deterministic particle type distribution
+        const numOrange = Math.floor(numParticles * orangeRatio);
+        const numBlue = numParticles - numOrange;
+        newParticleData.typeCounts[0] = numOrange; // Orange
+        newParticleData.typeCounts[1] = numBlue;   // Blue
+
+        // Distribute particles using quasi-random positions
         for (let i = 0; i < numParticles; i++) {
-            const row = Math.floor(i / gridCols);
-            const col = i % gridCols;
+            // Use quasi-random points scaled to simulation bounds
+            const margin = baseParticleRadius * 2;
+            const xPos = margin + quasiPoints[i][0] * (effectiveWidth - 2 * margin);
+            const yPos = margin + quasiPoints[i][1] * (effectiveHeight - 2 * margin);
 
-            // Positions in angstroms (not screen pixels)
-            const xPos = baseParticleRadius * 2 + col * spacingX + (Math.random() - 0.5) * (spacingX * 0.3);
-            const yPos = baseParticleRadius * 2 + row * spacingY + (Math.random() - 0.5) * (spacingY * 0.3);
-
-            // Assign random velocities (Maxwell-Boltzmann)
+            // Assign velocities with Maxwell-Boltzmann distribution
             const angle = Math.random() * 2 * Math.PI;
-            const speed = Math.sqrt(-2 * Math.log(Math.random())) * Math.sqrt(temperature);
+            const speed = Math.sqrt(-2 * Math.log(Math.max(0.001, Math.random()))) * Math.sqrt(temperature);
 
-            // Assign types, currently just 2 types with roughly equal distribution
-            const typeIdx = Math.floor(Math.random() * numTypes);
-            newParticleData.typeCounts[typeIdx]++;
+            // Assign types deterministically: first numOrange particles are orange, rest are blue
+            const typeIdx = i < numOrange ? 0 : 1;
 
-            // Store in typed arrays - interleaved x,y for better memory access
+            // Store in typed arrays
             const idx = i * 2;
             newParticleData.positions[idx] = xPos;
             newParticleData.positions[idx + 1] = yPos;
@@ -197,16 +329,20 @@ const MolecularDynamics = () => {
             newParticleData.oldAccelerations[idx] = 0;
             newParticleData.oldAccelerations[idx + 1] = 0;
             newParticleData.types[i] = typeIdx;
-            newParticleData.masses[i] = 1.0; // Could vary by type if needed
+            newParticleData.masses[i] = 1.0;
         }
 
-        setBlueCount(newParticleData.typeCounts[1]); // For display purposes
+        // Reset and update analytics with new particle types
+        if (analytics) {
+            analytics.reset(); // Clear all previous data
+            analytics.setParticleTypes(newParticleData.types);
+        }
         setParticleData(newParticleData);
     };
 
-    // Calculate forces between particles - optimized with typed arrays
+    // Calculate forces between particles using modular potential system
     const calculateForces = () => {
-        if (!particleData) return;
+        if (!particleData || !potentialManager) return;
 
         // Reset accelerations
         particleData.accelerations.fill(0);
@@ -217,24 +353,20 @@ const MolecularDynamics = () => {
         const masses = particleData.masses;
         const count = particleData.count;
 
-        // Calculate pairwise forces with spatial optimization
-        // Set a cutoff radius for LJ in angstroms
-        const cutoffRadius = 10.0; // angstroms
-
-        // Stronger force scaling for more visible interactions
-        const forceScale = 0.5; // Reduced because now we're using proper units
+        // Force scaling for numerical stability
+        const forceScale = 0.5;
+        let totalPotentialEnergy = 0;
+        let totalVirial = 0;
 
         for (let i = 0; i < count; i++) {
             const idxI = i * 2;
             const typeI = types[i];
             const massI = masses[i];
-            const chargeI = charges[typeI];
 
             for (let j = i + 1; j < count; j++) {
                 const idxJ = j * 2;
                 const typeJ = types[j];
                 const massJ = masses[j];
-                const chargeJ = charges[typeJ];
 
                 // Calculate distance
                 const dx = positions[idxJ] - positions[idxI];
@@ -246,19 +378,16 @@ const MolecularDynamics = () => {
 
                 const r = Math.sqrt(rSquared);
 
-                // Calculate forces from both potentials
-                let totalForce = 0;
-
-                // Apply Coulomb force
-                totalForce += calculateCoulomb(r, chargeI, chargeJ).force;
-
-                // Apply LJ force if within cutoff
-                if (r < cutoffRadius) {
-                    totalForce += calculateLennardJones(r, typeI, typeJ).force;
-                }
+                // Use potential manager to calculate total force and potential
+                const result = potentialManager.calculateTotal(r, typeI, typeJ);
+                let totalForce = result.force;
+                totalPotentialEnergy += result.potential;
 
                 // Scale and limit the force for stability
                 totalForce = forceScale * Math.min(Math.max(totalForce, -50), 50);
+
+                // Calculate virial for pressure calculation
+                totalVirial += totalForce * r;
 
                 // Project force onto x and y components
                 const invR = 1 / r;
@@ -271,6 +400,13 @@ const MolecularDynamics = () => {
                 accelerations[idxJ] -= fx / massJ;
                 accelerations[idxJ + 1] -= fy / massJ;
             }
+        }
+
+        // Update analytics if available
+        if (analytics && particleData) {
+            const systemVolume = (width / coordinateScale) * (height / coordinateScale);
+            analytics.updateTime(timeStep);
+            analytics.calculateAndSample(particleData, totalPotentialEnergy, systemVolume, totalVirial);
         }
     };
 
@@ -312,85 +448,17 @@ const MolecularDynamics = () => {
             velocities[idx + 1] += (oldAccels[idx + 1] + accels[idx + 1]) * dtHalf;
         }
 
-        // Apply boundary conditions (reflective) with proper unit conversions
-        applyBoundaryConditions();
+        // Apply boundary conditions using modular system
+        if (boundaryCondition) {
+            boundaryCondition.apply(particleData);
+        }
 
-        // Apply temperature control occasionally (velocity scaling)
-        if (Math.random() < 0.1) {
-            controlTemperature();
+        // Apply thermostat occasionally
+        if (thermostat && Math.random() < 0.1) {
+            thermostat.apply(particleData);
         }
     };
 
-    // Apply boundary conditions in angstrom space
-    const applyBoundaryConditions = () => {
-        if (!particleData) return;
-
-        const positions = particleData.positions;
-        const velocities = particleData.velocities;
-
-        // Boundaries in angstroms
-        const xMin = baseParticleRadius;
-        const xMax = width / visualScale - baseParticleRadius;
-        const yMin = baseParticleRadius;
-        const yMax = height / visualScale - baseParticleRadius;
-
-        // Apply to all particles
-        for (let i = 0; i < particleData.count; i++) {
-            const idx = i * 2;
-
-            // X boundaries
-            if (positions[idx] < xMin) {
-                positions[idx] = 2 * xMin - positions[idx];
-                velocities[idx] = -velocities[idx] * 0.95; // Slight damping
-            } else if (positions[idx] > xMax) {
-                positions[idx] = 2 * xMax - positions[idx];
-                velocities[idx] = -velocities[idx] * 0.95;
-            }
-
-            // Y boundaries
-            if (positions[idx + 1] < yMin) {
-                positions[idx + 1] = 2 * yMin - positions[idx + 1];
-                velocities[idx + 1] = -velocities[idx + 1] * 0.95;
-            } else if (positions[idx + 1] > yMax) {
-                positions[idx + 1] = 2 * yMax - positions[idx + 1];
-                velocities[idx + 1] = -velocities[idx + 1] * 0.95;
-            }
-        }
-    };
-
-    // Temperature control using velocity scaling (optimized)
-    const controlTemperature = () => {
-        if (!particleData || particleData.count === 0) return;
-
-        const velocities = particleData.velocities;
-        const masses = particleData.masses;
-        const count = particleData.count;
-
-        let totalKE = 0;
-
-        // Calculate total kinetic energy
-        for (let i = 0; i < count; i++) {
-            const idx = i * 2;
-            const vx = velocities[idx];
-            const vy = velocities[idx + 1];
-            const v2 = vx * vx + vy * vy;
-            totalKE += 0.5 * masses[i] * v2;
-        }
-
-        // Calculate current temperature (KE per particle)
-        const currentTemp = totalKE / count;
-
-        // Scale velocities
-        if (currentTemp > 0.001) { // Avoid division by very small numbers
-            const scaleFactor = Math.sqrt(temperature / currentTemp);
-
-            for (let i = 0; i < count; i++) {
-                const idx = i * 2;
-                velocities[idx] *= scaleFactor;
-                velocities[idx + 1] *= scaleFactor;
-            }
-        }
-    };
 
 
     const handleMouseDown = (e) => {
@@ -408,15 +476,15 @@ const MolecularDynamics = () => {
             const idx = i * 2;
 
             // Convert particle CENTER position to screen coordinates
-            const particleScreenX = positions[idx] * visualScale;
-            const particleScreenY = positions[idx + 1] * visualScale;
+            const particleScreenX = positions[idx] * coordinateScale;
+            const particleScreenY = positions[idx + 1] * coordinateScale;
 
             // Use bounding box check from the CENTER of the particle
             const dx = Math.abs(particleScreenX - screenX);
             const dy = Math.abs(particleScreenY - screenY);
 
             // Selection radius in screen pixels
-            const selectionSize = baseParticleRadius * visualScale * 1.2;
+            const selectionSize = baseParticleRadius * visualScale * coordinateScale * 1.2;
 
             if (dx <= selectionSize && dy <= selectionSize) {
                 setDraggingParticle(i);
@@ -434,8 +502,8 @@ const MolecularDynamics = () => {
         const screenY = e.clientY - rect.top;
 
         // Convert screen coordinates to simulation coordinates
-        const simX = screenX / visualScale;
-        const simY = screenY / visualScale;
+        const simX = screenX / coordinateScale;
+        const simY = screenY / coordinateScale;
 
         // Update the particle position (center point in simulation coordinates)
         const idx = draggingParticle * 2;
@@ -509,7 +577,7 @@ const MolecularDynamics = () => {
             // Efficiently draw particles from typed arrays
             const positions = particleData.positions;
             const types = particleData.types;
-            const visualRadius = baseParticleRadius * visualScale; // Convert to pixels
+            const visualRadius = baseParticleRadius * visualScale; // Visual scale only affects circle size
 
             ctx.strokeStyle = '#000000';
             ctx.lineWidth = 0.5;
@@ -518,9 +586,9 @@ const MolecularDynamics = () => {
                 const idx = i * 2;
                 const typeIdx = types[i];
 
-                // Convert position from angstroms to pixels
-                const screenX = positions[idx] * visualScale;
-                const screenY = positions[idx + 1] * visualScale;
+                // Convert position from angstroms to pixels using fixed coordinate scale
+                const screenX = positions[idx] * coordinateScale;
+                const screenY = positions[idx + 1] * coordinateScale;
 
                 // Draw the particle
                 ctx.beginPath();
@@ -538,7 +606,7 @@ const MolecularDynamics = () => {
         return () => {
             window.cancelAnimationFrame(animationFrameId);
         };
-    }, [particleData, running, baseParticleRadius, width, height, timeStep, epsilonScale, sigmaScale, chargeScale, temperature, stepsPerFrame, visualScale, typeColors, charges, epsilonMatrix]);
+    }, [particleData, running, baseParticleRadius, width, height, timeStep, epsilonScale, sigmaScale, chargeScale, stepsPerFrame, visualScale, typeColors, charges, epsilonMatrix]);
 
     // Add a method to update interaction parameters for different type pairs
     const updateInteractionParameter = (paramType, type1, type2, value) => {
@@ -557,305 +625,102 @@ const MolecularDynamics = () => {
     };
 
     return (
-        <div className={styles.container}>
-            <div ref={containerRef} className={styles.visualizationRow}>
-                <div className={styles.mainVisualizationColumn}>
-                    <canvas
-                        ref={canvasRef}
-                        width={width}
-                        height={height}
-                        className={styles.canvas}
-                        onMouseDown={handleMouseDown}
-                        onMouseMove={handleMouseMove}
-                        onMouseUp={handleMouseUp}
-                        onMouseLeave={handleMouseUp}
-                    />
-                </div>
-            </div>
-
-            <div className={styles.controlsSection}>
-                <h3 className={styles.infoTitle}>Simulation Controls</h3>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>No. of Particles:</label>
-                    <input
-                        type="range"
-                        min="10"
-                        max="200"
-                        step="10"
-                        value={numParticles}
-                        onChange={(e) => setNumParticles(parseInt(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{numParticles}</span>
-                </div>
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Temperature:</label>
-                    <input
-                        type="range"
-                        min="0.0"
-                        max="5"
-                        step="0.1"
-                        value={temperature}
-                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{temperature.toFixed(2)}</span>
-                </div>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Time step:</label>
-                    <input
-                        type="range"
-                        min="0.005"
-                        max="0.1"
-                        step="0.005"
-                        value={timeStep}
-                        onChange={(e) => setTimeStep(parseFloat(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{timeStep}</span>
-                </div>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Steps per frame:</label>
-                    <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="10"
-                        value={stepsPerFrame}
-                        onChange={(e) => setStepsPerFrame(parseInt(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{stepsPerFrame}</span>
-                </div>
-
-
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Epsilon Scale (ε):</label>
-                    <input
-                        type="range"
-                        min="0.1"
-                        max="2"
-                        step="0.1"
-                        value={epsilonScale}
-                        onChange={(e) => setEpsilonScale(parseFloat(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{epsilonScale.toFixed(2)}</span>
-                </div>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Sigma Scale (σ):</label>
-                    <input
-                        type="range"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
-                        value={sigmaScale}
-                        onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            setSigmaScale(value);
-                            // Update visual particle size based on sigma
-                            setBaseParticleRadius(1.5 * value);
-                        }}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{sigmaScale.toFixed(2)}</span>
-                </div>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Charge Scale (q):</label>
-                    <input
-                        type="range"
-                        min="0.0"
-                        max="5"
-                        step="0.2"
-                        value={chargeScale}
-                        onChange={(e) => setChargeScale(parseFloat(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{chargeScale.toFixed(2)}</span>
-                </div>
-
-                <div className={styles.rangeContainer}>
-                    <label className={styles.rangeLabel}>Visual Scale:</label>
-                    <input
-                        type="range"
-                        min="1"
-                        max="10"
-                        step="0.5"
-                        value={visualScale}
-                        onChange={(e) => setVisualScale(parseFloat(e.target.value))}
-                        className={styles.rangeInput}
-                    />
-                    <span className={styles.rangeValue}>{visualScale.toFixed(1)}</span>
-                </div>
-
-                <div className={styles.controlsRow}>
-                    <Button
-                        onClick={() => setRunning(!running)}
-                        variant={running ? "danger" : "success"}
-                    >
-                        {running ? 'Pause' : 'Start'}
-                    </Button>
-                    <Button
-                        onClick={initializeParticles}
-                        variant="info"
-                    >
-                        Reset
-                    </Button>
-                </div>
-            </div>
-
-            <div>
-                <h3 className={styles.explanationTitle}>Instructions & Information</h3>
-                <div className={styles.explanationText}>
-                    <p>Particle types: {particleData ? particleData.typeCounts.map((count, i) =>
-                        `${count} ${i === 0 ? 'orange' : 'blue'}`).join(', ') : ''}</p>
-
-                    <ul>
-                        <li>Click and drag particles to move them manually</li>
-                        <li>Adjust temperature to control average particle velocities</li>
-                        <li>Modify potential parameters to see different behaviors:
-                            <ul>
-                                <li>Epsilon (ε): controls the strength of LJ interaction</li>
-                                <li>Sigma (σ): controls the equilibrium distance between particles</li>
-                                <li>Charge (q): controls the strength of electrostatic interaction</li>
-                            </ul>
-                        </li>
-                        <li>Visual Scale: adjusts the visualization size (angstroms to pixels)</li>
-                        <li>Like charges repel, unlike charges attract</li>
-                        <li>All particles experience both Lennard-Jones and Coulomb forces</li>
-                    </ul>
-
-                    <h4>Type Interactions:</h4>
-                    <p>
-                        Each type of particle has its own set of interaction parameters.
-                        Orange-orange, blue-blue, and orange-blue interactions all use different
-                        parameters for more realistic simulations.
-                    </p>
-                </div>
-            </div>
-
-            <div className={styles.controlsSection}>
-                <h3 className={styles.infoTitle}>Advanced Type Parameters</h3>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                    <div>
-                        <h4 style={{ marginTop: '5px' }}>Type Charges:</h4>
-                        {charges.map((charge, i) => (
-                            <div key={`charge-${i}`} className={styles.rangeContainer}>
-                                <label className={styles.rangeLabel}>
-                                    Type {i} ({i === 0 ? 'Orange' : 'Blue'})
-                                </label>
-                                <input
-                                    type="range"
-                                    min="-3"
-                                    max="3"
-                                    step="0.5"
-                                    value={charge}
-                                    onChange={(e) => {
-                                        const newCharges = [...charges];
-                                        newCharges[i] = parseFloat(e.target.value);
-                                        setCharges(newCharges);
-                                    }}
-                                    className={styles.rangeInput}
-                                />
-                                <span className={styles.rangeValue}>{charge.toFixed(1)}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div>
-                        <h4 style={{ marginTop: '5px' }}>Type Colors:</h4>
-                        {typeColors.map((color, i) => (
-                            <div key={`color-${i}`} className={styles.rangeContainer}>
-                                <label className={styles.rangeLabel}>
-                                    Type {i} Color:
-                                </label>
-                                <div
-                                    style={{
-                                        width: '30px',
-                                        height: '20px',
-                                        backgroundColor: color,
-                                        border: '1px solid #000',
-                                        marginRight: '10px'
-                                    }}
-                                />
-                                <select
-                                    value={color}
-                                    onChange={(e) => {
-                                        const newColors = [...typeColors];
-                                        newColors[i] = e.target.value;
-                                        setTypeColors(newColors);
-                                    }}
-                                    style={{ flex: 1 }}
-                                >
-                                    <option value="rgba(255, 165, 0, 0.8)">Orange</option>
-                                    <option value="rgba(0, 0, 255, 0.8)">Blue</option>
-                                    <option value="rgba(255, 0, 0, 0.8)">Red</option>
-                                    <option value="rgba(0, 128, 0, 0.8)">Green</option>
-                                    <option value="rgba(128, 0, 128, 0.8)">Purple</option>
-                                    <option value="rgba(0, 0, 0, 0.8)">Black</option>
-                                </select>
-                            </div>
-                        ))}
+        <div style={{ 
+            width: '100vw', 
+            minHeight: '100vh', 
+            display: 'grid',
+            gridTemplateColumns: '75% 25%',
+            gap: '1rem',
+            padding: '1rem',
+            boxSizing: 'border-box'
+        }}>
+            {/* Left side: Canvas + Plot */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div>
+                    <h2 style={{ margin: '0 0 1rem 0' }}>Molecular Dynamics Simulation</h2>
+                    <div ref={containerRef} style={{ 
+                        width: `${canvasWidth + 10}px`,
+                        height: `${canvasHeight + 10}px`,
+                        border: width === canvasWidth && height === canvasHeight ? 'none' : '1px solid #ccc',
+                        backgroundColor: '#f8f9fa',
+                        position: 'relative',
+                        padding: '5px'
+                    }}>
+                        <canvas
+                            ref={canvasRef}
+                            width={width}
+                            height={height}
+                            style={{ 
+                                display: 'block',
+                                backgroundColor: '#ffffff'
+                            }}
+                            onMouseDown={handleMouseDown}
+                            onMouseMove={handleMouseMove}
+                            onMouseUp={handleMouseUp}
+                            onMouseLeave={handleMouseUp}
+                        />
+                        {/* Resize handle */}
+                        <div
+                            onMouseDown={handleResizeStart}
+                            style={{
+                                position: 'absolute',
+                                bottom: '0px',
+                                right: '0px',
+                                width: '20px',
+                                height: '20px',
+                                cursor: 'nw-resize',
+                                background: 'linear-gradient(-45deg, transparent 40%, #666 40%, #666 60%, transparent 60%)',
+                                opacity: 0.7,
+                                pointerEvents: 'auto'
+                            }}
+                        />
                     </div>
                 </div>
-
-                <h4 style={{ marginTop: '15px' }}>Interaction Parameters:</h4>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '10px' }}>
-                    <thead>
-                        <tr>
-                            <th style={{ padding: '5px', textAlign: 'left' }}>Interaction</th>
-                            <th style={{ padding: '5px', textAlign: 'left' }}>Epsilon (ε)</th>
-                            <th style={{ padding: '5px', textAlign: 'left' }}>Sigma (σ)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {Array.from({ length: numTypes }).map((_, i) =>
-                            Array.from({ length: i + 1 }).map((_, j) => (
-                                <tr key={`interaction-${i}-${j}`}>
-                                    <td style={{ padding: '5px' }}>
-                                        Type {i} - Type {j}
-                                        <div style={{ display: 'flex', gap: '5px' }}>
-                                            <div style={{ width: '15px', height: '15px', backgroundColor: typeColors[i] }}></div>
-                                            <div style={{ width: '15px', height: '15px', backgroundColor: typeColors[j] }}></div>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '5px' }}>
-                                        <input
-                                            type="range"
-                                            min="0.1"
-                                            max="2.0"
-                                            step="0.1"
-                                            value={epsilonMatrix[i][j]}
-                                            onChange={(e) => updateInteractionParameter('epsilon', i, j, parseFloat(e.target.value))}
-                                            style={{ width: '100%' }}
-                                        />
-                                        <span>{epsilonMatrix[i][j].toFixed(1)}</span>
-                                    </td>
-                                    <td style={{ padding: '5px' }}>
-                                        <input
-                                            type="range"
-                                            min="1.0"
-                                            max="5.0"
-                                            step="0.2"
-                                            value={sigmaMatrix[i][j]}
-                                            onChange={(e) => updateInteractionParameter('sigma', i, j, parseFloat(e.target.value))}
-                                            style={{ width: '100%' }}
-                                        />
-                                        <span>{sigmaMatrix[i][j].toFixed(1)}</span>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+                
+                {/* Analytics Plot */}
+                <AnalyticsPlot 
+                    analytics={analytics}
+                    particleData={particleData}
+                />
             </div>
+            
+            {/* Right side: Controls */}
+            <SimulationControls
+                running={running}
+                setRunning={setRunning}
+                initializeParticles={initializeParticles}
+                numParticles={numParticles}
+                setNumParticles={setNumParticles}
+                temperature={temperature}
+                setTemperature={setTemperature}
+                timeStep={timeStep}
+                setTimeStep={setTimeStep}
+                stepsPerFrame={stepsPerFrame}
+                setStepsPerFrame={setStepsPerFrame}
+                orangeRatio={orangeRatio}
+                setOrangeRatio={setOrangeRatio}
+                boundaryType={boundaryType}
+                setBoundaryType={setBoundaryType}
+                thermostatType={thermostatType}
+                setThermostatType={setThermostatType}
+                epsilonScale={epsilonScale}
+                setEpsilonScale={setEpsilonScale}
+                sigmaScale={sigmaScale}
+                setSigmaScale={setSigmaScale}
+                setBaseParticleRadius={setBaseParticleRadius}
+                chargeScale={chargeScale}
+                setChargeScale={setChargeScale}
+                visualScale={visualScale}
+                setVisualScale={setVisualScale}
+                charges={charges}
+                setCharges={setCharges}
+                typeColors={typeColors}
+                setTypeColors={setTypeColors}
+                epsilonMatrix={epsilonMatrix}
+                sigmaMatrix={sigmaMatrix}
+                updateInteractionParameter={updateInteractionParameter}
+                numTypes={numTypes}
+            />
         </div>
     );
 };

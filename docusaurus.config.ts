@@ -112,6 +112,10 @@ const config: Config = {
               label: 'Crystal Structures',
               href: '/crystals',
             },
+            {
+              label: 'Wulff Construction 2D',
+              href: '/wulff',
+            },
           ],
         },
         {
