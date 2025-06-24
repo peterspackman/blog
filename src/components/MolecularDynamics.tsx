@@ -33,7 +33,7 @@ const MolecularDynamics = () => {
     useEffect(() => {
         if (containerRef.current) {
             const containerRect = containerRef.current.getBoundingClientRect();
-            const initialWidth = Math.max(400, containerRect.width * 0.75 - 32); // 75% of container minus padding
+            const initialWidth = Math.max(400, containerRect.width - 10); // Full container width minus padding
             const initialHeight = Math.max(300, Math.min(600, initialWidth * 0.6)); // Maintain reasonable aspect ratio
             
             setCanvasWidth(initialWidth);

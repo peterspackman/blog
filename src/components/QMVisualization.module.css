@@ -433,6 +433,84 @@
   color: #374151;
 }
 
+/* Linear Combination Controls */
+.harmonicTerm {
+  border: 1px solid var(--ifm-color-emphasis-200, #e5e7eb);
+  border-radius: var(--ifm-card-border-radius, 6px);
+  padding: var(--ifm-card-padding, 12px);
+  margin-bottom: var(--ifm-spacing-vertical, 8px);
+  background-color: var(--ifm-background-color, white);
+}
+
+.harmonicTermHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--ifm-spacing-vertical, 8px);
+  font-weight: var(--ifm-font-weight-semibold, 600);
+  color: var(--ifm-color-content, #374151);
+}
+
+.harmonicTermControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--ifm-spacing-horizontal, 8px);
+  align-items: center;
+}
+
+.removeTermButton {
+  background-color: var(--ifm-color-danger, #ef4444);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color 0.2s;
+}
+
+.removeTermButton:hover {
+  background-color: var(--ifm-color-danger-dark, #dc2626);
+}
+
+.addTermButton {
+  background-color: var(--ifm-color-primary, #2563eb);
+  color: white;
+  border: none;
+  border-radius: var(--ifm-button-border-radius, 6px);
+  padding: var(--ifm-button-padding-vertical, 8px) var(--ifm-button-padding-horizontal, 16px);
+  font-weight: var(--ifm-font-weight-semibold, 500);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: var(--ifm-spacing-vertical, 8px);
+}
+
+.addTermButton:hover {
+  background-color: var(--ifm-color-primary-dark, #1d4ed8);
+}
+
+/* Spherical Harmonics Container Responsive */
+:global(.spherical-harmonics-container) {
+  width: 100vw !important;
+  min-height: 100vh !important;
+  display: grid !important;
+  grid-template-columns: 75% 25% !important;
+  gap: 1rem !important;
+  padding: 1rem !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 1200px) {
+  :global(.spherical-harmonics-container) {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 1200px) {
   .visualizationRow {
@@ -451,6 +529,10 @@
     width: 100%;
     max-width: 400px;
     margin: 0 auto;
+  }
+
+  .harmonicTermControls {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -239,7 +239,6 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({ analytics, particleData }
                 gap: '1rem'
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '600', color: '#374151' }}>Real-time Analytics</h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <select 
                             value={selectedMetric} 
