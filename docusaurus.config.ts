@@ -76,8 +76,7 @@ const config: Config = {
           label: 'software',
         },
         {
-          type: 'doc',
-          docId: 'publications',
+          to: '/publications',
           position: 'left',
           label: 'papers',
         },

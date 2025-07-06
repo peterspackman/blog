@@ -1,18 +1,29 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import Layout from '@theme/Layout';
-import CrystalViewer from '@site/src/components/Crystal.tsx';
+import { CrystalProvider, CrystalStructureProvider, CrystalViewer3D, CrystalControlsWithStructures } from '@site/src/components/Crystal';
 import styles from './qm-visualizations.module.css';
 
-export default function Crystal2D(): JSX.Element {
-  const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
-
+export default function CrystalPage() {
   return (
     <Layout
-      title="Crystal"
-      description="Interactive visualizations of molecular dynamics for">
+      title="Crystal Structures"
+      description="Interactive visualizations of crystal structures">
       <main className={styles.mainContainer} style={{ width: '100%' }}>
-        <CrystalViewer className={styles.centeredVisualization} />
+        <div className={styles.centeredVisualization}>
+          <CrystalStructureProvider>
+            <CrystalProvider>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'nowrap' }}>
+                <div style={{ width: '70%', flexShrink: 0 }}>
+                  <CrystalViewer3D height="600px" />
+                </div>
+                <div style={{ width: '30%', flexShrink: 0 }}>
+                  <CrystalControlsWithStructures />
+                </div>
+              </div>
+            </CrystalProvider>
+          </CrystalStructureProvider>
+        </div>
       </main>
     </Layout>
   );
