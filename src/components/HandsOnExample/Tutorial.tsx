@@ -76,33 +76,49 @@ const Tutorial: React.FC<TutorialProps> = ({
     Children.forEach(child.props.children, (section) => {
       if (!isValidElement(section)) return;
       
-      // Check the component function/type name
-      const componentName = section.type?.name || section.type?.displayName;
+      // Use data attributes to identify section types (minification-safe)
+      const sectionType = section.props?.['data-section-type'];
       
-      // Debug: log what we find
-      console.log('Section found:', { componentName, type: section.type, section });
-      
-      switch (componentName) {
-        case 'Instructions':
+      switch (sectionType) {
+        case 'instructions':
           step.instructions = section;
           break;
-        case 'Commands':
+        case 'commands':
           step.commands = section;
           break;
-        case 'Output':
+        case 'output':
           step.output = section;
           break;
-        case 'Notes':
+        case 'notes':
           step.notes = section;
           break;
+        default:
+          // Fallback to component name matching for development
+          const componentName = section.type?.displayName || section.type?.name;
+          switch (componentName) {
+            case 'Instructions':
+              step.instructions = section;
+              break;
+            case 'Commands':
+              step.commands = section;
+              break;
+            case 'Output':
+              step.output = section;
+              break;
+            case 'Notes':
+              step.notes = section;
+              break;
+          }
       }
     });
     
     return step;
   }).filter(Boolean) as ParsedStep[];
 
-  // Debug: log the parsed steps
-  console.log('Parsed steps:', steps);
+  // Debug: log the parsed steps in development only
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Parsed steps:', steps);
+  }
 
   const goToNextStep = () => {
     // Mark current step as completed
