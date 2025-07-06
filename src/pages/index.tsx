@@ -21,7 +21,7 @@ function HomepageHeader() {
           </Link>
           <Link
             className={clsx('button', 'button--primary', styles.buttonLink)}
-            to="/docs/publications">
+            to="/publications">
             papers
           </Link>
           <Link
