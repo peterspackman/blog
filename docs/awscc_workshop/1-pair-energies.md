@@ -14,11 +14,19 @@ Much of chemistry and materials science involves condensed matter, that is to in
 
 To cut a very long story short, we can start with the Gibbs free energy to determine whether molecular association is spontaneous under given conditions ($T$, $P$). Recall that the Gibbs free energy combines energetic and entropic contributions:
 
+<div style={{textAlign: 'center'}}>
+
 $$ \Delta G = \Delta H - T \Delta S$$
 
-i.e.
+</div>
+
+Or more explicitly:
+
+<div style={{textAlign: 'center'}}>
 
 $$\Delta G_{\text{dimer}} = \Delta H_{\text{dimer}} - T\Delta S_{\text{dimer}}$$
+
+</div>
 
 In practice, we're often primarily concerned with predicting the enthalpy contribution because:
 
@@ -31,25 +39,47 @@ In practice, we're often primarily concerned with predicting the enthalpy contri
 
 For a given molecular dimer or pair for example, this means that *regardless of how they came to be in a given configuration* we can calculate the enthalpy as:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta H_{\text{binding}} = H_{\text{dimer}} - H_{\text{monomer A}} - H_{\text{monomer B}}$$
+
+</div>
 
 This can be done via electronic structure calculations, molecular mechanics force fields, tight-binding, machine learned potentials or really any method that computes the total energy for a given system:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta E_{\text{binding}} = E_{AB} - E_A - E_B$$
+
+</div>
 
 This binding energy is not the whole picture, there are other enthalpy contributions:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta H = \Delta E + \Delta(PV) + \Delta E_{\text{ZPE}} + \Delta E_{\text{thermal}}$$
+
+</div>
 
 For condensed phases and moderate temperatures:
 - $\Delta(PV) \approx 0$ (negligible volume change)
 - $\Delta E_{\text{thermal}} \approx 0$ (a common assumption)
 
 Therefore:
+
+<div style={{textAlign: 'center'}}>
+
 $$\Delta H \approx \Delta E + \Delta E_{\text{ZPE}}$$
 
+</div>
+
 And often the zero-point energy correction is also small, giving:
+
+<div style={{textAlign: 'center'}}>
+
 $$\Delta H \approx \Delta E$$
+
+</div>
 
 This is why computational chemists often report energy calculations as approximations to enthalpies, but keep this in mind when considering systems you're working with...
 
@@ -76,7 +106,11 @@ Even in the text below I'll talk about where some effects are or are not importa
 
 The classical electrostatic energy between charges $q_i$ and $q_j$ separated by distance $r_{ij}$:
 
+<div style={{textAlign: 'center'}}>
+
 $$ E_\text{elec} = \sum_{i<j} \frac{q_i q_j}{r_{ij}}$$
+
+</div>
 
 That is if we just work in atomic units so we can do away with the constant factor of $\frac{1}{4\pi\epsilon_0}$
 
@@ -84,7 +118,11 @@ This is fundamentally important for condensed matter, as it's the longest-range 
 
 If we instead had a multipole series:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{elec}} = E_{\text{charge-charge}} + E_{\text{charge-dipole}} + E_{\text{dipole-dipole}} + ...$$
+
+</div>
 
 This stems from the Taylor expansion of the Coulomb interaction. Most force-fields don't even bother considering dipoles, but few if any include terms beyond quadrupoles.
 
@@ -102,7 +140,11 @@ These point charges can be placed wherever you see fit, though the mathematics f
 
 When electron clouds overlap, the Pauli exclusion principle requires antisymmetrization of the wavefunction, leading to repulsion:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{exch}} \propto \text{exp}(-\alpha r)$$
+
+</div>
 
 This short-range repulsion prevents molecular interpenetration. This is the source of the $\text{exp}(-\alpha r)$ term in Buckingham potentials and many others. The Lennard Jones potential is effectively approximating this as $1/r^{12}$
 
@@ -118,7 +160,11 @@ This short-range repulsion prevents molecular interpenetration. This is the sour
 
 The electric field of molecule A induces a dipole in molecule B:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{ind}} = -\frac{1}{2}\alpha_B |E_A|^2$$
+
+</div>
 
 where $\alpha_B$ is the polarizability of molecule B. This scales as $r^{-4}$ for charge-induced dipole interactions. This magical formula might seem great but it's important to consider polarzability as *effectively* a volume term, and that this is fundamentally approximating the polarizable volume of some site as spherical/isotropic.
 
@@ -136,7 +182,11 @@ Perhaps the most important kind of intermolecular interaction to consider due to
 
 All molecules interact via quantum mechanical fluctuations in electron density:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{disp}} = -\frac{3}{2}\frac{I_A I_B}{I_A + I_B}\frac{\alpha_A \alpha_B}{r^6}$$
+
+</div>
 
 where $I$ represents ionization potentials. This $r^{-6}$ attraction is universal.
 
@@ -154,7 +204,11 @@ People frequently refer to this as a **weak** interaction, but its ubiquity mean
 
 For noble gases like argon, only dispersion and exchange-repulsion really matter. The Lennard-Jones potential captures this physics:
 
+<div style={{textAlign: 'center'}}>
+
 $$V_{LJ}(r) = 4\epsilon\left[\left(\frac{\sigma}{r}\right)^{12} - \left(\frac{\sigma}{r}\right)^6\right]$$
+
+</div>
 
 Where:
 - $\epsilon$ = well depth (attraction strength)
@@ -217,7 +271,11 @@ Use this interactive tool to consider the following questions:
 
 At it's core, the most simple way to compute a pair energy is via the previously mentioned energy difference:
 
+<div style={{textAlign: 'center'}}>
+
 $$ E_\text{interaction} = E_\text{AB} - E_\text{A} - E_\text{B}$$
+
+</div>
 
 i.e. we'd need 3 calculations, one for each monomer and one for the pair!
 
@@ -229,7 +287,7 @@ Throughout these exercises we're going to ignore the relaxation aspect of intera
 
 ### Exercise 1: Basic Interaction Energy Calculation
 
-Understanding how molecules interact is fundamental to computational chemistry. We'll calculate the interaction energy between two water molecules using the supermolecular approach: ΔE = E_AB - E_A - E_B.
+Understanding how molecules interact is fundamental to computational chemistry. We'll calculate the interaction energy between two water molecules using the supermolecular approach: $\Delta E = E_\text{AB} - E_\text{A} - E_\text{B}$.
 
 <Tutorial
   title="Basic Water Dimer Interaction Energy"
@@ -299,63 +357,35 @@ H    2.593135384  -0.449496183  -0.744782026`}</code></pre>
     <Output>
       <pre><code>{`Using OCC with method=hf, basis=3-21g
 
-A: total                                -75.585366019097
-B: total                                -75.585366020641
-AB: total                               -151.176903148648
+total A                               -75.585325689991
+total B                               -75.585361853858
+total AB                              -151.187310894789
 
 Interaction Energy:
-  ΔE = -0.006171109 hartree
-  ΔE = -16.20 kJ/mol`}</code></pre>
+  ΔE = -0.016623351 hartree
+  ΔE = -43.64 kJ/mol`}</code></pre>
     </Output>
     
     <Notes>
-      <p>The negative interaction energy indicates attractive interaction (hydrogen bonding).</p>
-    </Notes>
-  </Step>
-
-  <Step id="analyze_components" title="Understanding the interaction">
-    <Instructions>
-      <p>The -16.20 kJ/mol interaction energy represents the hydrogen bond strength at HF/3-21G level. Let's verify this calculation manually.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`python3 -c "
-E_A = -75.585366019097
-E_B = -75.585366020641
-E_AB = -151.176903148648
-E_int = E_AB - E_A - E_B
-print(f'E_int = {E_int:.9f} hartree')
-print(f'E_int = {E_int * 2625.4996:.2f} kJ/mol')
-print(f'E_int = {E_int * 627.509:.2f} kcal/mol')
-"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`E_int = -0.006171109 hartree
-E_int = -16.20 kJ/mol
-E_int = -3.87 kcal/mol`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>Typical hydrogen bond energies are 10-40 kJ/mol, so this is within expected range.</p>
+      <p>The negative interaction energy indicates attractive interaction (hydrogen bonding). If you're using HF/3-21g like for this one then there's probably a very large error...</p>
     </Notes>
   </Step>
 
   <Step id="advanced_options" title="Try different methods">
     <Instructions>
-      <p>You can rerun with different methods and basis sets to see how the interaction energy changes.</p>
+      <p>You can rerun with different methods and basis sets to see how the interaction energy changes. If you're using ORCA you may need to modify the inp files directly</p>
     </Instructions>
     
     <Commands>
       <pre><code>{`# For better accuracy with OCC:
-./run_water_dimer.sh --method b3lyp --basis 6-31g
+./run_water_dimer.sh --method b3lyp --basis def2-tzvp
 
 # For quick semi-empirical with xTB:
 ./run_water_dimer.sh --program xtb --method gfn2`}</code></pre>
     </Commands>
     
     <Notes>
-      <p>Higher-level methods typically give interaction energies around -20 to -25 kJ/mol for water dimer.</p>
+      <p>Higher-level methods typically give interaction energies around -20 to -25 kJ/mol for water dimer. If you increase the basis set size you should see starkly different behaviour (eventually converging with large basis sets)</p>
     </Notes>
   </Step>
 </Tutorial>
@@ -363,6 +393,8 @@ E_int = -3.87 kcal/mol`}</code></pre>
 ### Exercise 2: Basis Set Superposition Error (BSSE) Correction
 
 When calculating interaction energies, basis set superposition error (BSSE) can lead to overestimation of binding. The Boys-Bernardi counterpoise correction addresses this by using ghost atoms to ensure consistent basis sets.
+
+The source of this error is basically that the electrons have more degrees of freedom to relax when the basis set size increases, so if we have a complete basis set for each monomer then there should ideally be no BSSE!.
 
 <Tutorial
   title="BSSE Correction with Counterpoise Method"
@@ -387,7 +419,7 @@ head -20 bsse.inp`}</code></pre>
 # First the monomer. In principle, you only need
 # to run it once, but we keep it for clarity.
 # --------------------------------------------
-! wb97x def2-qzvp VeryTightSCF PModel
+! hf 3-21g VeryTightSCF PModel
 %id "monomer"
 * xyz 0 1
 O   -0.702196054  -0.056060256   0.009942262
@@ -397,7 +429,7 @@ H    0.257521062   0.042121496   0.005218999
     </Output>
     
     <Notes>
-      <p>The file contains 5 calculations: 2 monomers, 1 dimer, and 2 ghost calculations. Note the high-quality basis set (def2-qzvp).</p>
+      <p>The file contains 5 calculations: 2 monomers, 1 dimer, and 2 ghost calculations. If we adjust that to a larger basis set we should see smaller BSSE!</p>
     </Notes>
   </Step>
 
@@ -440,10 +472,32 @@ H:   2.593135384  -0.449496183  -0.744782026
       <pre><code>{`Running ORCA BSSE calculation...
 
 BSSE calculation completed. Results saved to bsse.stdout
-Extract energies from the output to calculate BSSE-corrected interaction energy:
-  E_int_uncorrected = E_dimer - E_monomer1 - E_monomer2
-  E_int_corrected = E_dimer - E_monomer1_ghost - E_monomer2_ghost
-  BSSE = E_int_uncorrected - E_int_corrected`}</code></pre>
+
+Extracting energies from BSSE calculation...
+
+=========================================
+BSSE CORRECTION ANALYSIS
+=========================================
+
+Individual job energies:
+  Monomer A:           -75.585325690 hartree
+  Monomer B:           -75.585361854 hartree
+  Dimer AB:            -151.187310895 hartree
+  Monomer A + ghost B: -75.585862918 hartree
+  Monomer B + ghost A: -75.591681002 hartree
+
+Interaction energies:
+  Uncorrected:    -0.016623 hartree =  -43.64 kJ/mol
+  BSSE-corrected: -0.009767 hartree =  -25.64 kJ/mol
+
+BSSE correction:
+  BSSE = -0.006856 hartree =  -18.00 kJ/mol
+  BSSE = 40.0% of uncorrected interaction energy
+
+Analysis:
+  - Small BSSE (<1 kJ/mol) - correction less critical
+  - Use BSSE-corrected value for publication
+  - BSSE decreases with larger basis sets`}</code></pre>
     </Output>
     
     <Notes>
@@ -453,102 +507,32 @@ Extract energies from the output to calculate BSSE-corrected interaction energy:
 
   <Step id="extract_energies" title="Extract energies from output">
     <Instructions>
-      <p>Extract the final energies from each calculation to compute BSSE correction.</p>
+      <p>The script automatically did this, but you can manually extract the energies yourself and calculate the values to confirm!</p>
     </Instructions>
-    
-    <Commands>
-      <pre><code>{`grep -A1 "Job-Name" bsse.stdout | grep -B1 "FINAL SINGLE" | grep -E "Job-Name|FINAL"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`Job-Name: monomer
-FINAL SINGLE POINT ENERGY       -76.062213054486
-Job-Name: monomer
-FINAL SINGLE POINT ENERGY       -76.062213055021
-Job-Name: dimer
-FINAL SINGLE POINT ENERGY      -152.130903935775
-Job-Name: monomer_ghost
-FINAL SINGLE POINT ENERGY       -76.062431632384
-Job-Name: monomer_ghost
-FINAL SINGLE POINT ENERGY       -76.062431633266`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>We have two monomer calculations (should be identical), one dimer, and two ghost calculations.</p>
-    </Notes>
   </Step>
 
-  <Step id="calculate_bsse" title="Calculate BSSE correction">
+  <Step id="try_different_basis_sets" title="Try with different basis sets and methods">
     <Instructions>
-      <p>Calculate both uncorrected and BSSE-corrected interaction energies to see the effect of BSSE.</p>
+      <p>Calculate both uncorrected and BSSE-corrected interaction energies to see the effect of BSSE.
+      Try it with the following basis sets:</p>
+      <ul>
+        <li> 6-31G </li>
+        <li> def2-svp </li>
+        <li> def2-tzvp </li>
+        <li> def2-tzvpp </li>
+        <li> def2-qzvp </li>
+      </ul>
     </Instructions>
     
-    <Commands>
-      <pre><code>{`python3 -c "
-# Energies from the calculations
-E_A = -76.062213054486  # Monomer A
-E_B = -76.062213055021  # Monomer B  
-E_AB = -152.130903935775  # Dimer
-E_A_ghost = -76.062431632384  # A with ghost B
-E_B_ghost = -76.062431633266  # B with ghost A
-
-# Uncorrected interaction energy
-E_int_uncor = E_AB - E_A - E_B
-print(f'Uncorrected interaction energy:')
-print(f'  ΔE = {E_int_uncor:.6f} hartree = {E_int_uncor * 2625.5:.2f} kJ/mol')
-
-# BSSE-corrected interaction energy  
-E_int_cor = E_AB - E_A_ghost - E_B_ghost
-print(f'\\nBSSE-corrected interaction energy:')
-print(f'  ΔE = {E_int_cor:.6f} hartree = {E_int_cor * 2625.5:.2f} kJ/mol')
-
-# BSSE magnitude
-BSSE = E_int_uncor - E_int_cor
-print(f'\\nBSSE correction:')
-print(f'  BSSE = {BSSE:.6f} hartree = {BSSE * 2625.5:.2f} kJ/mol')
-print(f'  BSSE = {abs(BSSE/E_int_uncor)*100:.1f}% of uncorrected energy')
-"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`Uncorrected interaction energy:
-  ΔE = -0.006478 hartree = -17.01 kJ/mol
-
-BSSE-corrected interaction energy:
-  ΔE = -0.006041 hartree = -15.86 kJ/mol
-
-BSSE correction:
-  BSSE = -0.000437 hartree = -1.15 kJ/mol
-  BSSE = 6.8% of uncorrected energy`}</code></pre>
-    </Output>
-    
     <Notes>
-      <p>Even with def2-qzvp, BSSE is ~7% of the interaction energy. Smaller basis sets would show larger BSSE.</p>
-    </Notes>
-  </Step>
-
-  <Step id="analysis" title="Understanding BSSE effects">
-    <Instructions>
-      <p>BSSE artificially stabilizes the dimer because each monomer "borrows" basis functions from its partner. The counterpoise correction removes this artifact.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`echo "Summary of BSSE correction:"
-echo "1. Uncorrected: Each monomer in dimer has more basis functions available"
-echo "2. Corrected: Ghost atoms ensure consistent basis set size"
-echo "3. True interaction energy = -15.86 kJ/mol (not -17.01 kJ/mol)"
-echo "4. BSSE decreases with basis set size but never fully vanishes"`}</code></pre>
-    </Commands>
-    
-    <Notes>
-      <p>For publication-quality results, always include BSSE correction for intermolecular interactions.</p>
+      <p>For publication-quality results, always include some sort of BSSE correction (or use a big enough basis set) for intermolecular interactions. There are other counterpoise correctio options e.g. GCP etc.</p>
     </Notes>
   </Step>
 </Tutorial>
 
 ### Exercise 3: CE-1P Pairwise Interaction Model
 
-The CE-1P (Coupled Electron Pair - 1st order) model provides physically motivated decomposition of interaction energies into electrostatic, exchange, polarization, and dispersion components, useful for understanding the nature of intermolecular interactions.
+The CE-1P (CrystalExplorer - 1 parameter) model provides physically motivated construction of of interaction energies into electrostatic, exchange, repulsion, polarisation, and dispersion components, useful for understanding the nature of intermolecular interactions.
 
 <Tutorial
   title="CE-1P Interaction Energy Decomposition"
@@ -625,18 +609,16 @@ H    2.597492682  -0.411663274   0.766744858
     </Commands>
     
     <Output>
-      <pre><code>{`Running OCC CE-1P calculation with method=wb97x, basis=def2-svp, threads=1
+      <pre><code>{`Dimer
+Component              Energy (kJ/mol)
 
-Running monomer A calculation...
-Running monomer B calculation...
-
-Running CE-1P pair interaction calculation...
-  
-Coulomb:        -14.36 kJ/mol
-Exchange:       -34.19 kJ/mol  
-Polarization:    -7.46 kJ/mol
-Dispersion:      -2.53 kJ/mol
-Total:          -29.10 kJ/mol`}</code></pre>
+Coulomb                 -31.569102
+Exchange                -27.320883
+Repulsion                50.248193
+Polarization             -4.068470
+Dispersion               -1.755652
+__________________________________
+Total                   -24.694522`}</code></pre>
     </Output>
     
     <Notes>
@@ -644,123 +626,35 @@ Total:          -29.10 kJ/mol`}</code></pre>
     </Notes>
   </Step>
 
-  <Step id="analyze_components" title="Understand interaction components">
-    <Instructions>
-      <p>Let's analyze each component to understand the physics of hydrogen bonding in water.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`# Extract detailed output from pair.stdout
-grep -A20 "Pairwise CE" pair.stdout | grep -E "Coulomb|Exchange|Polarization|Dispersion|Total"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`  Coulomb                         -0.005469   -14.36
-  Exchange-Coulomb                -0.013023   -34.19
-  Polarization                    -0.002842    -7.46
-  Dispersion                      -0.000963    -2.53
-  Total CE-1P                     -0.011081   -29.10`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>Values shown in hartree and kJ/mol. Exchange-repulsion actually includes attractive exchange-Coulomb in CE-1P.</p>
-    </Notes>
-  </Step>
-
   <Step id="component_analysis" title="Physical interpretation">
     <Instructions>
-      <p>Analyze the relative importance of each interaction component for hydrogen bonding.</p>
+      <p>Analyze the relative importance of each interaction component for hydrogen bonding. Refer to the <a href="./ce-1p">CE-1p appendix</a> for more information</p>
+      <pre><code>{`Dimer
+Component              Energy (kJ/mol)
+
+Coulomb                 -31.569102
+Exchange                -27.320883
+Repulsion                50.248193
+Polarization             -4.068470
+Dispersion               -1.755652
+__________________________________
+Total                   -24.694522`}</code></pre>
     </Instructions>
-    
-    <Commands>
-      <pre><code>{`python3 -c "
-# CE-1P components in kJ/mol
-coulomb = -14.36
-exchange = -34.19  
-polarization = -7.46
-dispersion = -2.53
-total = -29.10
-
-print('Component analysis for water dimer hydrogen bond:')
-print(f'{"Component":<15} {"Energy (kJ/mol)":>15} {"% of Total":>12}')
-print('-' * 45)
-print(f'{"Coulomb":<15} {coulomb:>15.2f} {coulomb/total*100:>11.1f}%')
-print(f'{"Exchange":<15} {exchange:>15.2f} {exchange/total*100:>11.1f}%')
-print(f'{"Polarization":<15} {polarization:>15.2f} {polarization/total*100:>11.1f}%')  
-print(f'{"Dispersion":<15} {dispersion:>15.2f} {dispersion/total*100:>11.1f}%')
-print('-' * 45)
-print(f'{"Total":<15} {total:>15.2f} {100.0:>11.1f}%')
-
-print('\\nPhysical insights:')
-print('- Exchange-Coulomb dominates (117%), providing most attraction')
-print('- Classical Coulomb adds 49% attraction')  
-print('- Polarization (25%) shows importance of charge redistribution')
-print('- Dispersion is minor (9%) for H-bonds vs. van der Waals')
-"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`Component analysis for water dimer hydrogen bond:
-Component        Energy (kJ/mol)   % of Total
----------------------------------------------
-Coulomb                  -14.36        49.3%
-Exchange                 -34.19       117.5%
-Polarization              -7.46        25.6%
-Dispersion                -2.53         8.7%
----------------------------------------------
-Total                    -29.10       100.0%
-
-Physical insights:
-- Exchange-Coulomb dominates (117%), providing most attraction
-- Classical Coulomb adds 49% attraction  
-- Polarization (25%) shows importance of charge redistribution
-- Dispersion is minor (9%) for H-bonds vs. van der Waals`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>The exchange term in CE-1P includes penetration effects, making it attractive for hydrogen bonds.</p>
-    </Notes>
   </Step>
-
-  <Step id="compare_methods" title="Compare with other results">
-    <Instructions>
-      <p>Compare CE-1P results with our previous calculations to see method dependence.</p>
-    </Instructions>
     
-    <Commands>
-      <pre><code>{`echo "Comparison of water dimer interaction energies:"
-echo "Method               Basis        Energy (kJ/mol)"
-echo "------------------------------------------------"
-echo "HF                   3-21G            -16.20"
-echo "ωB97X (BSSE-corr)    def2-QZVP        -15.86"  
-echo "CE-1P/ωB97X          def2-SVP         -29.10"
-echo ""
-echo "CE-1P gives stronger binding due to:"
-echo "1. Better treatment of electron correlation"
-echo "2. Explicit polarization and dispersion"
-echo "3. Different basis set (def2-SVP vs others)"`}</code></pre>
-    </Commands>
-    
-    <Notes>
-      <p>CE-1P typically gives more accurate interaction energies than HF, approaching CCSD(T) quality.</p>
-    </Notes>
-  </Step>
-
-  <Step id="advanced_usage" title="Try different systems">
+  <Step id="advanced_usage" title="Try different methods and basis sets">
     <Instructions>
       <p>You can modify the molecular files to study different interactions and see how components change.</p>
-    </Instructions>
-    
-    <Commands>
+
       <pre><code>{`# For different methods/basis:
 ./run_ce1p.sh --method pbe --basis def2-tzvp
 
-# CE-1P excels at revealing interaction types:
+# CE-1P is quite an accurate method at low cost and helps reveal dominant interactions:
 # - Ionic: Coulomb dominates
 # - H-bonds: Exchange-Coulomb + Coulomb dominate  
 # - vdW: Dispersion dominates
 # - π-π: Mix of dispersion and exchange`}</code></pre>
-    </Commands>
+    </Instructions>
     
     <Notes>
       <p>CE-1P decomposition helps in understanding and designing molecular interactions.</p>
@@ -772,27 +666,18 @@ echo "3. Different basis set (def2-SVP vs others)"`}</code></pre>
 
 | Method | Binding Energy (kJ/mol) | Time | Key Advantage |
 |--------|------------------------|------|---------------|
-| **HF/3-21G** | -16.20 | ~0.5 sec | Very fast, but poor accuracy |
-| **ωB97X (BSSE-corr)** | -15.86 | ~1 min | Systematic improvability, well benchmarked |
-| **CE-1P/ωB97X** | -29.10 | &lt;0.5 sec | Cheap, accurate, physical insight |
+| **HF/3-21G** | -43.64 | ~0.5 sec | Very fast, but poor accuracy |
+| **HF/3-21G (BSSE-corr)** | -25.64 | ~7 s | Systematic improvability, well benchmarked |
+| **CE-1P (ωB97X/def2-SVP)** | -24.69 | &lt;0.5 sec | Cheap, accurate, physical insight |
 
 **Why do the methods give different binding energies?**
-- **HF/3-21G** underestimates binding due to small basis set and lack of correlation
-- **ωB97X w/BSSE** provides good balance, but limited by basis set quality
+- **HF/3-21G** the direct supermolecule method overestimates binding due to small basis set (BSSE)
+- **HF/3-21G w/BSSE** provides good balance, but can be very expensive for larger dimers
 - **CE-1P** includes all physical components explicitly, giving more accurate results
 
 **Key physical insights for water dimer:**
-1. **Exchange-Coulomb dominates** (117% of binding) - quantum penetration effects
-2. **Classical Coulomb** contributes significantly (49%) - charge-charge interactions
-3. **Polarization** is important (26%) - charge redistribution upon binding
-4. **Dispersion** is modest (9%) but essential for accurate binding
-
-## Computational Considerations
-
-Modern calculations often use:
-1. **DFT with dispersion corrections** (e.g., wb97x-D4)
-2. **Composite methods like double-hybrid functionals, MP2 or CCSD(T)** for benchmark accuracy
-3. **Force fields** for large systems (1000s of atoms)
+1. **Coulomb dominates** (117% of binding) - quantum penetration effects
+2. **Dispersion** is modest (9%) but probably essential for accurate binding
 
 ## Key Takeaways
 
@@ -818,39 +703,6 @@ For those interested in a more sophisticated energy decomposition analysis, Loca
 
 LED decomposes DLPNO-CCSD(T) energies into physically meaningful components. This method is available in ORCA and provides highly accurate interaction energies with detailed breakdowns.
 
-**Important**: LED analysis requires **three separate calculations**:
-
-1. **Dimer with LED**: Full complex with LED decomposition
-2. **Monomer A**: Isolated water molecule A at its geometry in the dimer
-3. **Monomer B**: Isolated water molecule B at its geometry in the dimer
-
-```bash
-# The complete LED workflow:
-orca led_dimer.inp > led_dimer.stdout  # Dimer with LED
-orca led_a.inp > led_a.stdout          # Water A at dimer geometry
-orca led_b.inp > led_b.stdout          # Water B at dimer geometry
-```
-
-**The interaction energy components are calculated as:**
-- **ΔE(component) = E(dimer) - E(monomer A) - E(monomer B)**
-
-**Energy breakdown (kJ/mol) - water dimer example:**
-
-| Component | Energy | Physical Origin |
-|-----------|--------|-----------------|
-| **Electrostatic** | -93.09 | Charge-charge interactions |
-| **Exchange** | -15.31 | Quantum stabilization from antisymmetrization |
-| **Dispersion** | -3.03 | London forces from electron correlation |
-| **Total binding** | **-28.95** | Full CCSD(T) binding energy |
-
-Notice how different the breakdown of some components is compared to CE-1p. This highlights why it's important to understand *how* the breakdown (or construction) is performed before interpretation. LED provides a more rigorous quantum mechanical decomposition but at significantly higher computational cost.
-
-**When to use LED:**
-- When you need highly accurate binding energies
-- For benchmarking other methods
-- When detailed understanding of electron correlation effects is required
-- For publication-quality energy decomposition analysis
-
-The LED method includes more correlation effects than DFT or semi-empirical methods, typically giving stronger binding energies and more detailed insights into the nature of intermolecular interactions.
+You can check this out in the `LED` directory, or looking at the [ORCA documentation](https://www.faccts.de/docs/orca/6.0/manual/contents/typical/properties.html#example-led-analysis-of-intermolecular-interactions)
 
 :::

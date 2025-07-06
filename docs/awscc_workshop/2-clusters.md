@@ -15,7 +15,11 @@ Moving from isolated pairs to clusters and crystals reveals fundamental challeng
 
 Consider three water molecules A, B, and C. The total interaction energy is:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{ABC} = E_{AB} + E_{AC} + E_{BC} + \Delta E_{3-body}$$
+
+</div>
 
 where $\Delta E_{3-body}$ is the non-additive three-body term. This arises from:
 
@@ -27,7 +31,11 @@ where $\Delta E_{3-body}$ is the non-additive three-body term. This arises from:
 
 For a cluster of N molecules, the many-body expansion is:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{total} = \sum_{i<j} E_{ij}^{(2)} + \sum_{i<j<k} E_{ijk}^{(3)} + \sum_{i<j<k<l} E_{ijkl}^{(4)} + ...$$
+
+</div>
 
 Where:
 - $E_{ij}^{(2)}$ = pairwise interactions (typically 85-95% of total)
@@ -72,7 +80,11 @@ In a crystal, we face additional complexity:
 3. **Periodic boundary conditions**: The unit cell represents infinite repetition
 
 The lattice energy is:
+<div style={{textAlign: 'center'}}>
+
 $$E_{lattice} = \frac{1}{2} \sum_{i=1}^{N} \sum_{j \neq i}^{\infty} E_{ij}$$
+
+</div>
 
 The factor of 1/2 avoids double counting. The sum converges because:
 - Electrostatic: Conditionally convergent (depends on summation order)
@@ -161,42 +173,60 @@ H         -2.09141      0.80635     -0.15110`}</code></pre>
     </Commands>
     
     <Output>
-      <pre><code>{`Using OCC with method=hf, basis=3-21g
-
-Running monomer calculations...
-  A:    Energy: -75.584078983869
-  B:    Energy: -75.583919156130
-  C:    Energy: -75.585017601871
-
-Running dimer calculations...
-  AB:   Energy: -151.173672018963
-  AC:   Energy: -151.175185748560
-  BC:   Energy: -151.169195344758
-
-Running trimer calculation...
-  ABC:  Energy: -226.764699203129
-
-=========================================
+      <pre><code>{`=========================================
 INTERACTION ENERGY ANALYSIS
 =========================================
 
 Individual pairwise interactions:
-  E_int(A-B) = -0.005674 hartree = -14.90 kJ/mol
-  E_int(A-C) = -0.005089 hartree = -13.36 kJ/mol
-  E_int(B-C) = -0.000259 hartree = -0.68 kJ/mol
+  E_int(A-B) = -0.016885 hartree = -44.33 kJ/mol
+  E_int(A-C) = -0.015870 hartree = -41.67 kJ/mol
+  E_int(B-C) = -0.001111 hartree = -2.92 kJ/mol
 
 Trimer interaction energies:
-  Direct trimer:     -0.011584 hartree = -30.41 kJ/mol
-  Sum of pairs:      -0.011022 hartree = -28.94 kJ/mol
-  Many-body effect:  -0.000562 hartree = -1.48 kJ/mol
+  Direct trimer:     -0.038561 hartree = -101.24 kJ/mol
+  Sum of pairs:      -0.033866 hartree = -88.92 kJ/mol
+  Many-body effect:  -0.004695 hartree = -12.33 kJ/mol
 
-Many-body contribution: 4.9% of total interaction`}</code></pre>
+Many-body contribution: 12.1% of total interaction`}</code></pre>
     </Output>
     
     <Notes>
-      <p>The three-body effect is -1.48 kJ/mol, about 5% of the total interaction energy - cooperative binding beyond pairwise additivity.</p>
+      <p>The three-body effect is -12.33 kJ/mol, about 12% of the total interaction energy - cooperative binding beyond pairwise additivity. But this is just for hf/3-21g! Which we know suffers from BSSE... Let's do the same thing with a better method/basis </p>
     </Notes>
   </Step>
+
+  <Step id="run_calculation" title="Run trimer calculation with wb97x/def2-tzvpp">
+    <Instructions>
+      <p>Execute the script to calculate all monomer, dimer, and trimer energies.</p>
+    </Instructions>
+    
+    <Commands>
+      <pre><code>./run_water_trimer.sh --method wb97x --basis def2-tzvpp</code></pre>
+    </Commands>
+    
+    <Output>
+      <pre><code>{`=========================================
+INTERACTION ENERGY ANALYSIS
+=========================================
+
+Individual pairwise interactions:
+  E_int(A-B) = -0.008928 hartree = -23.44 kJ/mol
+  E_int(A-C) = -0.008402 hartree = -22.06 kJ/mol
+  E_int(B-C) = -0.001432 hartree = -3.76 kJ/mol
+
+Trimer interaction energies:
+  Direct trimer:     -0.021519 hartree = -56.50 kJ/mol
+  Sum of pairs:      -0.018762 hartree = -49.26 kJ/mol
+  Many-body effect:  -0.002758 hartree = -7.24 kJ/mol
+
+Many-body contribution: 12.8% of total interaction`}</code></pre>
+    </Output>
+    
+    <Notes>
+      <p>The three-body effect is smaller in terms of total energy (-7.24 kJ/mol),but still about 13% of the total interaction energy!</p>
+    </Notes>
+  </Step>
+
 
   <Step id="analyze_pairwise" title="Understand pairwise contributions">
     <Instructions>
@@ -207,16 +237,16 @@ Many-body contribution: 4.9% of total interaction`}</code></pre>
       <pre><code>{`echo "Pairwise interaction analysis:"
 echo "Pair   Distance   E_int (kJ/mol)   Comment"
 echo "------------------------------------------------"
-echo "A-B    2.67 Å        -14.90        Strong H-bond"
-echo "A-C    2.59 Å        -13.36        Strong H-bond"  
-echo "B-C    4.12 Å         -0.68        Weak/no H-bond"
+echo "A-B    2.67 Å        -23.44        Strong H-bond"
+echo "A-C    2.59 Å        -22.06        Strong H-bond"  
+echo "B-C    4.12 Å         -3.76        Weak/no H-bond"
 echo ""
 echo "Molecule A acts as a double hydrogen bond donor/acceptor"
 echo "bridging between B and C, creating cooperativity."`}</code></pre>
     </Commands>
     
     <Notes>
-      <p>The geometry shows A is the central molecule, hydrogen bonded to both B and C.</p>
+      <p>The geometry shows A is the central molecule, hydrogen bonded to both B and C. Confirm this via a visualisation program!</p>
     </Notes>
   </Step>
 
@@ -245,7 +275,7 @@ echo "accumulates in bulk simulations (ice, liquid water)."`}</code></pre>
     </Commands>
     
     <Notes>
-      <p>Most force fields neglect 3-body terms for efficiency, accepting ~5% error in exchange for 100x speedup.</p>
+      <p>Many (most) force fields neglect 3-body terms for efficiency, accepting ~5% error in exchange for 100x speedup. but it's also worth keeping in mind that a trimer itself is not necessarily representative of a bulk structure! The 4, 5 ... n-body interactions may not be uniformly negative (binding)!</p>
     </Notes>
   </Step>
 </Tutorial>
@@ -300,247 +330,27 @@ ice_cluster_16.xyz: 65 molecules`}</code></pre>
     </Commands>
     
     <Output>
-      <pre><code>{`Running xTB ice cluster analysis with method=gfn2, threads=2
-
-Running central molecule calculation...
-  TOTAL ENERGY              -5.070728995 Eh
-
-Running cluster calculations...
-  Cluster with 4 neighbor shells...
-  TOTAL ENERGY             -25.386551710 Eh
-  Cluster with 8 neighbor shells...
-  TOTAL ENERGY             -45.684209813 Eh
-
-Running neighbor environment calculations...
-  Neighbors only with 4 shells...
-  TOTAL ENERGY             -20.287348592 Eh
-  Neighbors only with 8 shells...
-  TOTAL ENERGY             -40.556142828 Eh
-
-=========================================
+      <pre><code>{`=========================================
 INTERACTION ENERGY ANALYSIS
 =========================================
 
 Total interaction energies:
-  4-shell cluster:  -0.028474 hartree = -74.76 kJ/mol
-  8-shell cluster:  -0.057338 hartree = -150.53 kJ/mol
+  4-shell cluster:  -0.055711 hartree = -146.27 kJ/mol
+  8-shell cluster:  -0.049212 hartree = -129.21 kJ/mol
 
 Per-molecule interaction energies:
-  4-shell cluster:  -0.005695 hartree = -14.95 kJ/mol per molecule
-  8-shell cluster:  -0.006371 hartree = -16.73 kJ/mol per molecule
+  4-shell cluster:  -0.011142 hartree = -29.25 kJ/mol per molecule
+  8-shell cluster:  -0.005468 hartree = -14.36 kJ/mol per molecule
 
-Convergence: 11.9% change from 4 to 8 shells`}</code></pre>
+Convergence: -13.2% change from 4 to 8 shells`}</code></pre>
     </Output>
     
     <Notes>
-      <p>The per-molecule interaction energy increases by 12% from 4 to 8 neighbor shells, showing long-range effects matter.</p>
+      <p>The total binding energy for the central molecule decreases! When going from from 4 Å to 8 Å neighbor shells, showing long-range effects matter. The geometries for larger calculations are there, but I couldn't get them to converge (memory issues)</p>
     </Notes>
   </Step>
 
-  <Step id="cutoff_implications" title="Implications for cutoff selection">
-    <Instructions>
-      <p>Consider how these results guide cutoff selection in molecular simulations.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`echo "Cutoff radius effects on ice simulations:"
-echo "Cutoff   Accuracy  Comment"
-echo "----------------------------------------"
-echo " 6.0 Å     85%     Minimum acceptable, misses 15%"
-echo " 8.0 Å     92%     Common choice, misses 8%"
-echo "10.0 Å     96%     Good accuracy, misses 4%"
-echo "12.0 Å     98%     High accuracy, misses 2%"
-echo "14.0 Å     99%     Excellent, misses 1%"
-echo ""
-echo "Computational cost scales as ~r³:"
-echo "Going from 8.0 Å to 12.0 Å cutoff:"
-echo "- Accuracy: 92% → 98% (+6% accuracy)"
-echo "- Cost: 3.4× slower"
-echo "- Is 6% accuracy worth 3.4× cost?"`}</code></pre>
-    </Commands>
-    
-    <Notes>
-      <p>The accuracy vs. cost tradeoff depends on your application. Properties like phase transitions may need longer cutoffs.</p>
-    </Notes>
-  </Step>
 </Tutorial>
-
-### Exercise 3: Lattice Energy and Crystal Cohesion
-
-Finally, we tackle infinite crystals using the CE-1P pairwise summation approach. This exercise demonstrates how pairwise models can work surprisingly well for molecular crystals, despite the many-body effects we've just studied. The key insight is that while individual three-body terms matter, their collective effect in crystals is often well-approximated by cleverly parameterized pairwise models.
-
-<Tutorial
-  title="Ice Lattice Energy Calculation"
-  description="Calculate the lattice energy of ice Ih crystal using pairwise CE-1P interactions to understand crystal cohesion and predict sublimation enthalpy."
->
-  <Step id="setup" title="Navigate to ice lattice energy directory">
-    <Instructions>
-      <p>Navigate to the ice_elat directory containing the crystal structure file and examine the setup.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`cd ../ice_elat/
-ls -la
-head -20 ice.cif | grep -E "_cell|_symmetry|H2O"`}</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`ice.cif  ice_dimers/  run_ice_elat.sh  example_ice_stdout
-
-_cell_length_a 4.474(1)
-_cell_length_b 4.474
-_cell_length_c 7.298(2)
-_cell_angle_alpha 90
-_cell_angle_beta 90
-_cell_angle_gamma 120
-_symmetry_space_group_name_H-M 'P 63/m m c'
-_symmetry_Int_Tables_number 194`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>Ice Ih has hexagonal symmetry (space group P63/mmc) with a ≈ 4.5 Å and c ≈ 7.3 Å.</p>
-    </Notes>
-  </Step>
-
-  <Step id="run_calculation" title="Run lattice energy calculation">
-    <Instructions>
-      <p>Execute the OCC elat (energy lattice) calculation using the CE-1P model.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>./run_ice_elat.sh --model ce-1p --threads 4</code></pre>
-    </Commands>
-    
-    <Output>
-      <pre><code>{`Running OCC ice lattice energy calculation with model=ce-1p, threads=4
-
-Generating molecular pairs from crystal...
-Calculating pairwise interactions...
-
-Distance  Symmetry               Coulomb  Exchange  Polarization  Dispersion  Total
-2.759     1-x,1-y,1/2+z         -4.637   -8.842    -1.683       -0.683     -15.845
-2.759     -1+x,-1+y,z           -4.637   -8.842    -1.683       -0.683     -15.845
-3.456     1-x,1-y,-1/2+z        -5.123   -5.431    -1.316       -0.817     -12.688
-...
-
-Molecule 1 total: -63.109 kJ/mol (73 pairs)
-Molecule 2 total: -63.109 kJ/mol (73 pairs)
-
-Final energy: -126.217 kJ/mol
-Lattice energy: -126.217 kJ/mol
-
-=========================================
-LATTICE ENERGY ANALYSIS
-=========================================
-
-Calculated lattice energies:
-  Asymmetric unit:     -126.22 kJ/mol
-  Per molecule:        -63.11 kJ/mol
-
-Thermodynamic estimates:
-  2RT at 298K:         4.96 kJ/mol
-  ΔH_sub estimate:     58.15 kJ/mol
-
-Experimental reference:
-  ΔH_sub (exp):        ~54 kJ/mol
-  Difference:          4.15 kJ/mol (7.7%)`}</code></pre>
-    </Output>
-    
-    <Notes>
-      <p>The asymmetric unit contains 2 water molecules, so we divide by 2 for per-molecule energy. The 7.7% error is excellent for a pairwise model.</p>
-    </Notes>
-  </Step>
-
-  <Step id="analyze_components" title="Analyze interaction components">
-    <Instructions>
-      <p>Extract and analyze the contributions from different types of interactions in the crystal.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`echo "Interaction energy by distance in ice crystal:"
-echo "=============================================="
-echo "Distance (Å)  Energy (kJ/mol)  Type"
-echo "2.76          -15.8           Nearest H-bond neighbors"
-echo "3.46          -12.7           Second shell H-bonds"
-echo "4.47          -3.9            Third shell interactions"
-echo "5.20          -0.6            Long-range dispersion"
-echo ""
-echo "50% of binding comes from 4 nearest neighbors"
-echo "Long-range (>5 Å) still contributes 12%"`}</code></pre>
-    </Commands>
-    
-    <Notes>
-      <p>Nearest neighbors at 2.76 Å contribute -15.8 kJ/mol each, providing most of the cohesion, but long-range effects are non-negligible.</p>
-    </Notes>
-  </Step>
-
-  <Step id="crystal_properties" title="Relate to crystal properties">
-    <Instructions>
-      <p>Connect lattice energy to observable crystal properties and phase transitions.</p>
-    </Instructions>
-    
-    <Commands>
-      <pre><code>{`echo "Crystal energetics and phase transitions:"
-echo "========================================"
-echo "Lattice energy (ice→gas):      63.1 kJ/mol"
-echo "Fusion enthalpy (ice→liquid):   6.0 kJ/mol" 
-echo "Vaporization (liquid→gas):     40.7 kJ/mol"
-echo "Sum (fusion + vap):            46.7 kJ/mol"
-echo ""
-echo "Energy breakdown:"
-echo "Breaking ice structure:   6.0 kJ/mol (9.5%)"
-echo "Breaking H-bonds fully:  40.7 kJ/mol (64.5%)"
-echo ""
-echo "Interpretation:"
-echo "- Only ~10% of H-bonds break during melting"
-echo "- Liquid water retains ~90% of ice H-bond network"
-echo "- Full H-bond breaking occurs during vaporization"`}</code></pre>
-    </Commands>
-    
-    <Notes>
-      <p>The small fusion enthalpy shows ice and liquid water have similar H-bond networks - only the ordering changes.</p>
-    </Notes>
-  </Step>
-</Tutorial>
-
-## Connecting Theory to Practice: What We've Learned
-
-The three exercises above demonstrate key principles of many-body interactions and crystal energetics:
-
-**From Exercise 1 (Water Trimers):**
-- Many-body effects are real but modest (~5%) for hydrogen-bonded systems
-- Anti-cooperative effects in water arise from polarization saturation
-- Individual three-body terms can be calculated exactly for small systems
-
-**From Exercise 2 (Cluster Convergence):**
-- Long-range interactions (>8 Å) contribute ~10% to total binding
-- Simulation cutoffs represent accuracy vs. cost tradeoffs
-- Different properties (energies vs. forces vs. phase behavior) may require different cutoffs
-
-**From Exercise 3 (Crystal Lattice Energies):**
-- Pairwise models work remarkably well (~7% error) for molecular crystals
-- This success occurs despite measurable many-body effects in small clusters
-- Effective parameterization can capture collective many-body contributions
-
-**The Paradox Resolved:**
-How can pairwise models work so well for crystals when we just showed many-body effects are important? The answer lies in **error cancellation** and **effective parameterization**:
-
-1. **Many-body effects are systematic** - they occur similarly throughout the crystal
-2. **CE-1P includes implicit many-body terms** through its polarization model and fitted parameters
-3. **Collective effects average out** - individual cooperative/anti-cooperative terms partially cancel
-4. **Reference data includes many-body effects** - CE-1P was fitted to high-level calculations that capture these effects
-
-This is why **understanding fundamentals matters** - it helps you recognize when approximations will work and when they'll fail.
-
-## The CE-1p Model for Crystals
-
-The CE-1p model extends naturally from dimers to crystals by summing pairwise interactions. It captures the essential physics while remaining computationally efficient:
-
-- **Input**: Crystal structure + monomer wavefunctions
-- **Output**: Lattice energy with physical decomposition
-- **Speed**: ~1000x faster than full periodic DFT
-- **Accuracy**: 5-10% error for molecular crystals
-- **Many-body effects**: Partially included via polarization scaling
 
 ## Understanding Energy Units in Crystals
 
@@ -599,7 +409,11 @@ For the most accurate bespoke dataset, errors can be as low as 3 meV/atom:
 
 For molecular crystals, the experimental sublimation enthalpy relates to our calculated lattice energy:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta H_{sub} = -E_{lattice} + 2RT$$
+
+</div>
 
 The 2RT term (~5 kJ/mol at 298K) accounts for the difference between constrained vibrations in the crystal and free translation/rotation in the gas phase. For ice:
 
@@ -608,6 +422,127 @@ The 2RT term (~5 kJ/mol at 298K) accounts for the difference between constrained
 - Experimental = 54.1 kJ/mol (7% error)
 
 This excellent agreement validates the CE-1p approach for molecular crystals.
+
+
+### Exercise 3: Lattice Energy and Crystal Cohesion
+
+Finally, we tackle crystals using the CE-1P pairwise summation approach. This exercise demonstrates how pairwise models can work surprisingly well for molecular crystals, despite the many-body effects we've just studied. The key insight is that while individual three-body terms matter, their collective effect in crystals may well cancel and is often well-approximated by pairwise models.
+
+<Tutorial
+  title="Ice Lattice Energy Calculation"
+  description="Calculate the lattice energy of ice Ih crystal using pairwise CE-1P interactions to understand crystal cohesion and predict sublimation enthalpy."
+>
+  <Step id="setup" title="Navigate to ice lattice energy directory">
+    <Instructions>
+      <p>Navigate to the ice_elat directory containing the crystal structure file and examine the setup.</p>
+    </Instructions>
+    
+    <Commands>
+      <pre><code>{`cd ../ice_elat/
+ls -la
+head -20 ice.cif"`}</code></pre>
+    </Commands>
+    
+    <Output>
+      <pre><code>{`ice.cif run_ice_elat.sh  example_ice_stdout
+
+data_H2O
+_symmetry_space_group_name_H-M   P6_3cm
+_cell_length_a   7.60356630
+_cell_length_b   7.60356630
+_cell_length_c   7.14296200
+_cell_angle_alpha   90.00000000
+_cell_angle_beta   90.00000000
+_cell_angle_gamma   120.00000000
+_symmetry_Int_Tables_number   185
+_chemical_formula_structural   H2O
+_chemical_formula_sum   'H24 O12'
+_cell_volume   357.63798996`}</code></pre>
+    </Output>
+    
+    <Notes>
+      <p>Ice Ih has hexagonal symmetry (space group P6_3cm) with a ≈ 7.6 Å and c ≈ 7.14 Å.</p>
+    </Notes>
+  </Step>
+
+  <Step id="run_calculation" title="Run lattice energy calculation">
+    <Instructions>
+      <p>Execute the OCC elat (energy lattice) calculation using the CE-1P model.</p>
+    </Instructions>
+    
+    <Commands>
+      <pre><code>./run_ice_elat.sh --model ce-1p --threads 4</code></pre>
+    </Commands>
+    
+    <Output>
+      <pre><code>{`Neighbors for molecule 0
+     Rn      Rc                Symop   E_coul     E_ex    E_rep    E_pol   E_disp    E_tot
+===================================================================================
+  1.667   2.672                    -  -61.688  -88.662  165.103   -8.693   -2.160  -30.744
+  1.682   2.687                    -  -57.411  -83.945  156.064   -8.372   -2.151  -28.528
+  1.682   2.687                    -  -57.411  -83.945  156.064   -8.372   -2.151  -28.528
+  1.686   2.693                    -  -53.779  -82.590  153.337   -8.273   -2.157  -25.593
+  2.785   4.374        -x,1-y,-1/2+z    2.514   -0.244    0.409   -0.231   -0.560    1.849
+
+  Final energy: -125.590 kJ/mol
+Lattice energy: -125.590 kJ/mol
+...
+
+=========================================
+LATTICE ENERGY ANALYSIS
+=========================================
+
+Calculated lattice energies:
+  Asymmetric unit:     -125.59 kJ/mol
+  Per molecule:        -62.80 kJ/mol
+
+Thermodynamic estimates:
+  2RT at 298K:         4.96 kJ/mol
+  ΔH_sub estimate:     57.84 kJ/mol
+
+Experimental reference:
+  ΔH_sub (exp):        ~54 kJ/mol
+  Difference:          3.84 kJ/mol (7.1%)`}</code></pre>
+    </Output>
+    
+    <Notes>
+      <p>The asymmetric unit contains 2 water molecules, so we divide by 2 for per-molecule energy. The 7.1% error is excellent for a pairwise model, and undoubtedly comes from cancellation of errors on some level...</p>
+    </Notes>
+  </Step>
+</Tutorial>
+
+## Connecting Theory to Practice: What We've Learned
+
+The three exercises above demonstrate key principles of many-body interactions and crystal energetics:
+
+**From Exercise 1 (Water Trimers):**
+- Many-body effects are real but modest (~5%) for hydrogen-bonded systems, trimers, quatermers etc. are still probably not representative of a bulk...
+- Individual three-body terms can be calculated exactly for small systems
+
+**From Exercise 2 (Cluster Convergence):**
+- Simulation cutoffs represent accuracy vs. cost tradeoffs
+- Different properties (energies vs. forces vs. phase behavior) may require different cutoffs
+
+**From Exercise 3 (Crystal Lattice Energies):**
+- Pairwise models can work remarkably well (~7% error) for molecular crystals
+- This success occurs despite measurable many-body effects in small clusters
+
+How can pairwise models work so well for crystals when we just showed many-body effects are important? The answer lies in **error cancellation**, and the nature of crystals vs. trimers:
+
+1. **Many-body effects may cancel** - e.g. while the net polarisation of a molecule from 3 molecules might be very different than 2, it may be that for a full crystal these largely cancel... so:
+2. **Collective effects average out** - individual cooperative/anti-cooperative terms partially cancel
+
+This is why **understanding fundamentals matters** - it helps you recognize when approximations will work and when they'll fail. More importantly, testing and benchmarking accuracy is fundamental to understanding the success and potential failures of different models!
+
+## The CE-1p Model for Crystals
+
+The CE-1p model extends naturally from dimers to crystals by summing pairwise interactions. It captures the essential physics while remaining computationally efficient:
+
+- **Input**: Crystal structure + monomer wavefunctions
+- **Output**: Lattice energy with physical decomposition
+- **Speed**: much much cheaper computationally than e.g. full periodic DFT
+- **Accuracy**: MAD of 3.3 kJ/mol error for molecular crystals (X23 set)
+
 
 ## Practical Considerations and Challenges
 
@@ -621,8 +556,8 @@ The NaCl example demonstrates why simple cutoff-based summation fails for ionic 
 ### Polymorphism: When Small Differences Matter
 
 Many pharmaceutical compounds have multiple crystal forms (polymorphs) with energy differences < 5 kJ/mol. Since RT ≈ 2.5 kJ/mol at room temperature, thermal effects can reverse stability rankings. This is why:
-- Temperature-dependent studies are crucial
-- Kinetic factors often control which form crystallizes
+- Temperature-dependent studies are crucial, and vibrational enthalpy contributions are important.
+- Actual growth conditions (nucleation), kinetic factors often control which form crystallizes
 - Computational predictions need ~1 kJ/mol accuracy
 
 ### Visualizing Crystal Energetics
@@ -634,11 +569,9 @@ Tools like CrystalExplorer can generate "energy frameworks" - 3D visualizations 
 
 ## Key Takeaways
 
-✓ **Many-body effects** are real and measurable - the water trimer shows ~25% anti-cooperative effects
-
 ✓ **Energy units matter** - always specify per molecule, per formula unit, or per atom
 
-✓ **Pairwise models work surprisingly well** - CE-1p achieves ~10% accuracy by smart parameterization
+✓ **Pairwise models can work surprisingly well** - CE-1p achieves ~10% accuracy by smart parameterization
 
 ✓ **Convergence differs by system** - molecular crystals converge smoothly, ionic crystals oscillate wildly
 

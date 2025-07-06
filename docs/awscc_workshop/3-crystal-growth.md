@@ -673,7 +673,11 @@ The figure above shows how all our calculations connect to create a complete und
 
 The competition between crystal binding and solvent stabilization determines both **solubility** and **growth behavior**:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta G_{\text{crystallization}} = E_{\text{attachment}} - \Delta G_{\text{solvation}}$$
+
+</div>
 
 For paracetamol:
 - Strong solvation (-54.6 kJ/mol) favors dissolution

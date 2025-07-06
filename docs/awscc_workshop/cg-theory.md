@@ -32,7 +32,11 @@ Here's the key insight: crystals grow fastest at kink sites. Why? It's a Goldilo
 
 The attachment energy tells you how much a face wants to grow:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{att}} = \sum_{\text{neighbors}} (E_{\text{crystal}}^{AB} - E_{\text{solvent}}^{AB})$$
+
+</div>
 
 This is just saying: "How much more stable is this molecule when it's attached to the crystal versus when it's dissolved in solution?" If that number is large and negative (i.e., much more stable in the crystal), that face will grow fast. If it's small, the face grows slowly and ends up dominating the final crystal shape.
 
@@ -84,11 +88,19 @@ The beauty is that this automatically gives you the right equilibrium distributi
 
 In real experiments, you don't grow crystals from perfectly saturated solutions - that would take forever. You need supersaturation to provide the driving force. The chemical potential difference tells you how "hungry" the system is to form crystals:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta \mu = k_B T \ln(S)$$
+
+</div>
 
 Where S is the supersaturation ratio (how much more concentrated your solution is compared to the saturation concentration). This gets added to your attachment energy:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta G_{\text{total}} = \Delta G_{\text{attachment}} - \Delta \mu$$
+
+</div>
 
 The trick is getting the supersaturation right. Too low and nothing happens. Too high and you get kinetic effects (or worse, you crash everything out at once in an amorphous mess).
 
@@ -130,7 +142,11 @@ This is where CE-1p comes to the rescue. You need intermolecular interaction ene
 
 CE-1p gives you quantum mechanical quality for the price of a force field calculation:
 
+<div style={{textAlign: 'center'}}>
+
 $$U_{\text{latt}} = \frac{1}{2} \sum_{A} \sum_{r_n^{AB} < r_{\text{max}}} E^{AB}_{\text{CE-1p}}$$
+
+</div>
 
 The factor of 1/2 is there because we're double-counting pairs (A interacting with B is the same as B interacting with A).
 
@@ -154,7 +170,11 @@ We use nearest atom-atom distance ($r_n^{AB}$), not center-of-mass distance. For
 
 For a non-nearest neighbor interaction AC, partition its energy among nearest neighbors AB:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_{LR}^{AB} = \sum_{AC \notin NN} \frac{\vec{r}^{AB} \cdot \vec{r}^{AC}}{w_{\text{tot}}^{AC}} E^{AC}$$
+
+</div>
 
 Where the total weight is: $w_{\text{tot}}^{AC} = \sum_{AB \in NN} \vec{r}^{AB} \cdot \vec{r}^{AC}$
 
@@ -164,7 +184,11 @@ This preserves total energy while maintaining directional character of long-rang
 
 **SMD Continuum Model**: Calculates solvation free energies using the Solvation Model based on Density:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta G_{\text{solv}} = \Delta G_{\text{EP}} + \Delta G_{\text{CDS}} + \Delta G_{\text{std}}$$
+
+</div>
 
 Components:
 - **$\Delta G_{\text{EP}}$**: Electronic polarization from self-consistent reaction field
@@ -196,7 +220,11 @@ Components:
 
 For asymmetric crystal-solution interfaces:
 
+<div style={{textAlign: 'center'}}>
+
 $$\Delta G_{\text{solv}}^{\text{total}} = \Delta G_{\text{solv}}^{\overrightarrow{AB}} + \Delta G_{\text{solv}}^{\overrightarrow{BA}} + \frac{\Delta G_{\text{solv}}^{\overrightarrow{AB}} - \Delta G_{\text{solv}}^{\overrightarrow{BA}}}{2}$$
+
+</div>
 
 This maintains energy conservation while preserving interface asymmetry.
 
@@ -213,7 +241,11 @@ This maintains energy conservation while preserving interface asymmetry.
 **Final step**: Use computed interaction energies in CrystalGrower Monte Carlo simulation.
 
 Total attachment energy for each surface site:
+<div style={{textAlign: 'center'}}>
+
 $$E_{\text{attachment}} = \sum_{\text{neighbors}} (E_{\text{CE-1p}}^{AB} + E_{LR}^{AB} + \Delta G_{\text{solv}}^{AB})$$
+
+</div>
 
 The simulation predicts:
 - **Surface energies**: Cost of creating crystal-solution interfaces

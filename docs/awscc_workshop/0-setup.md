@@ -8,50 +8,17 @@ Welcome to the AWSCC 2025 Workshop on Intermolecular Interactions! This setup gu
 
 ## Quick Start
 
+The [GitHub repository](https://github.com/peterspackman/awscc2025) for this workshop is the best starting point.
+
 For this workshop, you'll need:
 - **[OCC](https://github.com/peterspackman/occ/releases)** (Open Crystal Calculations) - for interaction energy calculations
-- **XTB** (eXtended Tight-Binding) - for fast quantum calculations
-- A molecular visualizer (CrystalExplorer, VESTA, or Ovito)
+- **[XTB](https://github.com/grimme-lab/xtb)** (eXtended Tight-Binding) - for fast quantum calculations
+- **Optional:** ORCA for advanced calculations (not strictly required but very valuable)
+- **Visualization:** up to you - CrystalExplorer, Avogadro, Ovito, ChimeraX etc..
 
-## Installation Options
-
-### Option 1: Quick Install (5 minutes)
-
-#### OCC Installation and usage via CLI (recommended)
-```bash
-# Download from GitHub releases
-# https://github.com/peterspackman/occ/releases
-export OCC_DATA_PATH=/path/to/occ/share/folder
-occ --help
-```
-
-**Important**: Set the `OCC_DATA_PATH` environment variable:
-```bash
-export OCC_DATA_PATH=/path/to/occ/data
-```
-
-#### OCC install via pip or uv
-```
-pip install occpy
-occpy --help
-
-# For uv users
-uv tool run occpy --help
-```
-
-
-#### XTB Installation
-`xtb` can be installed via compilation of the source code, pre-built binary releases, conda etc.
-```bash
-# Install with conda
-conda install -c conda-forge xtb
-
-# Or with pip
-pip install xtb-python
-```
-
-### Option 2: Use Pre-computed Results
-All calculations have been pre-run. You can follow along using the provided output files in each section.
+Some of those are installable via the scripts in the
+[GitHub repository](https://github.com/peterspackman/awscc2025), but if you
+wish to manually install them there are instructions below for `occ` and `xtb` binaries.
 
 ## Test Your Setup
 
@@ -96,6 +63,52 @@ All calculations have been pre-run. You can follow along using the provided outp
    ...
    ```
 
+### Other Installation Options
+
+#### OCC Installation and usage via CLI (recommended)
+```bash
+# Download from GitHub releases
+# https://github.com/peterspackman/occ/releases
+export OCC_DATA_PATH=/path/to/occ/share/folder
+occ --help
+```
+
+**Important**: Set the `OCC_DATA_PATH` environment variable:
+```bash
+export OCC_DATA_PATH=/path/to/occ/data
+```
+
+#### OCC install via pip or uv
+```
+pip install occpy
+occpy --help
+
+# For uv users
+uv tool run occpy --help
+```
+
+
+#### XTB Installation
+`xtb` can be installed via compilation of the source code, pre-built binary releases, conda etc.
+```bash
+# Install with conda
+conda install -c conda-forge xtb
+
+# Or with pip
+pip install xtb-python
+
+
+```
+
+### Additional Software
+
+Some examples also use **ORCA** for calculations, though I've tried to make them optional where I can:
+- Register and download from [ORCA Forum](https://orcaforum.kofo.mpg.de/app.php/portal)
+- Free for academic use
+- Also pre-installed on GADI (requires registration and NCI `orca` group membership)
+
+
+
 ## Visualization Tools
 
 Use your preferred program for viewing molecular and crystal structures:
@@ -106,16 +119,15 @@ Use your preferred program for viewing molecular and crystal structures:
 ### Alternatives
 - **[Ovito](https://www.ovito.org/)** - Excellent for large systems and trajectories
 - **[VESTA](https://jp-minerals.org/vesta/en/)** - Great for crystal structures
-- **Avogadro**, **PyMOL**, whatever works for you
+- **Avogadro**, **PyMOL**, **ChimeraX**, whatever works for you
 
 ## Workshop Structure
 
-We'll cover four main topics in 1.5 hours:
+We'll cover three main topics in 1.5 hours:
 
-1. **Pair Energies** (20 min) - Understanding two-molecule interactions
-2. **Clusters** (20 min) - Moving to multi-molecule systems  
-3. **Crystal Growth** (20 min) - Simulating how crystals form
-4. **Open Exploration** (30 min) - Apply to your own systems
+1. **Pair energies/molecular dimers** - Understanding two-molecule interactions
+2. **Clusters** - Moving to multi-molecule systems  
+3. **Crystal Growth and solvation** - Simulating how crystals form
 
 ## Troubleshooting
 
@@ -130,13 +142,6 @@ We'll cover four main topics in 1.5 hours:
 - Ask a question!
 - Check the [OCC Wiki](https://github.com/peterspackman/occ/wiki)
 - Example outputs are in each exercise folder
-
-### Additional Software
-
-Some examples also use **ORCA** for calculations, though I've tried to make them optional where I can:
-- Register and download from [ORCA Forum](https://orcaforum.kofo.mpg.de/app.php/portal)
-- Free for academic use
-- Also pre-installed on GADI (requires registration and NCI `orca` group membership)
 
 ## Extra: Setting Up Your Own Calculations
 

@@ -16,7 +16,11 @@ The previous CrystalExplorer models (CE-HF and CE-B3LYP) demonstrated the value 
 
 The total interaction energy is calculated as a sum of physically-motivated components:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{tot} = E_\text{coul} + k_\text{rep} E_\text{rep} + E_\text{exch} + k_\text{pol} E_\text{pol} + E_\text{disp}$$
+
+</div>
 
 Where $E_\text{coul}$ represents Coulombic (electrostatic) interactions, $E_\text{rep}$ is repulsion from orbital orthogonalization, $E_\text{exch}$ accounts for exchange interactions, $E_\text{pol}$ is the polarization energy, and $E_\text{disp}$ captures dispersion interactions via XDM. The CE-1p model uses a single empirical parameter $k = 0.78$ that scales both the repulsion and polarization terms ($k_\text{rep} = k_\text{pol} = 0.78$), fitted to reproduce ωB97M-V/def2-QZVP interaction energies over 1157 intermolecular interactions from 147 crystal structures.
 
@@ -27,7 +31,11 @@ To understand the computational implementation, here are the matrix operations f
 
 The Coulomb energy includes electron-electron, electron-nuclear, and nuclear-nuclear interactions:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{coul} = E_{ee} + E_{en} + E_{nn} + E_{ecp}$$
+
+</div>
 
 Where for the interaction between molecules A and B:
 - **Nuclear-nuclear repulsion**: $E_{nn} = \sum_{i \in A} \sum_{j \in B} \frac{Z_i Z_j}{|R_i - R_j|}$
@@ -41,7 +49,11 @@ Here $D_{AB}^n$ is the density matrix of the non-orthogonalized dimer, $V_{AB}$ 
 
 The exchange energy arises from the antisymmetrization requirement:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{exch} = -\text{Tr}(D_{AB}^n K_{AB}) + E_A^{exch} + E_B^{exch}$$
+
+</div>
 
 Where $K_{AB}$ is the exchange matrix computed from the merged but non-orthogonalized molecular orbitals.
 
@@ -49,14 +61,22 @@ Where $K_{AB}$ is the exchange matrix computed from the merged but non-orthogona
 
 The repulsion term accounts for the energy change upon orthogonalization:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{rep} = E_{AB}^o - E_{AB}^n$$
+
+</div>
 
 Where:
 - $E_{AB}^o = \text{Tr}(D_{AB}^o H_{AB}) + \text{Tr}(D_{AB}^o J_{AB}^o) - \text{Tr}(D_{AB}^o K_{AB}^o)$
 - $E_{AB}^n = \text{Tr}(D_{AB}^n H_{AB}) + \text{Tr}(D_{AB}^n J_{AB}^n) - \text{Tr}(D_{AB}^n K_{AB}^n)$
 
 The orthogonalization is performed using symmetric Löwdin orthogonalization:
+<div style={{textAlign: 'center'}}>
+
 $$C_{AB}^o = S_{AB}^{-1/2} C_{AB}^n$$
+
+</div>
 
 Where $S_{AB}$ is the overlap matrix of the combined basis.
 
@@ -64,14 +84,22 @@ Where $S_{AB}$ is the overlap matrix of the combined basis.
 
 The polarization energy uses the electric field at atomic positions:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{pol} = -\frac{1}{2} \sum_{i \in A} \alpha_i |\vec{F}_i^B|^2 - \frac{1}{2} \sum_{j \in B} \alpha_j |\vec{F}_j^A|^2$$
+
+</div>
 
 Where:
 - $\vec{F}_i^B$ is the electric field at atom $i$ due to molecule B
 - $\alpha_i$ is the polarizability of atom $i$ (from XDM or empirical values)
 
 The electric field has nuclear and electronic contributions:
+<div style={{textAlign: 'center'}}>
+
 $$\vec{F}_i = \vec{F}_i^{nuc} + \vec{F}_i^{elec}$$
+
+</div>
 
 With:
 - Nuclear: $\vec{F}_i^{nuc} = \sum_{j} Z_j \frac{\vec{r}_{ij}}{|\vec{r}_{ij}|^3}$
@@ -81,7 +109,11 @@ With:
 
 Using the XDM model, the dispersion energy is:
 
+<div style={{textAlign: 'center'}}>
+
 $$E_\text{disp} = -\sum_{i \in A} \sum_{j \in B} \left(\frac{C_{6,ij}}{R_{ij}^6 + R_{vdW,ij}^6} + \frac{C_{8,ij}}{R_{ij}^8 + R_{vdW,ij}^8} + \frac{C_{10,ij}}{R_{ij}^{10} + R_{vdW,ij}^{10}}\right)$$
+
+</div>
 
 Where:
 - $C_{n,ij}$ are dispersion coefficients computed from atomic polarizabilities and multipole moments
@@ -89,7 +121,11 @@ Where:
 - $R_{crit,ij}$ is determined from the dispersion coefficients
 
 The dispersion coefficients are calculated using:
+<div style={{textAlign: 'center'}}>
+
 $$C_{6,ij} = \frac{2}{3} \frac{\alpha_i \alpha_j}{\alpha_i/N_i^{eff} + \alpha_j/N_j^{eff}}$$
+
+</div>
 
 And higher-order terms from the multipole moments computed via XDM.
 
@@ -143,7 +179,11 @@ The CE-1p model is implemented in **occ** (open-source quantum chemistry code, [
 
 Lattice energies are calculated by summing pairwise interactions over the crystal using the direct summation approach:
 
+<div style={{textAlign: 'center'}}>
+
 $$E^A_\text{latt} = \frac{1}{2} \sum_{|\mathbf{r}^{AB}| < r_\text{max}} E^{A B}$$
+
+</div>
 
 Where $E^A_\text{latt}$ is the lattice energy for symmetry unique molecule $A$, $E^{AB}$ is the pairwise interaction energy between molecules $A$ and $B$, with the factor of $\frac{1}{2}$ correcting for double counting. The CE-1p model shows remarkable accuracy despite the simplicity of this approach.
 
