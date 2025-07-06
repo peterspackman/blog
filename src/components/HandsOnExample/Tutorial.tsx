@@ -30,8 +30,12 @@ const Tutorial: React.FC<TutorialProps> = ({
   // Generate a unique key for this tutorial based on title
   const storageKey = `tutorial-progress-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
   
-  // Load progress from localStorage
+  // Load progress from localStorage (client-side only)
   const loadProgress = (): Set<number> => {
+    if (typeof window === 'undefined') {
+      return new Set(); // Return empty set during SSR
+    }
+    
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
@@ -44,8 +48,12 @@ const Tutorial: React.FC<TutorialProps> = ({
     return new Set();
   };
   
-  // Save progress to localStorage
+  // Save progress to localStorage (client-side only)
   const saveProgress = (completedSteps: Set<number>) => {
+    if (typeof window === 'undefined') {
+      return; // Skip during SSR
+    }
+    
     try {
       localStorage.setItem(storageKey, JSON.stringify(Array.from(completedSteps)));
     } catch (error) {
@@ -53,7 +61,12 @@ const Tutorial: React.FC<TutorialProps> = ({
     }
   };
   
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(loadProgress);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  
+  // Load progress after component mounts (client-side only)
+  React.useEffect(() => {
+    setCompletedSteps(loadProgress());
+  }, [storageKey]);
   
   // Save to localStorage whenever completedSteps changes
   React.useEffect(() => {
@@ -138,10 +151,12 @@ const Tutorial: React.FC<TutorialProps> = ({
   const resetProgress = () => {
     setCompletedSteps(new Set());
     setActiveStep(0);
-    try {
-      localStorage.removeItem(storageKey);
-    } catch (error) {
-      console.warn('Failed to clear tutorial progress:', error);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(storageKey);
+      } catch (error) {
+        console.warn('Failed to clear tutorial progress:', error);
+      }
     }
   };
 
