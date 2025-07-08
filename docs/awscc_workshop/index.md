@@ -5,9 +5,9 @@ description: Hands-on workshop exploring molecular interactions from dimers to c
 
 # Intermolecular Interactions: From Dimers to Crystals
 
-Welcome to the AWSCC 2025 Workshop! In this workshop we'll explore some of thebackground on intermolecular (or non-bonded) interactions, predicting the energies associated with these interactions, and how they might be used to rationalise/understand crystal structures and crystal growth.
+Welcome to the AWSCC 2025 Workshop! In this workshop we'll explore some of the background on intermolecular (or non-bonded) interactions, predicting the energies associated with these interactions, and how they might be used to rationalise/understand crystal structures and crystal growth.
 
-This material will likely exceed the allocated time, but I'm hopeful that it will remain as a useful resource for independent work for those interested.
+This comprehensive material is designed to serve as both a workshop guide and a reference for independent study. While we may not cover everything during the workshop, all resources will remain available for further exploration.
 
 :::info[Feel free to interrupt and ask questions!]
 If you've got a question, odds are someone else is having a similar issue or query!
@@ -28,8 +28,8 @@ import DocCardList from '@theme/DocCardList';
 
 ## Resources
 
-- [Workshop Repository](https://github.com/peterspackman/awscc_workshop_2025)
-- [OCC Documentation](https://github.com/peterspackman/occ/wiki)
+- [Workshop Repository](https://github.com/peterspackman/awscc2025)
+- [OCC (Open Computational Chemistry) Documentation](https://github.com/peterspackman/occ/wiki)
 - [CE-1p model info](./ce-1p.md)
 - [Crystal growth background](./cg-theory.md)
 

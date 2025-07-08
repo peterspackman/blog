@@ -11,7 +11,7 @@ Welcome to the AWSCC 2025 Workshop on Intermolecular Interactions! This setup gu
 The [GitHub repository](https://github.com/peterspackman/awscc2025) for this workshop is the best starting point.
 
 For this workshop, you'll need:
-- **[OCC](https://github.com/peterspackman/occ/releases)** (Open Crystal Calculations) - for interaction energy calculations
+- **[OCC](https://github.com/peterspackman/occ/releases)** (Open Computational Chemistry) - for interaction energy calculations
 - **[XTB](https://github.com/grimme-lab/xtb)** (eXtended Tight-Binding) - for fast quantum calculations
 - **Optional:** ORCA for advanced calculations (not strictly required but very valuable)
 - **Visualization:** up to you - CrystalExplorer, Avogadro, Ovito, ChimeraX etc..
@@ -24,8 +24,8 @@ wish to manually install them there are instructions below for `occ` and `xtb` b
 
 1. **Download workshop materials:**
    ```bash
-   git clone https://github.com/peterspackman/awscc_workshop_2025
-   cd awscc_workshop_2025
+   git clone https://github.com/peterspackman/awscc2025
+   cd awscc2025
    ```
 
 2. **Quick test:**

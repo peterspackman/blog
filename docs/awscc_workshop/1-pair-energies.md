@@ -8,7 +8,7 @@ import { Tutorial, Step, Instructions, Commands, Output, Notes } from '@site/src
 
 # 1. Intermolecular Interactions: From Theory to Practice
 
-Much of chemistry and materials science involves condensed matter, that is to intermolecular interactions (or perhaps more accurately non-bonded interactions). Understanding these interactions is therefore fundamental to many applications of computational chemistry. Since theoretical and computational chemistry is generally focused on getting the best answer in a tractable amount of computer time, it's essntial to know which kinds of interactions are important for which systems, and cheap and dirty can we be in their approximation when explaining or predicting some overvable phenomenon.
+Much of chemistry and materials science involves condensed matter, that is to intermolecular interactions (or perhaps more accurately non-bonded interactions). Understanding these interactions is therefore fundamental to many applications of computational chemistry. Since theoretical and computational chemistry is generally focused on getting the best answer in a tractable amount of computer time, it's essential to know which kinds of interactions are important for which systems, and cheap and dirty can we be in their approximation when explaining or predicting some observable phenomenon.
 
 ## Gibbs Free Energy vs. Enthalpy
 
@@ -166,7 +166,7 @@ $$E_{\text{ind}} = -\frac{1}{2}\alpha_B |E_A|^2$$
 
 </div>
 
-where $\alpha_B$ is the polarizability of molecule B. This scales as $r^{-4}$ for charge-induced dipole interactions. This magical formula might seem great but it's important to consider polarzability as *effectively* a volume term, and that this is fundamentally approximating the polarizable volume of some site as spherical/isotropic.
+where $\alpha_B$ is the polarizability of molecule B. This scales as $r^{-4}$ for charge-induced dipole interactions. While this formula provides a useful approximation, it's important to remember that polarizability is effectively a volume term, and this approach assumes the polarizable volume of a site is spherical/isotropic.
 
 ### 4. Dispersion (London Forces, van der Waals)
 

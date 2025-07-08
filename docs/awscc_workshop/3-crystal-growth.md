@@ -288,7 +288,7 @@ Crystal surface energies (vacuum)
     </Output>
     
     <Notes>
-      <p>OCC calculates both vacuum and solvated surface energies in one run. The calculation also provides thermodynamic properties including solvation free energy (-46.5 kJ/mol) and predicted solubility (938 g/L). Note that the predicted solubility is much higher than experimental (~15 g/L) because the calculation doesn't include crystal packing effects.</p>
+      <p>OCC calculates both vacuum and solvated surface energies in one run. The calculation also provides thermodynamic properties including solvation free energy (-46.5 kJ/mol) and predicted solubility (938 g/L). The predicted solubility significantly exceeds the experimental value (~15 g/L) as this simplified model focuses on surface energetics without accounting for the complex equilibrium between dissolved molecules and crystal packing effects.</p>
     </Notes>
   </Step>
 

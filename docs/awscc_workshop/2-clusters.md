@@ -346,7 +346,7 @@ Convergence: -13.2% change from 4 to 8 shells`}</code></pre>
     </Output>
     
     <Notes>
-      <p>The total binding energy for the central molecule decreases! When going from from 4 Å to 8 Å neighbor shells, showing long-range effects matter. The geometries for larger calculations are there, but I couldn't get them to converge (memory issues)</p>
+      <p>The total binding energy for the central molecule decreases! When going from 4 Å to 8 Å neighbor shells, showing long-range effects matter. Larger cluster calculations may require significant computational resources and memory optimization.</p>
     </Notes>
   </Step>
 
