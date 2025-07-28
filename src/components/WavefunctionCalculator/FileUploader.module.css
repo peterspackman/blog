@@ -1,0 +1,89 @@
+.section {
+  margin-bottom: 1rem;
+}
+
+.inputContainer {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background-color: var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.controls {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.browseButton {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  border-radius: 0.125rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.browseButton:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
+
+.combinedInput {
+  position: relative;
+  transition: background-color 0.3s;
+}
+
+.combinedInput.dragging {
+  background-color: var(--ifm-color-primary-lightest);
+}
+
+
+.clearButton {
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  background: none;
+  border: 1px solid var(--ifm-color-danger);
+  color: var(--ifm-color-danger);
+  border-radius: 0.125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clearButton:hover {
+  background-color: var(--ifm-color-danger);
+  color: white;
+}
+
+
+.xyzTextarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: none;
+  font-family: monospace;
+  font-size: 0.75rem;
+  resize: vertical;
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  min-height: 150px;
+}
+
+.xyzTextarea:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}

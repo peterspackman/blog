@@ -14,7 +14,7 @@ const UnitCellViewer3D: React.FC<UnitCellViewer3DProps> = ({ height = '400px' })
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.Camera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const frameIdRef = useRef<number>();
+  const frameIdRef = useRef<number | undefined>(undefined);
   const autoRotateEnabled = useRef<boolean>(false);
 
   const { state, calculateLatticeVectors } = useUnitCell();

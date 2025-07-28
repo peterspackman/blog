@@ -1,10 +1,10 @@
 
 import React, { useState } from 'react';
 import Layout from '@theme/Layout';
-import WaveInterferenceVisualization from '@site/src/components/Bragg.tsx';
+import WaveInterferenceVisualization from '@site/src/components/Bragg';
 import styles from './qm-visualizations.module.css';
 
-export default function QM1D(): JSX.Element {
+export default function QM1D() {
   const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
 
   return (

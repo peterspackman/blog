@@ -4,7 +4,7 @@ import QMVisualization1D from '@site/src/components/QMVisualization1D';
 import Particle2DBox from '@site/src/components/Particle2DBox';
 import styles from './qm-visualizations.module.css';
 
-export default function QM1D(): JSX.Element {
+export default function QM1D() {
   const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
 
   return (

@@ -2,7 +2,11 @@ import React, { useRef, useEffect, useState } from 'react';
 import styles from './QMVisualization.module.css';
 import MathFormula from './MathFormula';
 
-const WaveInterferenceVisualization = () => {
+interface WaveInterferenceVisualizationProps {
+    className?: string;
+}
+
+const WaveInterferenceVisualization: React.FC<WaveInterferenceVisualizationProps> = ({ className }) => {
     const canvasRef = useRef(null);
     const [wavelength, setWavelength] = useState(1.5); // X-ray wavelength in Angstroms
     const [latticeSpacing, setLatticeSpacing] = useState(3.0); // d-spacing in Angstroms
@@ -276,7 +280,7 @@ const WaveInterferenceVisualization = () => {
     }, [wavelength, latticeSpacing, incidentAngle, numberOfWaves, isBraggMet, pathDifference, braggOrder]);
 
     return (
-        <div className={styles.container}>
+        <div className={`${styles.container} ${className || ''}`}>
             <h2 className={styles.title}>
                 Bragg Interference
             </h2>

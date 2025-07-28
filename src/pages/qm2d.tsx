@@ -3,7 +3,7 @@ import Layout from '@theme/Layout';
 import Particle2DBox from '@site/src/components/Particle2DBox';
 import styles from './qm-visualizations.module.css';
 
-export default function QMVisualizations(): JSX.Element {
+export default function QMVisualizations() {
   const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
 
   return (

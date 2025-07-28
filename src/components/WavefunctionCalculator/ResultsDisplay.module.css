@@ -1,0 +1,144 @@
+.container {
+  max-width: 1000px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.energyCard, .statusCard, .propertiesCard {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.energyCard h4, .statusCard h4, .propertiesCard h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--ifm-heading-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.energyValues {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.primaryEnergy {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+}
+
+.secondaryEnergy {
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.statusInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.convergenceStatus {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.converged {
+  color: var(--ifm-color-success);
+}
+
+.notConverged {
+  color: var(--ifm-color-danger);
+}
+
+.timing {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.propertyList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.propertyItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.propertyLabel {
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.propertyValue {
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+}
+
+
+.exportSection {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.exportSection h4 {
+  margin: 0 0 0.75rem 0;
+  color: var(--ifm-heading-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.exportButtons {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.exportButton {
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.exportButton:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
+
+
+.noResults {
+  text-align: center;
+  padding: 3rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.noResults h3 {
+  margin-bottom: 0.5rem;
+}
+
+.noResults p {
+  margin: 0;
+}

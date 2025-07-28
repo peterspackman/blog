@@ -5,7 +5,11 @@ import LegendItem from './LegendItem';
 import MathFormula from './MathFormula';
 import styles from './QMVisualization.module.css';
 
-const QuantumSystemsVisualization = () => {
+interface QuantumSystemsVisualizationProps {
+  className?: string;
+}
+
+const QuantumSystemsVisualization: React.FC<QuantumSystemsVisualizationProps> = ({ className }) => {
   // State variables
   const [activeStates, setActiveStates] = useState([0]); // Array of active quantum numbers
   const [isAnimating, setIsAnimating] = useState(true);
@@ -538,7 +542,7 @@ const QuantumSystemsVisualization = () => {
   };
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${className || ''}`}>
       <h2 className={styles.title}>
         Quantum {getPotentialTypeDisplayName()} Visualization
       </h2>

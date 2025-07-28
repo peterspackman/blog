@@ -21,7 +21,7 @@ type Button = {
     // The link prop is a string that determines the URL the button should link to.
     link?: string;
     // The label prop is a string that determines the text of the button.
-    label: string;
+    label?: string;
     // The onClick prop is a function that will be called when the button is clicked.
     onClick?: () => void;
     // The children prop allows passing content as children instead of using the label prop

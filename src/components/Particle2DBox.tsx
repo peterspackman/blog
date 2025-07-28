@@ -5,7 +5,11 @@ import Button from './Button';
 import MathFormula from './MathFormula';
 import styles from './QMVisualization.module.css';
 
-const Particle2DBox = () => {
+interface Particle2DBoxProps {
+  className?: string;
+}
+
+const Particle2DBox: React.FC<Particle2DBoxProps> = ({ className }) => {
   // State variables
   const [activeStates, setActiveStates] = useState([{ nx: 1, ny: 1 }]);
   const [isAnimating, setIsAnimating] = useState(true);
@@ -394,7 +398,7 @@ const Particle2DBox = () => {
     const animate = () => {
       if (isAnimating) {
         timeRef.current += 0.005 * speed;
-        setCurrentTime(timeRef.current.toFixed(1));
+        setCurrentTime(parseFloat(timeRef.current.toFixed(1)));
 
         // Update time uniform
         if (materialRef.current) {
@@ -420,7 +424,7 @@ const Particle2DBox = () => {
   }, [isAnimating, speed]);
 
   return (
-    <div className={styles.container}>
+    <div className={`${styles.container} ${className || ''}`}>
       {/* Main visualization row */}
       <div className={styles.visualizationRow}>
         {/* Main visualization column */}

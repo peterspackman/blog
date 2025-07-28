@@ -2,7 +2,7 @@ import React from 'react';
 import Layout from '@theme/Layout';
 import ORCIDPublications from '../components/ORCIDPublications';
 
-export default function Publications(): JSX.Element {
+export default function Publications() {
   const orcidId = '0000-0002-6532-8571';
 
   return (

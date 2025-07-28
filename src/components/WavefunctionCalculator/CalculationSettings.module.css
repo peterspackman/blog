@@ -1,0 +1,43 @@
+.section {
+  margin-bottom: 0.75rem;
+}
+
+.section h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-heading-color);
+}
+
+.field {
+  margin-bottom: 0.5rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.field select,
+.field input {
+  width: 100%;
+  padding: 0.25rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
+.field select:focus,
+.field input:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.field input[type="number"] {
+  font-family: monospace;
+}

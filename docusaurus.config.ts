@@ -53,6 +53,39 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    function(context, options) {
+      return {
+        name: 'occjs-webpack-plugin',
+        configureWebpack(config, isServer, utils) {
+          return {
+            module: {
+              rules: [
+                {
+                  test: /node_modules\/@peterspackman\/occjs\/dist\/occjs\.js$/,
+                  use: {
+                    loader: 'string-replace-loader',
+                    options: {
+                      search: /await import\("module"\)/g,
+                      replace: '(function() { throw new Error("Node.js module not available in browser"); })()',
+                      flags: 'g'
+                    }
+                  }
+                }
+              ]
+            },
+            resolve: {
+              fallback: {
+                // Only fallback for occjs package
+                module: false,
+              }
+            }
+          };
+        },
+      };
+    },
+  ],
+
   stylesheets: [
     {
       href: "https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css",
@@ -81,6 +114,11 @@ const config: Config = {
           label: 'papers',
         },
         { to: '/blog', label: 'blog', position: 'left' },
+        {
+          to: '/utilities',
+          position: 'left',
+          label: 'utilities',
+        },
         {
           type: 'dropdown',
           label: 'visualisations',

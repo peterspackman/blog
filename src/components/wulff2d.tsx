@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styles from './WulffConstruction.module.css';
 
-const WulffConstruction = () => {
+interface WulffConstructionProps {
+    className?: string;
+}
+
+const WulffConstruction: React.FC<WulffConstructionProps> = ({ className }) => {
     const [showConstruction, setShowConstruction] = useState(true);
     const [highlightedDirection, setHighlightedDirection] = useState(null);
     const [draggedDirection, setDraggedDirection] = useState(null);
@@ -275,7 +279,7 @@ const WulffConstruction = () => {
     }
 
     return (
-        <div className="container margin-vert--lg">
+        <div className={`container margin-vert--lg ${className || ''}`}>
             <div className="row">
                 {/* γ-plot */}
                 <div className="col col--6 text--center">

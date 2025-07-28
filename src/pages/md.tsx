@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Layout from '@theme/Layout';
-import MolecularDynamics from '@site/src/components/MolecularDynamics.tsx';
+import MolecularDynamics from '@site/src/components/MolecularDynamics';
 import styles from './qm-visualizations.module.css';
 
-export default function MD(): JSX.Element {
+export default function MD() {
   const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
 
   return (

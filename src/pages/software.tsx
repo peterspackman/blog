@@ -46,7 +46,7 @@ const SoftwareProject: React.FC<SoftwareProjectProps> = ({
   );
 };
 
-export default function Software(): JSX.Element {
+export default function Software() {
   return (
     <Layout
       title="Software"

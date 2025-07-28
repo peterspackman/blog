@@ -18,7 +18,7 @@ const Figure: React.FC<FigureProps> = ({
   float = 'none',
   className = ''
 }) => {
-  const figureStyle = {
+  const figureStyle: React.CSSProperties = {
     width,
     float: float !== 'none' ? float : undefined,
     marginLeft: float === 'right' ? '1rem' : undefined,

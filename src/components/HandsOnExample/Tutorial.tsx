@@ -77,8 +77,9 @@ const Tutorial: React.FC<TutorialProps> = ({
   const steps: ParsedStep[] = Children.map(children, (child) => {
     if (!isValidElement(child)) return null;
     
-    const stepId = child.props.id || Math.random().toString();
-    const stepTitle = child.props.title || 'Untitled Step';
+    const childProps = child.props as any;
+    const stepId = childProps.id || Math.random().toString();
+    const stepTitle = childProps.title || 'Untitled Step';
     
     const step: ParsedStep = {
       id: stepId,
@@ -86,7 +87,7 @@ const Tutorial: React.FC<TutorialProps> = ({
     };
     
     // Extract sections from children by checking the component type
-    Children.forEach(child.props.children, (section) => {
+    Children.forEach(childProps.children, (section) => {
       if (!isValidElement(section)) return;
       
       // Use data attributes to identify section types (minification-safe)
@@ -107,7 +108,8 @@ const Tutorial: React.FC<TutorialProps> = ({
           break;
         default:
           // Fallback to component name matching for development
-          const componentName = section.type?.displayName || section.type?.name;
+          const sectionType = section.type as any;
+          const componentName = sectionType?.displayName || sectionType?.name;
           switch (componentName) {
             case 'Instructions':
               step.instructions = section;
@@ -257,7 +259,7 @@ const Tutorial: React.FC<TutorialProps> = ({
                     <div className={styles.section}>
                       <div className="alert alert--secondary">
                         <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.9rem', fontWeight: '700', margin: '0 0 0.75rem 0' }}>Instructions</h4>
-                        {steps[activeStep].instructions.props.children}
+                        {(steps[activeStep].instructions as any).props.children}
                       </div>
                     </div>
                   )}
@@ -266,7 +268,7 @@ const Tutorial: React.FC<TutorialProps> = ({
                     <div className={styles.section}>
                       <div className="alert alert--warning">
                         <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.9rem', fontWeight: '700', margin: '0 0 0.75rem 0' }}>Commands</h4>
-                        {steps[activeStep].commands.props.children}
+                        {(steps[activeStep].commands as any).props.children}
                       </div>
                     </div>
                   )}
@@ -275,7 +277,7 @@ const Tutorial: React.FC<TutorialProps> = ({
                     <div className={styles.section}>
                       <div className="alert alert--success">
                         <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.9rem', fontWeight: '700', margin: '0 0 0.75rem 0' }}>Expected Output</h4>
-                        {steps[activeStep].output.props.children}
+                        {(steps[activeStep].output as any).props.children}
                       </div>
                     </div>
                   )}
@@ -284,7 +286,7 @@ const Tutorial: React.FC<TutorialProps> = ({
                     <div className={styles.section}>
                       <div className="alert alert--info">
                         <h4 style={{ textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.9rem', fontWeight: '700', margin: '0 0 0.75rem 0' }}>Notes</h4>
-                        {steps[activeStep].notes.props.children}
+                        {(steps[activeStep].notes as any).props.children}
                       </div>
                     </div>
                   )}

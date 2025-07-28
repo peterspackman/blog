@@ -1,0 +1,104 @@
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--ifm-background-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  padding: 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ifm-heading-color);
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.button {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.button:hover {
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+.buttonActive {
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border-color: var(--ifm-color-primary);
+}
+
+.buttonActive:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
+
+.logOutput {
+  flex: 1;
+  padding: 1rem;
+  font-family: monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  overflow-y: auto;
+  background-color: var(--ifm-background-surface-color);
+  white-space: pre-wrap;
+}
+
+.noLogs {
+  color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+.logEntry {
+  margin-bottom: 0.125rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+.timestamp {
+  color: var(--ifm-color-emphasis-600);
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+.message {
+  flex: 1;
+}
+
+.log-debug {
+  color: var(--ifm-font-color-base);
+}
+
+.log-info {
+  color: var(--ifm-font-color-base);
+}
+
+.log-warn {
+  color: var(--ifm-color-warning-dark);
+}
+
+.log-error {
+  color: var(--ifm-color-danger);
+  font-weight: 500;
+}
