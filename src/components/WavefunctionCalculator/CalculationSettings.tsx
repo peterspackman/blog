@@ -37,11 +37,13 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="hf">Hartree-Fock (HF)</option>
             <option value="dft-b3lyp">DFT (B3LYP)</option>
             <option value="dft-pbe">DFT (PBE)</option>
+            <option value="dft-pbe0">DFT (PBE0)</option>
             <option value="dft-blyp">DFT (BLYP)</option>
             <option value="dft-wb97x">DFT (ωB97X)</option>
-            <option value="dft-wb97m">DFT (ωB97M-V)</option>
-            <option value="dft-m06-2x">DFT (M06-2X)</option>
-            <option value="dft-pbe0">DFT (PBE0)</option>
+            <option value="dft-wb97m">DFT (ωB97M)</option>
+            <option value="dft-m062x">DFT (M06-2X)</option>
+            <option value="dft-r2scan">DFT (r²SCAN)</option>
+            <option value="dft-tpss">DFT (TPSS)</option>
           </select>
         </div>
         
@@ -52,10 +54,18 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="3-21g">3-21G</option>
             <option value="6-31g">6-31G</option>
             <option value="6-31g(d,p)">6-31G(d,p)</option>
+            <option value="6-311g(d,p)">6-311G(d,p)</option>
             <option value="def2-svp">def2-SVP</option>
             <option value="def2-tzvp">def2-TZVP</option>
             <option value="cc-pvdz">cc-pVDZ</option>
             <option value="cc-pvtz">cc-pVTZ</option>
+            <option value="cc-pvqz">cc-pVQZ</option>
+            <option value="pcseg-0">pc-0</option>
+            <option value="pcseg-1">pc-1</option>
+            <option value="pcseg-2">pc-2</option>
+            <option value="pcseg-3">pc-3</option>
+            <option value="aug-pcseg-1">aug-pc-1</option>
+            <option value="aug-pcseg-2">aug-pc-2</option>
           </select>
         </div>
       </div>

@@ -145,7 +145,7 @@ async function runCalculation(params) {
             energy = await calc.runHF(settings);
             
         } else if (params.method.startsWith('dft-')) {
-            const functional = params.method.split('-')[1];
+            const functional = params.method.substring(4); // Remove "dft-" prefix
             postMessage({ 
                 type: 'log', 
                 level: 2, 
@@ -293,41 +293,31 @@ async function runCalculation(params) {
                 postMessage({ type: 'log', level: 3, message: `Could not extract orbital energies: ${e.message}` });
             }
             
-            // Also get orbital occupations
+            // Orbital occupations - currently estimated, will be available in API soon
+            postMessage({ type: 'log', level: 2, message: 'Note: Orbital occupations are currently estimated and will be available properly in the API soon' });
+            
+            // Estimate occupations based on number of electrons for now
             try {
-                const orbitalOccupations = wf.orbitalOccupations();
-                const occupationArray = [];
-                for (let i = 0; i < orbitalOccupations.size(); i++) {
-                    occupationArray.push(orbitalOccupations.get(i));
-                }
-                results.orbitalOccupations = occupationArray;
-                postMessage({ type: 'log', level: 2, message: `Extracted ${occupationArray.length} orbital occupations` });
-            } catch (e) {
-                postMessage({ type: 'log', level: 3, message: `Could not extract orbital occupations: ${e.message}` });
-                // Fallback: estimate occupations based on number of electrons
-                try {
-                    const numElectrons = molecule.numElectrons ? molecule.numElectrons() : molecule.size() * 5; // rough estimate
-                    const numOrbitals = results.orbitalEnergies ? results.orbitalEnergies.length : 0;
-                    if (numOrbitals > 0) {
-                        const occupationArray = [];
-                        let electronsLeft = numElectrons;
-                        for (let i = 0; i < numOrbitals; i++) {
-                            if (electronsLeft >= 2) {
-                                occupationArray.push(2.0);
-                                electronsLeft -= 2;
-                            } else if (electronsLeft === 1) {
-                                occupationArray.push(1.0);
-                                electronsLeft = 0;
-                            } else {
-                                occupationArray.push(0.0);
-                            }
+                const numElectrons = molecule.numElectrons();
+                const numOrbitals = results.orbitalEnergies ? results.orbitalEnergies.length : 0;
+                if (numOrbitals > 0) {
+                    const occupationArray = [];
+                    let electronsLeft = numElectrons;
+                    for (let i = 0; i < numOrbitals; i++) {
+                        if (electronsLeft >= 2) {
+                            occupationArray.push(2.0);
+                            electronsLeft -= 2;
+                        } else if (electronsLeft === 1) {
+                            occupationArray.push(1.0);
+                            electronsLeft = 0;
+                        } else {
+                            occupationArray.push(0.0);
                         }
-                        results.orbitalOccupations = occupationArray;
-                        postMessage({ type: 'log', level: 2, message: `Estimated orbital occupations for ${numElectrons} electrons` });
                     }
-                } catch (fallbackError) {
-                    postMessage({ type: 'log', level: 3, message: `Could not estimate occupations: ${fallbackError.message}` });
+                    results.orbitalOccupations = occupationArray;
                 }
+            } catch (e) {
+                // Silent fallback - just don't include occupations
             }
             
         } catch (e) {
