@@ -7,19 +7,30 @@ interface MoleculeViewerProps {
   moleculeName?: string;
 }
 
+type RepresentationType = 'ball+stick' | 'line' | 'spacefill' | 'surface' | 'cartoon' | 'licorice';
+
 const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName = 'Molecule' }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
+  const componentRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [representation, setRepresentation] = useState<RepresentationType>('ball+stick');
+  const [showHydrogens, setShowHydrogens] = useState(true);
+  const [colorScheme, setColorScheme] = useState('element');
 
   useEffect(() => {
     if (!stageRef.current) return;
 
-    // Initialize NGL Stage
+    // Initialize NGL Stage with more tolerant clipping planes
     nglStageRef.current = new NGL.Stage(stageRef.current, {
       backgroundColor: 'white',
-      quality: 'medium'
+      quality: 'medium',
+      clipNear: 0.000001,  // Very small near clipping plane
+      clipFar: 100,
+      clipDist: 10,
+      fogNear: 100,
+      fogFar: 100
     });
 
     // Handle resize
@@ -138,6 +149,53 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
     return sdf;
   };
 
+  // Update representation when settings change
+  const updateRepresentation = () => {
+    if (!componentRef.current) return;
+
+    // Remove all existing representations
+    componentRef.current.removeAllRepresentations();
+
+    // Selection string for hydrogen visibility
+    const selection = showHydrogens ? 'all' : 'not hydrogen';
+
+    // Add new representation based on current settings
+    const repParams: any = {
+      colorScheme: colorScheme,
+      sele: selection
+    };
+
+    switch (representation) {
+      case 'ball+stick':
+        repParams.radiusScale = 0.8;
+        repParams.bondScale = 0.3;
+        break;
+      case 'line':
+        repParams.linewidth = 2;
+        break;
+      case 'spacefill':
+        repParams.radiusScale = 1.0;
+        break;
+      case 'licorice':
+        repParams.bondScale = 0.5;
+        repParams.multipleBond = true;
+        break;
+      case 'surface':
+        repParams.opacity = 0.8;
+        repParams.surfaceType = 'vws';
+        break;
+    }
+
+    componentRef.current.addRepresentation(representation, repParams);
+    
+    // Auto view to fit molecule
+    nglStageRef.current?.autoView();
+  };
+
+  useEffect(() => {
+    updateRepresentation();
+  }, [representation, showHydrogens, colorScheme]);
+
   useEffect(() => {
     if (!xyzData || !nglStageRef.current) return;
 
@@ -161,15 +219,11 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
           name: moleculeName 
         });
 
-        // Add representations
-        structure.addRepresentation('ball+stick', {
-          colorScheme: 'element',
-          radiusScale: 0.8,
-          bondScale: 0.3
-        });
+        // Store component reference
+        componentRef.current = structure;
 
-        // Auto view to fit molecule
-        nglStageRef.current!.autoView();
+        // Apply initial representation
+        updateRepresentation();
         
         setIsLoading(false);
       } catch (err) {
@@ -224,6 +278,49 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
           >
             ⛶
           </button>
+        </div>
+      </div>
+      
+      <div className={styles.representationControls}>
+        <div className={styles.controlGroup}>
+          <label className={styles.controlLabel}>Style</label>
+          <select 
+            value={representation} 
+            onChange={(e) => setRepresentation(e.target.value as RepresentationType)}
+            className={styles.controlSelect}
+          >
+            <option value="ball+stick">Ball & Stick</option>
+            <option value="line">Line</option>
+            <option value="spacefill">Space Fill</option>
+            <option value="licorice">Licorice</option>
+            <option value="surface">Surface</option>
+          </select>
+        </div>
+        
+        <div className={styles.controlGroup}>
+          <label className={styles.controlLabel}>Color</label>
+          <select 
+            value={colorScheme} 
+            onChange={(e) => setColorScheme(e.target.value)}
+            className={styles.controlSelect}
+          >
+            <option value="element">By Element</option>
+            <option value="uniform">Uniform</option>
+            <option value="chainname">By Chain</option>
+            <option value="random">Random</option>
+          </select>
+        </div>
+        
+        <div className={styles.controlGroup}>
+          <label className={styles.checkboxLabel}>
+            <input 
+              type="checkbox" 
+              checked={showHydrogens} 
+              onChange={(e) => setShowHydrogens(e.target.checked)}
+              className={styles.checkbox}
+            />
+            Show Hydrogens
+          </label>
         </div>
       </div>
       

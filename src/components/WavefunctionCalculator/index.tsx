@@ -31,6 +31,7 @@ interface CalculationResult {
     coefficients?: MatrixData;
   };
   orbitalEnergies?: number[];
+  orbitalOccupations?: number[];
 }
 
 interface MatrixData {
@@ -47,11 +48,15 @@ const WavefunctionCalculator: React.FC = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [results, setResults] = useState<CalculationResult | null>(null);
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
-  const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('output');
+  const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('structure');
   const [error, setError] = useState<string>('');
+  
+  // Collapsible sections state
+  const [isInputExpanded, setIsInputExpanded] = useState(true);
+  const [isSettingsExpanded, setIsSettingsExpanded] = useState(true);
 
   // Calculation settings
-  const [method, setMethod] = useState('hf');
+  const [method, setMethod] = useState('dft-wb97x');
   const [basisSet, setBasisSet] = useState('6-31g(d,p)');
   const [maxIterations, setMaxIterations] = useState(100);
   const [energyTolerance, setEnergyTolerance] = useState(1e-8);
@@ -250,29 +255,56 @@ const WavefunctionCalculator: React.FC = () => {
             {isWorkerReady ? '✓ Ready' : '⏳ Loading...'}
           </div>
 
-          <FileUploader onFileLoad={handleFileLoad} />
-
-          {moleculeInfo && (
-            <div className={styles.section}>
-              <div className={styles.moleculeInfo}>
-                <div><strong>{moleculeInfo.formula}</strong> ({moleculeInfo.numAtoms} atoms)</div>
+          <div className={styles.collapsibleSection}>
+            <button 
+              className={styles.sectionHeader}
+              onClick={() => setIsInputExpanded(!isInputExpanded)}
+            >
+              <span className={styles.sectionTitle}>Molecule Input</span>
+              <span className={`${styles.chevron} ${isInputExpanded ? styles.chevronExpanded : ''}`}>
+                ▼
+              </span>
+            </button>
+            {isInputExpanded && (
+              <div className={styles.sectionContent}>
+                <FileUploader onFileLoad={handleFileLoad} />
+                {moleculeInfo && (
+                  <div className={styles.moleculeInfo}>
+                    <div><strong>{moleculeInfo.formula}</strong> ({moleculeInfo.numAtoms} atoms)</div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {currentXYZData && (
-            <CalculationSettings
-              method={method}
-              setMethod={setMethod}
-              basisSet={basisSet}
-              setBasisSet={setBasisSet}
-              maxIterations={maxIterations}
-              setMaxIterations={setMaxIterations}
-              energyTolerance={energyTolerance}
-              setEnergyTolerance={setEnergyTolerance}
-              logLevel={logLevel}
-              setLogLevel={setLogLevel}
-            />
+            <div className={styles.collapsibleSection}>
+              <button 
+                className={styles.sectionHeader}
+                onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
+              >
+                <span className={styles.sectionTitle}>Calculation Settings</span>
+                <span className={`${styles.chevron} ${isSettingsExpanded ? styles.chevronExpanded : ''}`}>
+                  ▼
+                </span>
+              </button>
+              {isSettingsExpanded && (
+                <div className={styles.sectionContent}>
+                  <CalculationSettings
+                    method={method}
+                    setMethod={setMethod}
+                    basisSet={basisSet}
+                    setBasisSet={setBasisSet}
+                    maxIterations={maxIterations}
+                    setMaxIterations={setMaxIterations}
+                    energyTolerance={energyTolerance}
+                    setEnergyTolerance={setEnergyTolerance}
+                    logLevel={logLevel}
+                    setLogLevel={setLogLevel}
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {currentXYZData && (
@@ -350,14 +382,26 @@ const WavefunctionCalculator: React.FC = () => {
                   <div className={styles.orbitalsCard}>
                     <h4>Orbital Energies</h4>
                     <div className={styles.orbitalGrid}>
-                      {results.orbitalEnergies.slice(0, 20).map((energy, i) => (
-                        <div key={i} className={styles.orbitalItem}>
-                          <span className={styles.orbitalIndex}>Orbital {i + 1}:</span>
-                          <span className={styles.orbitalEnergy}>
-                            {energy.toFixed(6)} Eh ({(energy * 27.2114).toFixed(3)} eV)
-                          </span>
-                        </div>
-                      ))}
+                      {results.orbitalEnergies.slice(0, 20).map((energy, i) => {
+                        const occupation = results.orbitalOccupations?.[i] ?? 0;
+                        const isOccupied = occupation > 0;
+                        
+                        return (
+                          <div key={i} className={`${styles.orbitalItem} ${isOccupied ? styles.orbitalOccupied : styles.orbitalVirtual}`}>
+                            <div className={styles.orbitalContent}>
+                              <div className={styles.orbitalEnergy}>
+                                {energy.toFixed(6)} Eh
+                              </div>
+                              <div className={styles.orbitalEnergyEV}>
+                                {(energy * 27.2114).toFixed(3)} eV
+                              </div>
+                            </div>
+                            <div className={styles.occupationBadge}>
+                              {occupation === 2.0 ? '↑↓' : occupation === 1.0 ? '↑' : ''}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     {results.orbitalEnergies.length > 20 && (
                       <div className={styles.moreOrbitals}>

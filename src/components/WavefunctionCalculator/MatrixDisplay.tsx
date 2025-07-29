@@ -40,7 +40,7 @@ const MatrixDisplay: React.FC<MatrixDisplayProps> = ({
   const displayCols = showFullMatrix ? cols : Math.min(cols, maxDisplaySize);
 
   const formatNumber = (num: number) => {
-    if (Math.abs(num) < 1e-10) return '0.000000';
+    if (Math.abs(num) < 1e-10) return '·';  // Use middle dot for zero values
     return num.toFixed(precision);
   };
 
@@ -90,15 +90,21 @@ const MatrixDisplay: React.FC<MatrixDisplayProps> = ({
           }}
         >
           {Array.from({ length: displayRows }, (_, i) =>
-            Array.from({ length: displayCols }, (_, j) => (
-              <div 
-                key={`${i}-${j}`} 
-                className={styles.matrixElement}
-                title={`[${i+1},${j+1}] = ${data[i]?.[j] || 0}`}
-              >
-                {formatNumber(data[i]?.[j] || 0)}
-              </div>
-            ))
+            Array.from({ length: displayCols }, (_, j) => {
+              const value = data[i]?.[j] || 0;
+              const formattedValue = formatNumber(value);
+              const isZero = Math.abs(value) < 1e-10;
+              
+              return (
+                <div 
+                  key={`${i}-${j}`} 
+                  className={`${styles.matrixElement} ${isZero ? styles.zeroElement : ''}`}
+                  title={`[${i+1},${j+1}] = ${value}`}
+                >
+                  {formattedValue}
+                </div>
+              );
+            })
           )}
         </div>
         

@@ -9,6 +9,47 @@
   margin-bottom: 1.5rem;
 }
 
+@media (max-width: 768px) {
+  .summaryGrid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  
+  .energyCard, .statusCard, .propertiesCard {
+    padding: 0.75rem;
+  }
+  
+  .energyCard h4, .statusCard h4, .propertiesCard h4 {
+    font-size: 0.8rem;
+  }
+  
+  .primaryEnergy {
+    font-size: 1.1rem;
+  }
+  
+  .secondaryEnergy {
+    font-size: 0.8rem;
+  }
+  
+  .propertyItem {
+    font-size: 0.7rem;
+  }
+  
+  .exportSection {
+    padding: 0.75rem;
+  }
+  
+  .exportButtons {
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  
+  .exportButton {
+    width: 100%;
+  }
+}
+
 .energyCard, .statusCard, .propertiesCard {
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.5rem;
