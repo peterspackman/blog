@@ -22,6 +22,10 @@ self.addEventListener('message', async function(e) {
                 setLogLevel(data.level);
                 break;
                 
+            case 'computeCube':
+                await computeCube(data);
+                break;
+                
             default:
                 postMessage({ type: 'error', error: `Unknown message type: ${type}` });
         }
@@ -187,19 +191,48 @@ async function runCalculation(params) {
             });
         }
         
-        // Export wavefunction data
+        // Store calculation and molecule for cube computation and export basic info
         try {
             const wf = calc.wavefunction;
             results.wavefunctionData = {
-                fchk: wf.exportToString('fchk'),
                 numBasisFunctions: calc.basis.nbf(),
-                numAtoms: molecule.size()
+                numAtoms: molecule.size(),
+                nAlpha: wf.nAlpha || Math.ceil(molecule.numElectrons() / 2),
+                nBeta: wf.nBeta || Math.floor(molecule.numElectrons() / 2),
+                numElectrons: molecule.numElectrons(),
+                basisSet: params.basisSet,
+                method: params.method
             };
+            
+            // Generate FCHK file using wavefunction exportToString method
+            try {
+                postMessage({ type: 'log', level: 2, message: 'Generating FCHK file...' });
+                
+                const fchkString = wf.exportToString("fchk");
+                
+                if (fchkString && fchkString.length > 0) {
+                    results.wavefunctionData.fchk = fchkString;
+                    postMessage({ type: 'log', level: 2, message: 'FCHK file generated successfully' });
+                } else {
+                    throw new Error('FCHK string is empty or null');
+                }
+            } catch (fchkError) {
+                postMessage({ 
+                    type: 'log', 
+                    level: 3, 
+                    message: `Could not generate FCHK file: ${fchkError.message}` 
+                });
+                // Don't fail the entire calculation if FCHK generation fails
+            }
+            
+            // Store calculation and molecule in worker context for cube computation
+            self.currentCalculation = calc;
+            self.currentMolecule = molecule;
         } catch (e) {
             postMessage({ 
                 type: 'log', 
                 level: 3, 
-                message: `Could not export wavefunction: ${e.message}` 
+                message: `Could not store wavefunction data: ${e.message}` 
             });
         }
         
@@ -293,31 +326,28 @@ async function runCalculation(params) {
                 postMessage({ type: 'log', level: 3, message: `Could not extract orbital energies: ${e.message}` });
             }
             
-            // Orbital occupations - currently estimated, will be available in API soon
-            postMessage({ type: 'log', level: 2, message: 'Note: Orbital occupations are currently estimated and will be available properly in the API soon' });
-            
-            // Estimate occupations based on number of electrons for now
+            // Get orbital occupations from wavefunction
             try {
-                const numElectrons = molecule.numElectrons();
                 const numOrbitals = results.orbitalEnergies ? results.orbitalEnergies.length : 0;
                 if (numOrbitals > 0) {
                     const occupationArray = [];
-                    let electronsLeft = numElectrons;
+                    const nAlpha = wf.nAlpha || Math.ceil(molecule.numElectrons() / 2);
+                    const nBeta = wf.nBeta || Math.floor(molecule.numElectrons() / 2);
+                    
+                    // For restricted calculations, each orbital gets 0, 1, or 2 electrons
                     for (let i = 0; i < numOrbitals; i++) {
-                        if (electronsLeft >= 2) {
-                            occupationArray.push(2.0);
-                            electronsLeft -= 2;
-                        } else if (electronsLeft === 1) {
-                            occupationArray.push(1.0);
-                            electronsLeft = 0;
+                        if (i < Math.min(nAlpha, nBeta)) {
+                            occupationArray.push(2.0); // Doubly occupied
+                        } else if (i < Math.max(nAlpha, nBeta)) {
+                            occupationArray.push(1.0); // Singly occupied
                         } else {
-                            occupationArray.push(0.0);
+                            occupationArray.push(0.0); // Virtual
                         }
                     }
                     results.orbitalOccupations = occupationArray;
                 }
             } catch (e) {
-                // Silent fallback - just don't include occupations
+                postMessage({ type: 'log', level: 3, message: `Could not extract orbital occupations: ${e.message}` });
             }
             
         } catch (e) {
@@ -340,6 +370,141 @@ async function runCalculation(params) {
             type: 'result', 
             success: false, 
             error: error.message 
+        });
+    }
+}
+
+async function computeCube(params) {
+    try {
+        const startTime = performance.now();
+        
+        postMessage({ 
+            type: 'log', 
+            level: 2, 
+            message: `Computing ${params.cubeType} cube for orbital ${params.orbitalIndex || 'N/A'}...` 
+        });
+
+        if (!self.currentCalculation || !self.currentMolecule) {
+            throw new Error('No calculation available. Please run a calculation first.');
+        }
+
+        const wavefunction = self.currentCalculation.wavefunction;
+        let cubeString;
+
+        switch (params.cubeType) {
+            case 'molecular_orbital':
+                // Try the simple approach first, fall back to volume calculator if needed
+                try {
+                    cubeString = occModule.generateMOCube(
+                        wavefunction,
+                        params.orbitalIndex,
+                        params.gridSteps || 40,
+                        params.gridSteps || 40,
+                        params.gridSteps || 40
+                    );
+                } catch (simpleError) {
+                    postMessage({ 
+                        type: 'log', 
+                        level: 3, 
+                        message: `Simple MO cube generation failed, trying volume calculator: ${simpleError.message}` 
+                    });
+                    
+                    // Fall back to volume calculator
+                    const moCalculator = new occModule.VolumeCalculator();
+                    moCalculator.setWavefunction(wavefunction);
+
+                    const moParams = new occModule.VolumeGenerationParameters();
+                    moParams.property = occModule.VolumePropertyKind.MolecularOrbital;
+                    moParams.orbitalIndex = params.orbitalIndex;
+                    moParams.setSteps(params.gridSteps || 40, params.gridSteps || 40, params.gridSteps || 40);
+                    
+                    // Set buffer around molecule if specified
+                    if (params.gridBuffer) {
+                        moParams.setBuffer(params.gridBuffer);
+                    }
+
+                    const moVolume = moCalculator.computeVolume(moParams);
+                    cubeString = moCalculator.volumeAsCubeString(moVolume);
+
+                    // Clean up
+                    moVolume.delete();
+                    moParams.delete();
+                    moCalculator.delete();
+                }
+                break;
+
+            case 'electron_density':
+                cubeString = occModule.generateElectronDensityCube(
+                    wavefunction,
+                    params.gridSteps || 40,
+                    params.gridSteps || 40,
+                    params.gridSteps || 40
+                );
+                break;
+
+            case 'electric_potential':
+                // Use volume calculator for ESP (this is the standard way for ESP)
+                try {
+                    const espCalculator = new occModule.VolumeCalculator();
+                    espCalculator.setWavefunction(wavefunction);
+
+                    const espParams = new occModule.VolumeGenerationParameters();
+                    espParams.property = occModule.VolumePropertyKind.ElectricPotential;
+                    espParams.setSteps(params.gridSteps || 40, params.gridSteps || 40, params.gridSteps || 40);
+                    
+                    if (params.gridBuffer) {
+                        espParams.setBuffer(params.gridBuffer);
+                    }
+
+                    const espVolume = espCalculator.computeVolume(espParams);
+                    cubeString = espCalculator.volumeAsCubeString(espVolume);
+
+                    // Clean up
+                    espVolume.delete();
+                    espParams.delete();
+                    espCalculator.delete();
+                } catch (espError) {
+                    postMessage({ 
+                        type: 'log', 
+                        level: 3, 
+                        message: `ESP calculation failed: ${espError.message}` 
+                    });
+                    throw espError;
+                }
+                break;
+
+            default:
+                throw new Error(`Unknown cube type: ${params.cubeType}`);
+        }
+
+        const endTime = performance.now();
+        const elapsedMs = endTime - startTime;
+
+        postMessage({ 
+            type: 'log', 
+            level: 2, 
+            message: `Cube computation completed in ${elapsedMs.toFixed(0)}ms` 
+        });
+
+        // Send cube result back to main thread
+        postMessage({ 
+            type: 'cubeResult', 
+            success: true, 
+            cubeData: cubeString,
+            cubeType: params.cubeType,
+            orbitalIndex: params.orbitalIndex,
+            gridSteps: params.gridSteps,
+            gridBuffer: params.gridBuffer,
+            elapsedMs: elapsedMs
+        });
+
+    } catch (error) {
+        postMessage({ 
+            type: 'cubeResult', 
+            success: false, 
+            error: error.message,
+            cubeType: params.cubeType,
+            orbitalIndex: params.orbitalIndex
         });
     }
 }

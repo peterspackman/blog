@@ -1,0 +1,117 @@
+.orbitalItem {
+  position: relative;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.orbitalItem:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.orbitalOccupied {
+  background-color: var(--ifm-color-success-contrast-background);
+  border-color: var(--ifm-color-success);
+}
+
+.orbitalVirtual {
+  background-color: var(--ifm-color-warning-contrast-background);
+  border-color: var(--ifm-color-warning);
+}
+
+.orbitalSelected {
+  border-color: var(--ifm-color-primary) !important;
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  font-weight: 600;
+}
+
+.orbitalContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.orbitalEnergy {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+  line-height: 1.2;
+}
+
+.orbitalEnergyEV {
+  font-size: 0.65rem;
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.2;
+}
+
+.orbitalLabel {
+  font-size: 0.6rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-top: 0.1rem;
+  line-height: 1.2;
+}
+
+.orbitalIndicators {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.occupationBadge {
+  background-color: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-800);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: bold;
+  min-width: 1.2rem;
+  text-align: center;
+  line-height: 1;
+}
+
+.orbitalOccupied .occupationBadge {
+  background-color: var(--ifm-color-success);
+  color: var(--ifm-color-success-contrast-foreground);
+}
+
+.orbitalVirtual .occupationBadge {
+  background-color: var(--ifm-color-warning);
+  color: var(--ifm-color-warning-contrast-foreground);
+}
+
+.orbitalColorIndicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--ifm-background-color);
+  box-shadow: 0 0 0 1px var(--ifm-color-emphasis-300);
+  flex-shrink: 0;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .orbitalItem {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+  
+  .orbitalEnergy {
+    font-size: 0.8rem;
+  }
+  
+  .orbitalEnergyEV {
+    font-size: 0.7rem;
+  }
+  
+  .occupationBadge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+  }
+}

@@ -169,6 +169,16 @@
   background-color: var(--ifm-color-primary-dark);
 }
 
+.exportButtonDisabled {
+  background-color: var(--ifm-color-emphasis-300) !important;
+  color: var(--ifm-color-emphasis-600) !important;
+  cursor: not-allowed !important;
+}
+
+.exportButtonDisabled:hover {
+  background-color: var(--ifm-color-emphasis-300) !important;
+}
+
 
 .noResults {
   text-align: center;

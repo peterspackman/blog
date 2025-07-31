@@ -138,14 +138,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
             >
               ↓ JSON
             </button>
-            {results.wavefunctionData.fchk && (
-              <button 
-                className={styles.exportButton}
-                onClick={() => downloadWavefunction('fchk')}
-              >
-                ↓ FCHK
-              </button>
-            )}
+            <button 
+              className={results.wavefunctionData.fchk ? styles.exportButton : `${styles.exportButton} ${styles.exportButtonDisabled}`}
+              onClick={() => results.wavefunctionData.fchk ? downloadWavefunction('fchk') : alert('FCHK data not available. Check the calculation logs for details.')}
+              disabled={!results.wavefunctionData.fchk}
+              title={results.wavefunctionData.fchk ? 'Download FCHK file' : 'FCHK generation failed - see logs'}
+            >
+              ↓ FCHK {!results.wavefunctionData.fchk && '(unavailable)'}
+            </button>
           </div>
         </div>
       )}

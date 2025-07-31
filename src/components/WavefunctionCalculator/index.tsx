@@ -6,6 +6,7 @@ import ResultsDisplay from './ResultsDisplay';
 import LogOutput from './LogOutput';
 import MatrixDisplay from './MatrixDisplay';
 import MoleculeViewer from './MoleculeViewer';
+import OrbitalItem from './OrbitalItem';
 
 interface CalculationResult {
   energy: number;
@@ -50,6 +51,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
   const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('structure');
   const [error, setError] = useState<string>('');
+  const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
   
   // Collapsible sections state
   const [isInputExpanded, setIsInputExpanded] = useState(true);
@@ -128,6 +130,10 @@ const WavefunctionCalculator: React.FC = () => {
         handleCalculationResult(data);
         break;
 
+      case 'cubeResult':
+        handleCubeResult(data);
+        break;
+
       case 'error':
         console.error('Worker error:', data.error);
         setError('Calculation error: ' + data.error);
@@ -160,6 +166,12 @@ const WavefunctionCalculator: React.FC = () => {
   const handleFileLoad = (xyzContent: string) => {
     setCurrentXYZData(xyzContent);
     
+    // Clear cube cache when loading a new molecule
+    setCubeResults(new Map());
+    
+    // Clear any existing calculation results
+    setResults(null);
+    
     try {
       // Parse XYZ to get basic info
       const lines = xyzContent.trim().split('\n');
@@ -180,7 +192,7 @@ const WavefunctionCalculator: React.FC = () => {
         .join('');
       
       setMoleculeInfo({ name: moleculeName, formula, numAtoms });
-      addLog(`Molecule loaded: ${formula} (${numAtoms} atoms)`, 'info');
+      addLog(`Molecule loaded: ${formula} (${numAtoms} atoms) - cleared orbital cache`, 'info');
     } catch (error) {
       console.error('Error parsing XYZ:', error);
       setError('Failed to parse XYZ data: ' + error.message);
@@ -196,6 +208,20 @@ const WavefunctionCalculator: React.FC = () => {
       addLog('Calculation completed successfully!', 'info');
     } else {
       setError('Calculation failed: ' + data.error);
+    }
+  };
+
+  const handleCubeResult = (data: any) => {
+    if (data.success) {
+      const key = data.cubeType === 'molecular_orbital' 
+        ? `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}_${data.gridBuffer || 5.0}` 
+        : data.cubeType;
+      
+      setCubeResults(prev => new Map(prev.set(key, data.cubeData)));
+      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex})` : ''} [${data.gridSteps || 40} steps, ${data.gridBuffer || 5.0}Å buffer]`, 'info');
+    } else {
+      setError(`Cube computation failed: ${data.error}`);
+      addLog(`Cube computation failed: ${data.error}`, 'error');
     }
   };
 
@@ -245,6 +271,30 @@ const WavefunctionCalculator: React.FC = () => {
       initializeWorker();
       setIsCalculating(false);
     }
+  };
+
+  const requestCubeComputation = (cubeType: string, orbitalIndex?: number, gridSteps?: number, gridBuffer?: number) => {
+    if (!worker || !isWorkerReady) {
+      setError('Web Worker not ready for cube computation.');
+      return;
+    }
+
+    if (!results || !results.wavefunctionData) {
+      setError('No wavefunction data available for cube computation.');
+      return;
+    }
+
+    addLog(`Requesting ${cubeType} cube computation...`, 'info');
+    
+    worker.postMessage({
+      type: 'computeCube',
+      data: {
+        cubeType,
+        orbitalIndex,
+        gridSteps: gridSteps || 40,
+        gridBuffer: gridBuffer || 5.0
+      }
+    });
   };
 
   return (
@@ -366,7 +416,10 @@ const WavefunctionCalculator: React.FC = () => {
                 {currentXYZData ? (
                   <MoleculeViewer 
                     xyzData={currentXYZData} 
-                    moleculeName={moleculeInfo?.name || 'Molecule'} 
+                    moleculeName={moleculeInfo?.name || 'Molecule'}
+                    wavefunctionResults={results}
+                    cubeResults={cubeResults}
+                    onRequestCubeComputation={requestCubeComputation}
                   />
                 ) : (
                   <div className={styles.noStructure}>
@@ -385,21 +438,18 @@ const WavefunctionCalculator: React.FC = () => {
                       {results.orbitalEnergies.slice(0, 20).map((energy, i) => {
                         const occupation = results.orbitalOccupations?.[i] ?? 0;
                         const isOccupied = occupation > 0;
+                        const orbital = {
+                          index: i,
+                          energy: energy * 27.2114, // Convert to eV for the component
+                          occupation,
+                          isOccupied
+                        };
                         
                         return (
-                          <div key={i} className={`${styles.orbitalItem} ${isOccupied ? styles.orbitalOccupied : styles.orbitalVirtual}`}>
-                            <div className={styles.orbitalContent}>
-                              <div className={styles.orbitalEnergy}>
-                                {energy.toFixed(6)} Eh
-                              </div>
-                              <div className={styles.orbitalEnergyEV}>
-                                {(energy * 27.2114).toFixed(3)} eV
-                              </div>
-                            </div>
-                            <div className={styles.occupationBadge}>
-                              {occupation === 2.0 ? '↑↓' : occupation === 1.0 ? '↑' : ''}
-                            </div>
-                          </div>
+                          <OrbitalItem
+                            key={i}
+                            orbital={orbital}
+                          />
                         );
                       })}
                     </div>

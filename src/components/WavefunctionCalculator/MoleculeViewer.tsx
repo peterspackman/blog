@@ -1,23 +1,43 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as NGL from 'ngl';
 import styles from './MoleculeViewer.module.css';
+import OrbitalItem from './OrbitalItem';
 
 interface MoleculeViewerProps {
   xyzData: string;
   moleculeName?: string;
+  wavefunctionResults?: any;
+  cubeResults?: Map<string, string>;
+  onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number, gridBuffer?: number) => void;
 }
 
 type RepresentationType = 'ball+stick' | 'line' | 'spacefill' | 'surface' | 'cartoon' | 'licorice';
 
-const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName = 'Molecule' }) => {
+const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ 
+  xyzData, 
+  moleculeName = 'Molecule', 
+  wavefunctionResults, 
+  cubeResults,
+  onRequestCubeComputation 
+}) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
   const componentRef = useRef<any>(null);
+  const moComponentRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [representation, setRepresentation] = useState<RepresentationType>('ball+stick');
   const [showHydrogens, setShowHydrogens] = useState(true);
   const [colorScheme, setColorScheme] = useState('element');
+  const [selectedOrbitals, setSelectedOrbitals] = useState<Set<number>>(new Set());
+  const [isosurfaceValue, setIsosurfaceValue] = useState<number>(0.01);
+  const [showBothPhases, setShowBothPhases] = useState<boolean>(false);
+  const [opacity, setOpacity] = useState<number>(1.0);
+  const [isComputingMO, setIsComputingMO] = useState(false);
+  const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(new Map());
+  const [gridSteps, setGridSteps] = useState<number>(40);
+  const [gridBuffer, setGridBuffer] = useState<number>(5.0); // Buffer in Angstroms around molecule
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!stageRef.current) return;
@@ -244,8 +264,215 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
 
   const toggleFullscreen = () => {
     if (nglStageRef.current) {
-      nglStageRef.current.toggleFullscreen();
+      nglStageRef.current.toggleFullscreen(stageRef.current);
     }
+  };
+
+  // Get available orbitals from wavefunction results
+  const availableOrbitals = React.useMemo(() => {
+    if (!wavefunctionResults?.orbitalEnergies || !wavefunctionResults?.orbitalOccupations) {
+      return [];
+    }
+
+    const orbitals = [];
+    for (let i = 0; i < wavefunctionResults.orbitalEnergies.length; i++) {
+      const energy = wavefunctionResults.orbitalEnergies[i];
+      const occupation = wavefunctionResults.orbitalOccupations[i] || 0;
+      orbitals.push({
+        index: i,
+        energy: energy * 27.2114, // Convert to eV
+        occupation,
+        isOccupied: occupation > 0
+      });
+    }
+    return orbitals;
+  }, [wavefunctionResults]);
+
+  // Show all available orbitals
+  const displayedOrbitals = availableOrbitals;
+
+  // Don't select any orbitals by default - user chooses which to plot
+
+  // Request new cube data when orbitals change or when grid settings change
+  useEffect(() => {
+    if (availableOrbitals.length > 0 && onRequestCubeComputation && selectedOrbitals.size > 0) {
+      const missingOrbitals = [];
+      
+      for (const orbitalIndex of selectedOrbitals) {
+        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+        const existingCube = cubeResults?.get(cubeKey);
+        if (!existingCube) {
+          missingOrbitals.push(orbitalIndex);
+        }
+      }
+      
+      if (missingOrbitals.length > 0) {
+        // Clear existing timeout
+        if (updateTimeoutRef.current) {
+          clearTimeout(updateTimeoutRef.current);
+        }
+
+        // Set new timeout for debounced update
+        updateTimeoutRef.current = setTimeout(() => {
+          computeAndVisualizeMOs(missingOrbitals);
+        }, 300); // Longer delay for grid setting changes
+      }
+    }
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps, gridBuffer]);
+
+  const computeAndVisualizeMOs = async (orbitalIndices: number[]) => {
+    if (!onRequestCubeComputation || !nglStageRef.current) {
+      return;
+    }
+
+    setIsComputingMO(true);
+    setError('');
+
+    try {
+      // Request cube computation for each orbital
+      for (const orbitalIndex of orbitalIndices) {
+        onRequestCubeComputation('molecular_orbital', orbitalIndex, gridSteps, gridBuffer);
+      }
+    } catch (error) {
+      console.error('Error requesting MO computation:', error);
+      setError('Failed to request molecular orbital computation: ' + error.message);
+      setIsComputingMO(false);
+    }
+  };
+
+  // Watch for cube results and visualize them
+  useEffect(() => {
+    if (!nglStageRef.current) return;
+
+    // If no orbitals selected, clear visualizations
+    if (selectedOrbitals.size === 0) {
+      visualizeAllSelectedMOs();
+      return;
+    }
+
+    // Only proceed if we have cube results
+    if (!cubeResults) return;
+
+    // Check if all selected orbitals have cube data
+    const allCubesAvailable = Array.from(selectedOrbitals).every(orbitalIndex => {
+      const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+      return cubeResults.get(cubeKey);
+    });
+
+    if (allCubesAvailable) {
+      visualizeAllSelectedMOs();
+      if (isComputingMO) {
+        setIsComputingMO(false);
+      }
+    }
+  }, [cubeResults, selectedOrbitals, isosurfaceValue, showBothPhases, opacity]);
+
+  const visualizeAllSelectedMOs = async () => {
+    if (!nglStageRef.current) return;
+
+    try {
+      // Remove existing MO surfaces
+      if (moComponentRef.current) {
+        if (Array.isArray(moComponentRef.current)) {
+          moComponentRef.current.forEach(component => {
+            if (component && nglStageRef.current) {
+              nglStageRef.current.removeComponent(component);
+            }
+          });
+        } else if (nglStageRef.current) {
+          nglStageRef.current.removeComponent(moComponentRef.current);
+        }
+        moComponentRef.current = null;
+      }
+
+      const moComponents = [];
+      const colors = ['#4A90E2', '#FF8C42', '#7B68EE', '#32CD32', '#FF6B6B', '#9B59B6'];
+      
+      // Store color mapping for visual indicators
+      const newOrbitalColors = new Map<number, string>();
+
+      // If no orbitals selected, clear everything and return
+      if (selectedOrbitals.size === 0) {
+        moComponentRef.current = [];
+        setOrbitalColors(newOrbitalColors);
+        // Force a re-render by resetting the stage view
+        nglStageRef.current.autoView();
+        return;
+      }
+
+      // Load and visualize each selected orbital
+      for (const [index, orbitalIndex] of Array.from(selectedOrbitals).entries()) {
+        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+        const cubeData = cubeResults?.get(cubeKey);
+        
+        if (cubeData) {
+          // Create blob from cube data and load it
+          const blob = new Blob([cubeData], { type: 'text/plain' });
+          const cubeComponent = await nglStageRef.current.loadFile(blob, {
+            ext: 'cube',
+            name: `MO_${orbitalIndex}`
+          });
+
+          if (cubeComponent) {
+            const color = colors[index % colors.length];
+            
+            // Store color mapping
+            newOrbitalColors.set(orbitalIndex, color);
+
+            // Add positive isosurface
+            cubeComponent.addRepresentation('surface', {
+              visible: true,
+              isolevelType: 'value',
+              isolevel: isosurfaceValue,
+              color: color,
+              opacity: opacity,
+              opaqueBack: false
+            });
+
+            // Add negative isosurface if showing both phases
+            if (showBothPhases) {
+              cubeComponent.addRepresentation('surface', {
+                visible: true,
+                isolevelType: 'value',
+                isolevel: -isosurfaceValue,
+                color: 'red',
+                opacity: opacity,
+                opaqueBack: false
+              });
+            }
+
+            moComponents.push(cubeComponent);
+          }
+        }
+      }
+
+      moComponentRef.current = moComponents;
+      setOrbitalColors(newOrbitalColors);
+      nglStageRef.current.autoView();
+    } catch (error) {
+      console.error('Error visualizing molecular orbitals:', error);
+      setError('Failed to visualize molecular orbitals: ' + error.message);
+    }
+  };
+
+
+  const toggleOrbitalSelection = (orbitalIndex: number) => {
+    setSelectedOrbitals(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orbitalIndex)) {
+        newSet.delete(orbitalIndex);
+      } else {
+        newSet.add(orbitalIndex);
+      }
+      return newSet;
+    });
   };
 
   if (!xyzData) {
@@ -262,7 +489,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h4>3D Structure</h4>
+        <h4>3D Structure & Molecular Orbitals</h4>
         <div className={styles.controls}>
           <button 
             className={styles.controlButton}
@@ -282,6 +509,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
       </div>
       
       <div className={styles.representationControls}>
+        {/* Structure Controls */}
         <div className={styles.controlGroup}>
           <label className={styles.controlLabel}>Style</label>
           <select 
@@ -323,24 +551,130 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ xyzData, moleculeName =
           </label>
         </div>
       </div>
-      
-      {error && (
-        <div className={styles.error}>
-          <p>{error}</p>
+
+      <div className={styles.mainContent}>
+        <div className={styles.viewerContainer}>
+          {error && (
+            <div className={styles.error}>
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {isLoading && (
+            <div className={styles.loading}>
+              <p>Loading molecule...</p>
+            </div>
+          )}
+          
+          <div 
+            ref={stageRef} 
+            className={styles.viewer}
+            style={{ opacity: isLoading ? 0.5 : 1 }}
+          />
         </div>
-      )}
-      
-      {isLoading && (
-        <div className={styles.loading}>
-          <p>Loading molecule...</p>
-        </div>
-      )}
-      
-      <div 
-        ref={stageRef} 
-        className={styles.viewer}
-        style={{ opacity: isLoading ? 0.5 : 1 }}
-      />
+
+        {/* Orbital Sidebar - shown when wavefunction results are available */}
+        {wavefunctionResults && availableOrbitals.length > 0 && (
+          <div className={styles.orbitalSidebar}>
+            <div className={styles.orbitalSidebarHeader}>
+              <h5>Molecular Orbitals</h5>
+              <span className={styles.orbitalHint}>Click orbitals to visualize</span>
+            </div>
+
+            {/* MO Controls */}
+            <div className={styles.moControls}>
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>Isovalue</label>
+                <input 
+                  type="number" 
+                  min="0.001" 
+                  max="0.2" 
+                  step="0.001" 
+                  value={isosurfaceValue}
+                  onChange={(e) => setIsosurfaceValue(parseFloat(e.target.value) || 0.01)}
+                  className={styles.numberInput}
+                />
+              </div>
+
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>Opacity</label>
+                <input 
+                  type="number" 
+                  min="0.1" 
+                  max="1.0" 
+                  step="0.05" 
+                  value={opacity}
+                  onChange={(e) => setOpacity(parseFloat(e.target.value) || 1.0)}
+                  className={styles.numberInput}
+                  title="Orbital surface opacity (0.1 = very transparent, 1.0 = opaque)"
+                />
+              </div>
+
+
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>Grid Steps</label>
+                <input 
+                  type="number" 
+                  min="20" 
+                  max="100" 
+                  step="5"
+                  value={gridSteps}
+                  onChange={(e) => setGridSteps(parseInt(e.target.value) || 40)}
+                  className={styles.numberInput}
+                  title="Number of grid points per dimension (higher = more detail, slower)"
+                />
+              </div>
+
+              <div className={styles.controlGroup}>
+                <label className={styles.controlLabel}>Grid Buffer (Å)</label>
+                <input 
+                  type="number" 
+                  min="2.0" 
+                  max="10.0" 
+                  step="0.5"
+                  value={gridBuffer}
+                  onChange={(e) => setGridBuffer(parseFloat(e.target.value) || 5.0)}
+                  className={styles.numberInput}
+                  title="Buffer region around molecule in Angstroms"
+                />
+              </div>
+
+              {isComputingMO && (
+                <div className={styles.controlGroup}>
+                  <span className={styles.computingIndicator}>Computing MO...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Orbital List */}
+            <div className={styles.orbitalList}>
+              {displayedOrbitals.map((orbital, idx) => {
+                // Find HOMO/LUMO in the full orbital set
+                const homoIndex = availableOrbitals.findIndex((orb, i) => 
+                  orb.isOccupied && (!availableOrbitals[i + 1] || !availableOrbitals[i + 1].isOccupied)
+                );
+                const lumoIndex = homoIndex >= 0 ? homoIndex + 1 : -1;
+                const isHOMO = orbital.index === homoIndex;
+                const isLUMO = orbital.index === lumoIndex;
+                const isSelected = selectedOrbitals.has(orbital.index);
+                const orbitalColor = orbitalColors.get(orbital.index);
+                
+                return (
+                  <OrbitalItem
+                    key={orbital.index}
+                    orbital={orbital}
+                    isHOMO={isHOMO}
+                    isLUMO={isLUMO}
+                    isSelected={isSelected}
+                    colorIndicator={isSelected ? orbitalColor : undefined}
+                    onClick={() => toggleOrbitalSelection(orbital.index)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
