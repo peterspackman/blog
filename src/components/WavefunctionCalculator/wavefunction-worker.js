@@ -388,88 +388,252 @@ async function computeCube(params) {
             throw new Error('No calculation available. Please run a calculation first.');
         }
 
+        // Validate parameters
+        const gridSteps = Math.min(Math.max(params.gridSteps || 40, 20), 60);
+        
+        if (gridSteps !== (params.gridSteps || 40)) {
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: `Grid steps clamped to valid range: ${gridSteps}` 
+            });
+        }
+
         const wavefunction = self.currentCalculation.wavefunction;
+        
+        // Validate wavefunction is properly initialized
+        if (!wavefunction) {
+            throw new Error('Wavefunction is not available or not properly initialized');
+        }
+        
+        postMessage({ 
+            type: 'log', 
+            level: 2, 
+            message: `Using grid: ${gridSteps} steps` 
+        });
+        
         let cubeString;
+        let gridInfo;
 
         switch (params.cubeType) {
             case 'molecular_orbital':
-                // Try the simple approach first, fall back to volume calculator if needed
+                // Validate orbital index
+                if (params.orbitalIndex === undefined || params.orbitalIndex < 0) {
+                    throw new Error('Invalid orbital index provided');
+                }
+                
+                // Get number of basis functions to validate orbital index
+                const numBasisFunctions = self.currentCalculation.basis?.nbf?.() || 0;
+                if (params.orbitalIndex >= numBasisFunctions) {
+                    throw new Error(`Orbital index ${params.orbitalIndex} exceeds available orbitals (${numBasisFunctions})`);
+                }
+
+                // Use the correct API from the bindings - MO cubes use ElectronDensity property with mo_number
+                let moCalculator = null;
+                let moParams = null;
+                let moVolume = null;
+                
                 try {
-                    cubeString = occModule.generateMOCube(
-                        wavefunction,
-                        params.orbitalIndex,
-                        params.gridSteps || 40,
-                        params.gridSteps || 40,
-                        params.gridSteps || 40
-                    );
-                } catch (simpleError) {
+                    if (!occModule.VolumeCalculator) {
+                        throw new Error('VolumeCalculator not available in OCC module');
+                    }
+                    
+                    moCalculator = new occModule.VolumeCalculator();
+                    moParams = new occModule.VolumeGenerationParameters();
+                    
+                    // Use the correct API - MO cubes use ElectronDensity property with mo_number set
+                    if (!occModule.VolumePropertyKind || !occModule.VolumePropertyKind.ElectronDensity) {
+                        throw new Error('VolumePropertyKind.ElectronDensity not available');
+                    }
+                    
+                    postMessage({ 
+                        type: 'log', 
+                        level: 2, 
+                        message: `Setting up MO calculation for orbital ${params.orbitalIndex}` 
+                    });
+                    
+                    moCalculator.setWavefunction(wavefunction);
+                    moParams.property = occModule.VolumePropertyKind.ElectronDensity;
+                    moParams.mo_number = params.orbitalIndex;  // This is the key - set mo_number for MO cubes
+                    moParams.setSteps(gridSteps, gridSteps, gridSteps);
+                    // Note: setBuffer is not exposed in the bindings, only setOrigin
+
+                    postMessage({ 
+                        type: 'log', 
+                        level: 2, 
+                        message: `Computing volume for orbital ${params.orbitalIndex}...` 
+                    });
+
+                    moVolume = moCalculator.computeVolume(moParams);
+                    
+                    if (!moVolume) {
+                        throw new Error('Volume computation returned null/undefined');
+                    }
+                    
+                    // Extract grid information from VolumeData
+                    gridInfo = {
+                        origin: moVolume.getOrigin(),
+                        steps: moVolume.getSteps(), 
+                        nx: moVolume.nx(),
+                        ny: moVolume.ny(),
+                        nz: moVolume.nz(),
+                        basis: moVolume.getBasis()
+                    };
+                    
+                    postMessage({ 
+                        type: 'log', 
+                        level: 2, 
+                        message: `Grid: ${gridInfo.nx}x${gridInfo.ny}x${gridInfo.nz}, origin: [${gridInfo.origin[0].toFixed(2)}, ${gridInfo.origin[1].toFixed(2)}, ${gridInfo.origin[2].toFixed(2)}]` 
+                    });
+                    
+                    cubeString = moCalculator.volumeAsCubeString(moVolume);
+                    
+                    if (!cubeString || cubeString.length === 0) {
+                        throw new Error('Cube string generation failed or returned empty result');
+                    }
+
+                } catch (error) {
                     postMessage({ 
                         type: 'log', 
                         level: 3, 
-                        message: `Simple MO cube generation failed, trying volume calculator: ${simpleError.message}` 
+                        message: `MO cube computation error: ${error.message}` 
                     });
-                    
-                    // Fall back to volume calculator
-                    const moCalculator = new occModule.VolumeCalculator();
-                    moCalculator.setWavefunction(wavefunction);
-
-                    const moParams = new occModule.VolumeGenerationParameters();
-                    moParams.property = occModule.VolumePropertyKind.MolecularOrbital;
-                    moParams.orbitalIndex = params.orbitalIndex;
-                    moParams.setSteps(params.gridSteps || 40, params.gridSteps || 40, params.gridSteps || 40);
-                    
-                    // Set buffer around molecule if specified
-                    if (params.gridBuffer) {
-                        moParams.setBuffer(params.gridBuffer);
+                    throw error;
+                } finally {
+                    // Ensure cleanup happens even if errors occur
+                    try {
+                        if (moVolume) moVolume.delete();
+                        if (moParams) moParams.delete();
+                        if (moCalculator) moCalculator.delete();
+                    } catch (cleanupError) {
+                        postMessage({ 
+                            type: 'log', 
+                            level: 3, 
+                            message: `Cleanup error: ${cleanupError.message}` 
+                        });
                     }
-
-                    const moVolume = moCalculator.computeVolume(moParams);
-                    cubeString = moCalculator.volumeAsCubeString(moVolume);
-
-                    // Clean up
-                    moVolume.delete();
-                    moParams.delete();
-                    moCalculator.delete();
                 }
                 break;
 
             case 'electron_density':
-                cubeString = occModule.generateElectronDensityCube(
-                    wavefunction,
-                    params.gridSteps || 40,
-                    params.gridSteps || 40,
-                    params.gridSteps || 40
-                );
-                break;
-
-            case 'electric_potential':
-                // Use volume calculator for ESP (this is the standard way for ESP)
+                // Use VolumeCalculator for consistency
+                let densityCalculator = null;
+                let densityParams = null;
+                let densityVolume = null;
+                
                 try {
-                    const espCalculator = new occModule.VolumeCalculator();
-                    espCalculator.setWavefunction(wavefunction);
-
-                    const espParams = new occModule.VolumeGenerationParameters();
-                    espParams.property = occModule.VolumePropertyKind.ElectricPotential;
-                    espParams.setSteps(params.gridSteps || 40, params.gridSteps || 40, params.gridSteps || 40);
+                    if (!occModule.VolumeCalculator) {
+                        throw new Error('VolumeCalculator not available in OCC module');
+                    }
                     
-                    if (params.gridBuffer) {
-                        espParams.setBuffer(params.gridBuffer);
+                    densityCalculator = new occModule.VolumeCalculator();
+                    densityParams = new occModule.VolumeGenerationParameters();
+                    
+                    if (!occModule.VolumePropertyKind || !occModule.VolumePropertyKind.ElectronDensity) {
+                        throw new Error('VolumePropertyKind.ElectronDensity not available');
+                    }
+                    
+                    densityCalculator.setWavefunction(wavefunction);
+                    densityParams.property = occModule.VolumePropertyKind.ElectronDensity;
+                    densityParams.setSteps(gridSteps, gridSteps, gridSteps);
+
+                    densityVolume = densityCalculator.computeVolume(densityParams);
+                    
+                    if (!densityVolume) {
+                        throw new Error('Density volume computation returned null/undefined');
+                    }
+                    
+                    // Extract grid information from VolumeData
+                    gridInfo = {
+                        origin: densityVolume.getOrigin(),
+                        steps: densityVolume.getSteps(), 
+                        nx: densityVolume.nx(),
+                        ny: densityVolume.ny(),
+                        nz: densityVolume.nz(),
+                        basis: densityVolume.getBasis()
+                    };
+                    
+                    cubeString = densityCalculator.volumeAsCubeString(densityVolume);
+                    
+                    if (!cubeString || cubeString.length === 0) {
+                        throw new Error('Density cube string generation failed or returned empty result');
                     }
 
-                    const espVolume = espCalculator.computeVolume(espParams);
-                    cubeString = espCalculator.volumeAsCubeString(espVolume);
-
-                    // Clean up
-                    espVolume.delete();
-                    espParams.delete();
-                    espCalculator.delete();
-                } catch (espError) {
+                } catch (error) {
                     postMessage({ 
                         type: 'log', 
                         level: 3, 
-                        message: `ESP calculation failed: ${espError.message}` 
+                        message: `Density cube computation error: ${error.message}` 
                     });
-                    throw espError;
+                    throw error;
+                } finally {
+                    try {
+                        if (densityVolume) densityVolume.delete();
+                        if (densityParams) densityParams.delete();
+                        if (densityCalculator) densityCalculator.delete();
+                    } catch (cleanupError) {
+                        postMessage({ 
+                            type: 'log', 
+                            level: 3, 
+                            message: `Density cleanup error: ${cleanupError.message}` 
+                        });
+                    }
+                }
+                break;
+
+            case 'electric_potential':
+                let espCalculator = null;
+                let espParams = null;
+                let espVolume = null;
+                
+                try {
+                    if (!occModule.VolumeCalculator) {
+                        throw new Error('VolumeCalculator not available in OCC module');
+                    }
+                    
+                    espCalculator = new occModule.VolumeCalculator();
+                    espParams = new occModule.VolumeGenerationParameters();
+                    
+                    if (!occModule.VolumePropertyKind || !occModule.VolumePropertyKind.ElectricPotential) {
+                        throw new Error('VolumePropertyKind.ElectricPotential not available');
+                    }
+                    
+                    espCalculator.setWavefunction(wavefunction);
+                    espParams.property = occModule.VolumePropertyKind.ElectricPotential;
+                    espParams.setSteps(gridSteps, gridSteps, gridSteps);
+                    espParams.setBuffer(gridBuffer);
+
+                    espVolume = espCalculator.computeVolume(espParams);
+                    
+                    if (!espVolume) {
+                        throw new Error('ESP volume computation returned null/undefined');
+                    }
+                    
+                    cubeString = espCalculator.volumeAsCubeString(espVolume);
+                    
+                    if (!cubeString || cubeString.length === 0) {
+                        throw new Error('ESP cube string generation failed or returned empty result');
+                    }
+
+                } catch (error) {
+                    postMessage({ 
+                        type: 'log', 
+                        level: 3, 
+                        message: `ESP cube computation error: ${error.message}` 
+                    });
+                    throw error;
+                } finally {
+                    try {
+                        if (espVolume) espVolume.delete();
+                        if (espParams) espParams.delete();
+                        if (espCalculator) espCalculator.delete();
+                    } catch (cleanupError) {
+                        postMessage({ 
+                            type: 'log', 
+                            level: 3, 
+                            message: `ESP cleanup error: ${cleanupError.message}` 
+                        });
+                    }
                 }
                 break;
 
@@ -487,16 +651,22 @@ async function computeCube(params) {
         });
 
         // Send cube result back to main thread
-        postMessage({ 
+        const result = { 
             type: 'cubeResult', 
             success: true, 
             cubeData: cubeString,
             cubeType: params.cubeType,
             orbitalIndex: params.orbitalIndex,
             gridSteps: params.gridSteps,
-            gridBuffer: params.gridBuffer,
             elapsedMs: elapsedMs
-        });
+        };
+        
+        // Only include gridInfo if it was extracted (molecular orbital case)
+        if (typeof gridInfo !== 'undefined') {
+            result.gridInfo = gridInfo;
+        }
+        
+        postMessage(result);
 
     } catch (error) {
         postMessage({ 

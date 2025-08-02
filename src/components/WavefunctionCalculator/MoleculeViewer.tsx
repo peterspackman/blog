@@ -8,7 +8,8 @@ interface MoleculeViewerProps {
   moleculeName?: string;
   wavefunctionResults?: any;
   cubeResults?: Map<string, string>;
-  onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number, gridBuffer?: number) => void;
+  cubeGridInfo?: any;
+  onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number) => void;
 }
 
 type RepresentationType = 'ball+stick' | 'line' | 'spacefill' | 'surface' | 'cartoon' | 'licorice';
@@ -18,6 +19,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   moleculeName = 'Molecule', 
   wavefunctionResults, 
   cubeResults,
+  cubeGridInfo,
   onRequestCubeComputation 
 }) => {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -36,8 +38,18 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [isComputingMO, setIsComputingMO] = useState(false);
   const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(new Map());
   const [gridSteps, setGridSteps] = useState<number>(40);
-  const [gridBuffer, setGridBuffer] = useState<number>(5.0); // Buffer in Angstroms around molecule
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isMOSettingsExpanded, setIsMOSettingsExpanded] = useState<boolean>(true);
+  const [showGridBounds, setShowGridBounds] = useState<boolean>(false);
+  const gridBoundsComponentRef = useRef<any>(null);
+  const [lastGridInfo, setLastGridInfo] = useState<any>(null);
+  const [orbitalRenderStyle, setOrbitalRenderStyle] = useState<'surface' | 'wireframe' | 'dot' | 'slice'>('surface');
+  const [isOrbitalPanelOpen, setIsOrbitalPanelOpen] = useState<boolean>(false);
+  const [sliceDirection, setSliceDirection] = useState<'x' | 'y' | 'z'>('z');
+  const [slicePosition, setSlicePosition] = useState<number>(0);
+  const [colorScale, setColorScale] = useState<string>('rwb');
+  const [colorRange, setColorRange] = useState<[number, number]>([0, 0.05]);
+  const [isColorRangeExpanded, setIsColorRangeExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     if (!stageRef.current) return;
@@ -299,7 +311,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       const missingOrbitals = [];
       
       for (const orbitalIndex of selectedOrbitals) {
-        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
         const existingCube = cubeResults?.get(cubeKey);
         if (!existingCube) {
           missingOrbitals.push(orbitalIndex);
@@ -325,7 +337,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         clearTimeout(updateTimeoutRef.current);
       }
     };
-  }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps, gridBuffer]);
+  }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps]);
 
   const computeAndVisualizeMOs = async (orbitalIndices: number[]) => {
     if (!onRequestCubeComputation || !nglStageRef.current) {
@@ -336,9 +348,14 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     setError('');
 
     try {
-      // Request cube computation for each orbital
+      // Validate orbital indices before requesting computation
+      const maxOrbitalIndex = availableOrbitals.length - 1;
+      
       for (const orbitalIndex of orbitalIndices) {
-        onRequestCubeComputation('molecular_orbital', orbitalIndex, gridSteps, gridBuffer);
+        if (orbitalIndex < 0 || orbitalIndex > maxOrbitalIndex) {
+          throw new Error(`Invalid orbital index ${orbitalIndex}. Valid range: 0-${maxOrbitalIndex}`);
+        }
+        onRequestCubeComputation('molecular_orbital', orbitalIndex, gridSteps);
       }
     } catch (error) {
       console.error('Error requesting MO computation:', error);
@@ -349,6 +366,14 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
   // Watch for cube results and visualize them
   useEffect(() => {
+    console.log('MO visualization effect triggered:', { 
+      selectedOrbitals: selectedOrbitals.size, 
+      cubeResults: cubeResults.size, 
+      orbitalRenderStyle, 
+      sliceDirection, 
+      slicePosition 
+    });
+    
     if (!nglStageRef.current) return;
 
     // If no orbitals selected, clear visualizations
@@ -362,7 +387,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
     // Check if all selected orbitals have cube data
     const allCubesAvailable = Array.from(selectedOrbitals).every(orbitalIndex => {
-      const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+      const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
       return cubeResults.get(cubeKey);
     });
 
@@ -372,7 +397,59 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         setIsComputingMO(false);
       }
     }
-  }, [cubeResults, selectedOrbitals, isosurfaceValue, showBothPhases, opacity]);
+  }, [cubeResults, selectedOrbitals, isosurfaceValue, showBothPhases, opacity, orbitalRenderStyle, sliceDirection, slicePosition, colorScale, colorRange]);
+
+  // Simple slice position - use the actual position value
+  const calculateSlicePosition = (cubeComponent: any, direction: 'x' | 'y' | 'z', position: number) => {
+    console.log(`Slice position: direction=${direction}, position=${position}`);
+    return position;
+  };
+
+  // Extract grid bounds from NGL volume object
+  const extractGridBoundsFromVolume = (volumeComponent: any) => {
+    try {
+      if (!volumeComponent || !volumeComponent.structure || !volumeComponent.structure.volume) {
+        return null;
+      }
+
+      const volume = volumeComponent.structure.volume;
+      
+      // NGL volume objects typically have these properties
+      const header = volume.header;
+      if (!header) return null;
+
+      // Grid dimensions
+      const nx = header.nx || header.gridDimensions?.[0];
+      const ny = header.ny || header.gridDimensions?.[1]; 
+      const nz = header.nz || header.gridDimensions?.[2];
+
+      // Grid vectors (step sizes and directions)
+      const vx = header.vx || header.gridVectors?.[0];
+      const vy = header.vy || header.gridVectors?.[1];
+      const vz = header.vz || header.gridVectors?.[2];
+
+      // Origin point
+      const origin = header.origin || header.gridOrigin;
+
+      if (!nx || !ny || !nz || !vx || !vy || !vz || !origin) {
+        console.log('Missing grid data in volume header:', header);
+        return null;
+      }
+
+      // Calculate bounds
+      const min = [origin[0], origin[1], origin[2]];
+      const max = [
+        origin[0] + (nx - 1) * vx[0] + (ny - 1) * vy[0] + (nz - 1) * vz[0],
+        origin[1] + (nx - 1) * vx[1] + (ny - 1) * vy[1] + (nz - 1) * vz[1],
+        origin[2] + (nx - 1) * vx[2] + (ny - 1) * vy[2] + (nz - 1) * vz[2]
+      ];
+
+      return { min, max };
+    } catch (error) {
+      console.error('Error extracting grid bounds from volume:', error);
+      return null;
+    }
+  };
 
   const visualizeAllSelectedMOs = async () => {
     if (!nglStageRef.current) return;
@@ -409,7 +486,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
       // Load and visualize each selected orbital
       for (const [index, orbitalIndex] of Array.from(selectedOrbitals).entries()) {
-        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}_${gridBuffer}`;
+        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
         const cubeData = cubeResults?.get(cubeKey);
         
         if (cubeData) {
@@ -426,25 +503,78 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
             // Store color mapping
             newOrbitalColors.set(orbitalIndex, color);
 
-            // Add positive isosurface
-            cubeComponent.addRepresentation('surface', {
-              visible: true,
-              isolevelType: 'value',
-              isolevel: isosurfaceValue,
-              color: color,
-              opacity: opacity,
-              opaqueBack: false
-            });
-
-            // Add negative isosurface if showing both phases
-            if (showBothPhases) {
+            // Add representation based on selected style
+            if (orbitalRenderStyle === 'surface') {
+              // Add positive isosurface
               cubeComponent.addRepresentation('surface', {
                 visible: true,
                 isolevelType: 'value',
-                isolevel: -isosurfaceValue,
-                color: 'red',
+                isolevel: isosurfaceValue,
+                color: color,
                 opacity: opacity,
                 opaqueBack: false
+              });
+
+              // Add negative isosurface if showing both phases
+              if (showBothPhases) {
+                cubeComponent.addRepresentation('surface', {
+                  visible: true,
+                  isolevelType: 'value',
+                  isolevel: -isosurfaceValue,
+                  color: 'red',
+                  opacity: opacity,
+                  opaqueBack: false
+                });
+              }
+            } else if (orbitalRenderStyle === 'wireframe') {
+              // Add wireframe representation
+              cubeComponent.addRepresentation('surface', {
+                visible: true,
+                isolevelType: 'value',
+                isolevel: isosurfaceValue,
+                color: color,
+                opacity: opacity,
+                wireframe: true,
+                linewidth: 2
+              });
+
+              if (showBothPhases) {
+                cubeComponent.addRepresentation('surface', {
+                  visible: true,
+                  isolevelType: 'value',
+                  isolevel: -isosurfaceValue,
+                  color: 'red',
+                  opacity: opacity,
+                  wireframe: true,
+                  linewidth: 2
+                });
+              }
+            } else if (orbitalRenderStyle === 'dot') {
+              // Add dot volume rendering
+              cubeComponent.addRepresentation('dot', {
+                visible: true,
+                color: color,
+                opacity: opacity,
+                dotType: 'square',
+                dotSpacing: 2,
+                threshold: 0.001
+              });
+            } else if (orbitalRenderStyle === 'slice') {
+              // Add slice volume rendering using proper NGL API
+              const slicePos = calculateSlicePosition(cubeComponent, sliceDirection, slicePosition);
+              console.log(`Adding slice representation: direction=${sliceDirection}, normalizedPos=${slicePosition}, coordinatePos=${slicePos}`);
+              
+              cubeComponent.addRepresentation('slice', {
+                visible: true,
+                opacity: opacity,
+                dimension: sliceDirection,
+                positionType: "coordinate",
+                position: slicePos,
+                thresholdMin: colorRange[0],
+                thresholdMax: colorRange[1],
+                thresholdType: 'value',
+                colorScheme: colorScale,
+                colorDomain: colorRange
               });
             }
 
@@ -474,6 +604,136 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       return newSet;
     });
   };
+
+
+  // Create and display grid bounds visualization
+  const updateGridBoundsVisualization = async () => {
+    if (!nglStageRef.current) return;
+
+    // Remove existing bounds visualization
+    if (gridBoundsComponentRef.current) {
+      nglStageRef.current.removeComponent(gridBoundsComponentRef.current);
+      gridBoundsComponentRef.current = null;
+    }
+
+    if (!showGridBounds) return;
+
+    // Use the gridInfo from the worker if available
+    let bounds = null;
+    
+    if (cubeGridInfo) {
+      // Calculate bounds from the worker's grid info
+      const origin = cubeGridInfo.origin;
+      const steps = cubeGridInfo.steps;
+      const nx = cubeGridInfo.nx;
+      const ny = cubeGridInfo.ny;
+      const nz = cubeGridInfo.nz;
+      const basis = cubeGridInfo.basis; // 3x3 matrix as flat array
+      
+      if (origin && steps && nx && ny && nz && basis) {
+        // Convert basis from flat array to 3x3 matrix
+        const basisMatrix = [
+          [basis[0], basis[1], basis[2]],
+          [basis[3], basis[4], basis[5]], 
+          [basis[6], basis[7], basis[8]]
+        ];
+        
+        // Calculate grid extents (in Bohr)
+        const minBohr = [origin[0], origin[1], origin[2]];
+        const maxBohr = [
+          origin[0] + (nx - 1) * basisMatrix[0][0] + (ny - 1) * basisMatrix[1][0] + (nz - 1) * basisMatrix[2][0],
+          origin[1] + (nx - 1) * basisMatrix[0][1] + (ny - 1) * basisMatrix[1][1] + (nz - 1) * basisMatrix[2][1],
+          origin[2] + (nx - 1) * basisMatrix[0][2] + (ny - 1) * basisMatrix[1][2] + (nz - 1) * basisMatrix[2][2]
+        ];
+        
+        // Convert from Bohr to Angstrom (1 Bohr = 0.529177 Angstrom)
+        const bohrToAngstrom = 0.529177;
+        const min = [minBohr[0] * bohrToAngstrom, minBohr[1] * bohrToAngstrom, minBohr[2] * bohrToAngstrom];
+        const max = [maxBohr[0] * bohrToAngstrom, maxBohr[1] * bohrToAngstrom, maxBohr[2] * bohrToAngstrom];
+        
+        bounds = { min, max };
+        console.log('Grid bounds (converted to Angstrom):', bounds);
+      }
+    }
+    
+    // If no grid info available, we can't show accurate bounds
+    if (!bounds) {
+      console.log('No cube grid info available - cannot show accurate grid bounds');
+      return;
+    }
+    
+
+    try {
+      const [minX, minY, minZ] = bounds.min;
+      const [maxX, maxY, maxZ] = bounds.max;
+      
+      // Create a simple cube wireframe using line representation
+      // Generate 8 vertices of the bounding box
+      const vertices = [
+        [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ], // bottom face
+        [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ]  // top face
+      ];
+      
+      // Create edges connecting the vertices
+      const edges = [
+        // Bottom face edges
+        [0, 1], [1, 2], [2, 3], [3, 0],
+        // Top face edges  
+        [4, 5], [5, 6], [6, 7], [7, 4],
+        // Vertical edges
+        [0, 4], [1, 5], [2, 6], [3, 7]
+      ];
+      
+      // Create a simple MOL format string for the wireframe
+      let molString = `Grid Bounds
+  Generated
+  
+${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart(3, ' ')}  0  0  0  0  0  0  0  0999 V2000
+`;
+      
+      // Add vertices (atoms)
+      vertices.forEach(([x, y, z]) => {
+        molString += `${x.toFixed(4).padStart(10, ' ')}${y.toFixed(4).padStart(10, ' ')}${z.toFixed(4).padStart(10, ' ')} C   0  0  0  0  0  0  0  0  0  0  0  0
+`;
+      });
+      
+      // Add edges (bonds)
+      edges.forEach(([i, j]) => {
+        molString += `${(i + 1).toString().padStart(3, ' ')}${(j + 1).toString().padStart(3, ' ')}  1  0  0  0  0
+`;
+      });
+      
+      molString += 'M  END\n$$$$\n';
+      
+      // Load the wireframe structure
+      const blob = new Blob([molString], { type: 'text/plain' });
+      const boundsComponent = await nglStageRef.current.loadFile(blob, {
+        ext: 'mol',
+        name: 'Grid_Bounds'
+      });
+      
+      if (boundsComponent) {
+        // Add wireframe representation
+        boundsComponent.addRepresentation('line', {
+          colorScheme: 'uniform',
+          colorValue: '#ff6b6b',
+          linewidth: 2,
+          opacity: 0.7
+        });
+        
+        gridBoundsComponentRef.current = boundsComponent;
+      }
+      
+    } catch (error) {
+      console.error('Error creating grid bounds visualization:', error);
+      setError('Failed to create grid bounds visualization: ' + error.message);
+    }
+  };
+
+  // Update bounds when grid settings change or when cube grid info is available
+  useEffect(() => {
+    updateGridBoundsVisualization();
+  }, [showGridBounds, cubeGridInfo]);
 
   if (!xyzData) {
     return (
@@ -510,7 +770,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       
       <div className={styles.representationControls}>
         {/* Structure Controls */}
-        <div className={styles.controlGroup}>
+        <div className={styles.inlineControlGroup}>
           <label className={styles.controlLabel}>Style</label>
           <select 
             value={representation} 
@@ -525,7 +785,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
           </select>
         </div>
         
-        <div className={styles.controlGroup}>
+        <div className={styles.inlineControlGroup}>
           <label className={styles.controlLabel}>Color</label>
           <select 
             value={colorScheme} 
@@ -537,18 +797,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
             <option value="chainname">By Chain</option>
             <option value="random">Random</option>
           </select>
-        </div>
-        
-        <div className={styles.controlGroup}>
-          <label className={styles.checkboxLabel}>
-            <input 
-              type="checkbox" 
-              checked={showHydrogens} 
-              onChange={(e) => setShowHydrogens(e.target.checked)}
-              className={styles.checkbox}
-            />
-            Show Hydrogens
-          </label>
         </div>
       </div>
 
@@ -571,77 +819,203 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
             className={styles.viewer}
             style={{ opacity: isLoading ? 0.5 : 1 }}
           />
+
+          {/* Toggle button for mobile */}
+          {wavefunctionResults && availableOrbitals.length > 0 && (
+            <button 
+              className={styles.orbitalToggleButton}
+              onClick={() => setIsOrbitalPanelOpen(!isOrbitalPanelOpen)}
+            >
+              {isOrbitalPanelOpen ? 'Hide' : 'Orbitals'}
+            </button>
+          )}
         </div>
 
         {/* Orbital Sidebar - shown when wavefunction results are available */}
         {wavefunctionResults && availableOrbitals.length > 0 && (
-          <div className={styles.orbitalSidebar}>
+          <div className={`${styles.orbitalSidebar} ${isOrbitalPanelOpen ? styles.open : ''}`}>
             <div className={styles.orbitalSidebarHeader}>
               <h5>Molecular Orbitals</h5>
-              <span className={styles.orbitalHint}>Click orbitals to visualize</span>
+              <button 
+                className={styles.orbitalCloseButton}
+                onClick={() => setIsOrbitalPanelOpen(false)}
+                title="Close orbital panel"
+              >
+                ×
+              </button>
             </div>
 
-            {/* MO Controls */}
-            <div className={styles.moControls}>
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>Isovalue</label>
-                <input 
-                  type="number" 
-                  min="0.001" 
-                  max="0.2" 
-                  step="0.001" 
-                  value={isosurfaceValue}
-                  onChange={(e) => setIsosurfaceValue(parseFloat(e.target.value) || 0.01)}
-                  className={styles.numberInput}
-                />
-              </div>
+            {/* Settings - Collapsible */}
+            <div className={styles.collapsibleSection}>
+              <button 
+                className={styles.lightSectionHeader}
+                onClick={() => setIsMOSettingsExpanded(!isMOSettingsExpanded)}
+              >
+                <span>Settings</span>
+                <span className={`${styles.chevron} ${isMOSettingsExpanded ? styles.chevronExpanded : ''}`}>
+                  ▼
+                </span>
+              </button>
+              {isMOSettingsExpanded && (
+                <div className={styles.sectionContent}>
+                  <div className={styles.moControls}>
+                  <div className={styles.controlGroup}>
+                    <label className={styles.controlLabel}>Style</label>
+                    <select 
+                      value={orbitalRenderStyle}
+                      onChange={(e) => setOrbitalRenderStyle(e.target.value as 'surface' | 'wireframe' | 'dot' | 'slice')}
+                      className={styles.controlSelect}
+                    >
+                      <option value="surface">Surface</option>
+                      <option value="wireframe">Wireframe</option>
+                      <option value="dot">Dot Volume</option>
+                      <option value="slice">Slice Volume</option>
+                    </select>
+                  </div>
 
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>Opacity</label>
-                <input 
-                  type="number" 
-                  min="0.1" 
-                  max="1.0" 
-                  step="0.05" 
-                  value={opacity}
-                  onChange={(e) => setOpacity(parseFloat(e.target.value) || 1.0)}
-                  className={styles.numberInput}
-                  title="Orbital surface opacity (0.1 = very transparent, 1.0 = opaque)"
-                />
-              </div>
+                  {(orbitalRenderStyle === 'surface' || orbitalRenderStyle === 'wireframe') && (
+                    <div className={styles.controlGroup}>
+                      <label className={styles.controlLabel}>Isovalue</label>
+                      <input 
+                        type="number" 
+                        min="0.001" 
+                        max="0.2" 
+                        step="0.001" 
+                        value={isosurfaceValue}
+                        onChange={(e) => setIsosurfaceValue(parseFloat(e.target.value) || 0.01)}
+                        className={styles.numberInput}
+                      />
+                    </div>
+                  )}
 
+                  {orbitalRenderStyle === 'slice' && (
+                    <>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.controlLabel}>Slice Direction</label>
+                        <select 
+                          value={sliceDirection}
+                          onChange={(e) => setSliceDirection(e.target.value as 'x' | 'y' | 'z')}
+                          className={styles.controlSelect}
+                        >
+                          <option value="x">X-axis</option>
+                          <option value="y">Y-axis</option>
+                          <option value="z">Z-axis</option>
+                        </select>
+                      </div>
+                      <div className={styles.controlGroup}>
+                        <label className={styles.controlLabel}>Slice Position</label>
+                        <div className={styles.slicePositionControls}>
+                          <button 
+                            onClick={() => setSlicePosition(slicePosition - 0.5)}
+                            className={styles.controlButton}
+                            title="Move slice by -0.5"
+                          >
+                            -
+                          </button>
+                          <input 
+                            type="number" 
+                            step="0.1" 
+                            value={slicePosition}
+                            onChange={(e) => setSlicePosition(parseFloat(e.target.value) || 0)}
+                            className={styles.numberInput}
+                            title="Slice position in Angstroms"
+                          />
+                          <button 
+                            onClick={() => setSlicePosition(slicePosition + 0.5)}
+                            className={styles.controlButton}
+                            title="Move slice by +0.5"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      <div className={styles.collapsibleControl}>
+                        <button 
+                          className={styles.controlToggle}
+                          onClick={() => setIsColorRangeExpanded(!isColorRangeExpanded)}
+                        >
+                          <span className={styles.controlLabel}>Color Range</span>
+                          <span className={`${styles.chevron} ${isColorRangeExpanded ? styles.chevronExpanded : ''}`}>
+                            ▼
+                          </span>
+                        </button>
+                        {isColorRangeExpanded && (
+                          <div className={styles.controlContent}>
+                            <div className={styles.colorRangeGrid}>
+                              <div className={styles.controlGroup}>
+                                <label className={styles.controlLabel}>Minimum</label>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={colorRange[0]}
+                                  onChange={(e) => setColorRange([parseFloat(e.target.value) || 0, colorRange[1]])}
+                                  className={styles.numberInput}
+                                  title="Minimum value for color scale"
+                                />
+                              </div>
+                              <div className={styles.controlGroup}>
+                                <label className={styles.controlLabel}>Maximum</label>
+                                <input 
+                                  type="number" 
+                                  step="0.01" 
+                                  value={colorRange[1]}
+                                  onChange={(e) => setColorRange([colorRange[0], parseFloat(e.target.value) || 0.05])}
+                                  className={styles.numberInput}
+                                  title="Maximum value for color scale"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
 
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>Grid Steps</label>
-                <input 
-                  type="number" 
-                  min="20" 
-                  max="100" 
-                  step="5"
-                  value={gridSteps}
-                  onChange={(e) => setGridSteps(parseInt(e.target.value) || 40)}
-                  className={styles.numberInput}
-                  title="Number of grid points per dimension (higher = more detail, slower)"
-                />
-              </div>
+                  <div className={styles.controlGroup}>
+                    <label className={styles.controlLabel}>Opacity</label>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      max="1" 
+                      step="0.05" 
+                      value={opacity}
+                      onChange={(e) => setOpacity(parseFloat(e.target.value) || 1.0)}
+                      className={styles.numberInput}
+                      title="Orbital surface opacity (0 = transparent, 1 = opaque)"
+                    />
+                  </div>
 
-              <div className={styles.controlGroup}>
-                <label className={styles.controlLabel}>Grid Buffer (Å)</label>
-                <input 
-                  type="number" 
-                  min="2.0" 
-                  max="10.0" 
-                  step="0.5"
-                  value={gridBuffer}
-                  onChange={(e) => setGridBuffer(parseFloat(e.target.value) || 5.0)}
-                  className={styles.numberInput}
-                  title="Buffer region around molecule in Angstroms"
-                />
-              </div>
+                  <div className={styles.controlGroup}>
+                    <label className={styles.controlLabel}>Grid Steps</label>
+                    <input 
+                      type="number" 
+                      min="20" 
+                      max="60" 
+                      step="5"
+                      value={gridSteps}
+                      onChange={(e) => setGridSteps(parseInt(e.target.value) || 40)}
+                      className={styles.numberInput}
+                      title="Number of grid points per dimension (higher = more detail, slower)"
+                    />
+                    {cubeGridInfo && (
+                      <label className={styles.checkboxLabel}>
+                        <input 
+                          type="checkbox" 
+                          checked={showGridBounds} 
+                          onChange={(e) => setShowGridBounds(e.target.checked)}
+                          className={styles.checkbox}
+                        />
+                        Bounds
+                      </label>
+                    )}
+                  </div>
 
-              {isComputingMO && (
-                <div className={styles.controlGroup}>
-                  <span className={styles.computingIndicator}>Computing MO...</span>
+                  {isComputingMO && (
+                    <div className={styles.controlGroup}>
+                      <span className={styles.computingIndicator}>Computing MO...</span>
+                    </div>
+                  )}
+                  </div>
                 </div>
               )}
             </div>

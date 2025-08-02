@@ -67,15 +67,27 @@ export class MOComputation {
       throw new Error('No wavefunction available for MO computation');
     }
 
+    // Validate parameters
+    const gridSteps = Math.min(Math.max(options.gridSteps, 20), 100);
+    
+    if (options.orbitalIndex < 0) {
+      throw new Error('Invalid orbital index provided');
+    }
+
+    const calculator = new this.occModule.VolumeCalculator();
+    const params = new this.occModule.VolumeGenerationParameters();
+
     try {
-      // Use the convenience function to generate MO cube data
-      const cubeString = this.occModule.generateMOCube(
-        this.wavefunction,
-        options.orbitalIndex,
-        options.gridSteps,
-        options.gridSteps,
-        options.gridSteps
-      );
+      calculator.setWavefunction(this.wavefunction);
+      params.property = this.occModule.VolumePropertyKind.MolecularOrbital;
+      params.orbitalIndex = options.orbitalIndex;
+      params.setSteps(gridSteps, gridSteps, gridSteps);
+      
+      // Set default buffer if not specified
+      params.setBuffer(5.0);
+
+      const volume = calculator.computeVolume(params);
+      const cubeString = calculator.volumeAsCubeString(volume);
 
       // Get orbital information
       const orbitalEnergies = this.wavefunction.molecularOrbitals?.energies;
@@ -87,6 +99,9 @@ export class MOComputation {
       const occupation = options.orbitalIndex < numOccupiedOrbitals ? 2.0 : 0.0;
       const isOccupied = options.orbitalIndex < numOccupiedOrbitals;
 
+      // Clean up in reverse order
+      volume.delete();
+      
       return {
         cubeData: cubeString,
         orbitalIndex: options.orbitalIndex,
@@ -97,6 +112,10 @@ export class MOComputation {
     } catch (error) {
       console.error('Error computing MO cube:', error);
       throw new Error(`Failed to compute MO cube: ${error.message}`);
+    } finally {
+      // Ensure cleanup happens even if errors occur
+      params.delete();
+      calculator.delete();
     }
   }
 
@@ -109,16 +128,32 @@ export class MOComputation {
       throw new Error('No wavefunction available for electron density computation');
     }
 
+    // Validate parameters
+    const validatedGridSteps = Math.min(Math.max(gridSteps, 20), 100);
+    
+    const calculator = new this.occModule.VolumeCalculator();
+    const params = new this.occModule.VolumeGenerationParameters();
+
     try {
-      return this.occModule.generateElectronDensityCube(
-        this.wavefunction,
-        gridSteps,
-        gridSteps,
-        gridSteps
-      );
+      calculator.setWavefunction(this.wavefunction);
+      params.property = this.occModule.VolumePropertyKind.ElectronDensity;
+      params.setSteps(validatedGridSteps, validatedGridSteps, validatedGridSteps);
+      params.setBuffer(5.0);
+
+      const volume = calculator.computeVolume(params);
+      const cubeString = calculator.volumeAsCubeString(volume);
+
+      // Clean up in reverse order
+      volume.delete();
+      
+      return cubeString;
     } catch (error) {
       console.error('Error computing electron density cube:', error);
       throw new Error(`Failed to compute electron density cube: ${error.message}`);
+    } finally {
+      // Ensure cleanup happens even if errors occur
+      params.delete();
+      calculator.delete();
     }
   }
 
@@ -131,27 +166,32 @@ export class MOComputation {
       throw new Error('No wavefunction available for ESP computation');
     }
 
-    try {
-      // Use the volume calculator for ESP
-      const calculator = new this.occModule.VolumeCalculator();
-      calculator.setWavefunction(this.wavefunction);
+    // Validate parameters
+    const validatedGridSteps = Math.min(Math.max(gridSteps, 20), 100);
+    
+    const calculator = new this.occModule.VolumeCalculator();
+    const params = new this.occModule.VolumeGenerationParameters();
 
-      const params = new this.occModule.VolumeGenerationParameters();
+    try {
+      calculator.setWavefunction(this.wavefunction);
       params.property = this.occModule.VolumePropertyKind.ElectricPotential;
-      params.setSteps(gridSteps, gridSteps, gridSteps);
+      params.setSteps(validatedGridSteps, validatedGridSteps, validatedGridSteps);
+      params.setBuffer(5.0);
 
       const volume = calculator.computeVolume(params);
       const cubeString = calculator.volumeAsCubeString(volume);
 
-      // Clean up
+      // Clean up in reverse order
       volume.delete();
-      params.delete();
-      calculator.delete();
-
+      
       return cubeString;
     } catch (error) {
       console.error('Error computing ESP cube:', error);
       throw new Error(`Failed to compute ESP cube: ${error.message}`);
+    } finally {
+      // Ensure cleanup happens even if errors occur
+      params.delete();
+      calculator.delete();
     }
   }
 

@@ -52,6 +52,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('structure');
   const [error, setError] = useState<string>('');
   const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
+  const [cubeGridInfo, setCubeGridInfo] = useState<any>(null);
   
   // Collapsible sections state
   const [isInputExpanded, setIsInputExpanded] = useState(true);
@@ -214,11 +215,17 @@ const WavefunctionCalculator: React.FC = () => {
   const handleCubeResult = (data: any) => {
     if (data.success) {
       const key = data.cubeType === 'molecular_orbital' 
-        ? `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}_${data.gridBuffer || 5.0}` 
+        ? `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}` 
         : data.cubeType;
       
       setCubeResults(prev => new Map(prev.set(key, data.cubeData)));
-      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex})` : ''} [${data.gridSteps || 40} steps, ${data.gridBuffer || 5.0}Å buffer]`, 'info');
+      
+      // Store grid info if available
+      if (data.gridInfo) {
+        setCubeGridInfo(data.gridInfo);
+      }
+      
+      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex})` : ''} [${data.gridSteps || 40} steps]`, 'info');
     } else {
       setError(`Cube computation failed: ${data.error}`);
       addLog(`Cube computation failed: ${data.error}`, 'error');
@@ -273,7 +280,7 @@ const WavefunctionCalculator: React.FC = () => {
     }
   };
 
-  const requestCubeComputation = (cubeType: string, orbitalIndex?: number, gridSteps?: number, gridBuffer?: number) => {
+  const requestCubeComputation = (cubeType: string, orbitalIndex?: number, gridSteps?: number) => {
     if (!worker || !isWorkerReady) {
       setError('Web Worker not ready for cube computation.');
       return;
@@ -291,8 +298,7 @@ const WavefunctionCalculator: React.FC = () => {
       data: {
         cubeType,
         orbitalIndex,
-        gridSteps: gridSteps || 40,
-        gridBuffer: gridBuffer || 5.0
+        gridSteps: gridSteps || 40
       }
     });
   };
@@ -419,6 +425,7 @@ const WavefunctionCalculator: React.FC = () => {
                     moleculeName={moleculeInfo?.name || 'Molecule'}
                     wavefunctionResults={results}
                     cubeResults={cubeResults}
+                    cubeGridInfo={cubeGridInfo}
                     onRequestCubeComputation={requestCubeComputation}
                   />
                 ) : (
