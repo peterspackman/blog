@@ -26,7 +26,9 @@ interface DirectionalData {
 
 interface AnalysisResult {
   properties: ElasticProperties;
-  eigenvalues: number[];
+  eigenvalues: number[] | null;
+  eigenvalueError?: string;
+  isPositiveDefinite: boolean;
   extrema: {
     shearModulus: { min: number; max: number; anisotropy: number };
     youngsModulus: { min: number; max: number; anisotropy: number };
@@ -2350,6 +2352,61 @@ export const ElasticTensor: React.FC = () => {
         <div className={styles.resultsColumn}>
           {analysisResults && (
             <>
+              {/* Positive Definiteness Error */}
+              {analysisResults.eigenvalues && !analysisResults.isPositiveDefinite && (
+                <div className={styles.errorBanner} style={{
+                  backgroundColor: '#f8d7da',
+                  border: '1px solid #f5c6cb',
+                  borderLeft: '4px solid #dc3545',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  <div>
+                    <strong style={{ color: '#721c24' }}>Error: Tensor Not Positive Definite</strong>
+                    <div style={{ fontSize: '0.9em', color: '#721c24', marginTop: '4px' }}>
+                      This elastic tensor has {analysisResults.eigenvalues.filter(val => val <= 0).length} non-positive eigenvalue(s), 
+                      indicating this is not a stable minimum. The calculated properties and visualizations are not physically meaningful.
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Eigenvalue Error Warning */}
+              {analysisResults.eigenvalueError && (
+                <div className={styles.warningBanner} style={{
+                  backgroundColor: '#f8d7da',
+                  border: '1px solid #f5c6cb',
+                  borderLeft: '4px solid #dc3545',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc3545" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" y1="9" x2="9" y2="15"/>
+                    <line x1="9" y1="9" x2="15" y2="15"/>
+                  </svg>
+                  <div>
+                    <strong style={{ color: '#721c24' }}>Error: Cannot Calculate Eigenvalues</strong>
+                    <div style={{ fontSize: '0.9em', color: '#721c24', marginTop: '4px' }}>
+                      {analysisResults.eigenvalueError}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Tables Section */}
               <div className={styles.tablesGrid}>
                 <div className={styles.tableCell}>
@@ -2899,22 +2956,35 @@ export const ElasticTensor: React.FC = () => {
                   </>
                 ) : show3D && selectedProperty !== 'matrix' ? (
                   <>
-                    {/* 3D Surface chart */}
-                    <div className={styles.sectionTitle}>3D Property Surface</div>
-                    <div className={styles.surfaceChartContainer}>
-                      {surfaceData && (
-                        <SurfaceChart 
-                          data={surfaceData} 
-                          property={selectedProperty} 
-                          useScatter={use3DScatter}
-                          referenceData={comparisonMode ? referenceSurfaceData : undefined}
-                          comparisonMode={comparisonMode}
-                          showDifference={showDifference}
-                          testTensorName={getTestTensorName()}
-                          referenceTensorName={getReferenceTensorName()}
-                        />
-                      )}
-                    </div>
+                    {analysisResults.isPositiveDefinite ? (
+                      <>
+                        {/* 3D Surface chart */}
+                        <div className={styles.sectionTitle}>3D Property Surface</div>
+                        <div className={styles.surfaceChartContainer}>
+                          {surfaceData && (
+                            <SurfaceChart 
+                              data={surfaceData} 
+                              property={selectedProperty} 
+                              useScatter={use3DScatter}
+                              referenceData={comparisonMode ? referenceSurfaceData : undefined}
+                              comparisonMode={comparisonMode}
+                              showDifference={showDifference}
+                              testTensorName={getTestTensorName()}
+                              referenceTensorName={getReferenceTensorName()}
+                            />
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{
+                        padding: '40px 20px',
+                        textAlign: 'center',
+                        color: 'var(--ifm-color-emphasis-600)',
+                        fontStyle: 'italic'
+                      }}>
+                        3D visualization disabled: Tensor is not positive definite
+                      </div>
+                    )}
                   </>
                 ) : selectedProperty !== 'matrix' ? (
                   <>

@@ -129,12 +129,63 @@ async function analyzeTensor(params) {
             properties.linearCompressibility[name] = 1000 / properties.bulkModulus[name]; // Convert to TPa^-1
         }
         
-        // Calculate eigenvalues (diagonal elements as approximation)
-        const eigenvalues = [];
-        for (let i = 0; i < 6; i++) {
-            eigenvalues.push(tensorData[i][i]);
+        // Calculate eigenvalues using the WASM eigenvalues function
+        let eigenvalues = null;
+        let isPositiveDefinite = true;
+        let eigenvalueError = null;
+        
+        try {
+            if (elasticTensor.eigenvalues && typeof elasticTensor.eigenvalues === 'function') {
+                const eigenResult = elasticTensor.eigenvalues();
+                eigenvalues = [];
+                
+                // Convert result to JavaScript array
+                if (eigenResult && eigenResult.size && typeof eigenResult.size === 'function') {
+                    // Vector-like object
+                    for (let i = 0; i < eigenResult.size(); i++) {
+                        eigenvalues.push(eigenResult.get(i));
+                    }
+                } else if (eigenResult && eigenResult.length !== undefined) {
+                    // Array-like object
+                    for (let i = 0; i < eigenResult.length; i++) {
+                        eigenvalues.push(eigenResult[i]);
+                    }
+                } else if (Array.isArray(eigenResult)) {
+                    eigenvalues = [...eigenResult];
+                } else {
+                    throw new Error('Unknown eigenvalue result format');
+                }
+                
+                eigenvalues.sort((a, b) => a - b);
+                
+                // Check if all eigenvalues are positive (positive definite check)
+                isPositiveDefinite = eigenvalues.every(val => val > 0);
+                
+                postMessage({ type: 'log', level: 2, message: `Retrieved ${eigenvalues.length} eigenvalues: [${eigenvalues.map(v => v.toFixed(4)).join(', ')}]` });
+                
+                if (!isPositiveDefinite) {
+                    const negativeCount = eigenvalues.filter(val => val <= 0).length;
+                    postMessage({ 
+                        type: 'log', 
+                        level: 1, 
+                        message: `Warning: Tensor is not positive definite - ${negativeCount} eigenvalue(s) <= 0` 
+                    });
+                }
+                
+            } else {
+                throw new Error('eigenvalues() method not available in ElasticTensor');
+            }
+            
+        } catch (error) {
+            eigenvalueError = error.message;
+            eigenvalues = null;
+            isPositiveDefinite = true; // Default to true if we can't check
+            postMessage({ 
+                type: 'log', 
+                level: 1, 
+                message: `Could not calculate eigenvalues: ${error.message}` 
+            });
         }
-        eigenvalues.sort((a, b) => a - b);
         
         // Calculate directional extrema with more comprehensive sampling
         const numSamples = 50;
@@ -231,6 +282,8 @@ async function analyzeTensor(params) {
             data: {
                 properties,
                 eigenvalues,
+                eigenvalueError,
+                isPositiveDefinite,
                 extrema,
                 stiffnessMatrix,
                 complianceMatrix,
