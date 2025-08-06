@@ -206,6 +206,25 @@ async function analyzeTensor(params) {
             linearCompressibility: { min: compMin, max: compMax, anisotropy: compMax / compMin }
         };
         
+        // Get the Voigt matrices
+        const stiffnessMatrix = [];
+        const complianceMatrix = [];
+        
+        // Access the voigtC and voigtS properties directly
+        const voigtC = elasticTensor.voigtC;
+        const voigtS = elasticTensor.voigtS;
+        
+        for (let i = 0; i < 6; i++) {
+            const stiffnessRow = [];
+            const complianceRow = [];
+            for (let j = 0; j < 6; j++) {
+                stiffnessRow.push(voigtC.get(i, j));
+                complianceRow.push(voigtS.get(i, j));
+            }
+            stiffnessMatrix.push(stiffnessRow);
+            complianceMatrix.push(complianceRow);
+        }
+
         postMessage({
             type: 'analysisResult',
             success: true,
@@ -213,6 +232,8 @@ async function analyzeTensor(params) {
                 properties,
                 eigenvalues,
                 extrema,
+                stiffnessMatrix,
+                complianceMatrix,
                 elasticTensor: elasticTensor // Pass tensor for further calculations
             }
         });
@@ -230,9 +251,9 @@ async function analyzeTensor(params) {
 
 async function generateDirectionalData(params) {
     try {
-        const { tensorData, property, plane, numPoints } = params;
+        const { tensorData, property, plane, numPoints, isReference } = params;
         
-        postMessage({ type: 'log', level: 2, message: `Generating directional data for ${property}...` });
+        postMessage({ type: 'log', level: 2, message: `Generating directional data for ${property} ${plane} (ref: ${isReference})...` });
         
         // Create ElasticTensor (recreate since we can't serialize it)
         let mat6;
@@ -292,7 +313,8 @@ async function generateDirectionalData(params) {
                     type: 'directionalDataResult',
                     success: true,
                     data: data,
-                    plane: plane
+                    plane: plane,
+                    isReference: isReference || false
                 });
                 
                 postMessage({ type: 'log', level: 2, message: 'Directional data generation complete (WASM)' });
@@ -357,7 +379,8 @@ async function generateDirectionalData(params) {
             type: 'directionalDataResult',
             success: true,
             data: data,
-            plane: plane
+            plane: plane,
+            isReference: isReference || false
         });
         
         postMessage({ type: 'log', level: 2, message: 'Directional data generation complete' });
@@ -373,7 +396,7 @@ async function generateDirectionalData(params) {
 
 async function generate3DSurfaceData(params) {
     try {
-        const { tensorData, property } = params;
+        const { tensorData, property, isReference } = params;
         
         postMessage({ type: 'log', level: 2, message: `Generating 3D surface data for ${property}...` });
         
@@ -450,7 +473,8 @@ async function generate3DSurfaceData(params) {
                 property,
                 numU: numU + 1,
                 numV: numV + 1
-            }
+            },
+            isReference: isReference || false
         });
         
         postMessage({ type: 'log', level: 2, message: '3D surface data generation complete' });
