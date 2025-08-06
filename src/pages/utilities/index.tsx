@@ -15,7 +15,7 @@ export default function Utilities() {
           running entirely in your browser using WebAssembly.
         </p>
         
-        <div className="row margin-top--lg">
+        <div className={`row margin-top--lg ${styles.row}`}>
           <div className="col col--6">
             <div className="card">
               <div className="card__header">
@@ -41,19 +41,21 @@ export default function Utilities() {
           <div className="col col--6">
             <div className="card">
               <div className="card__header">
-                <h3>More Tools Coming Soon</h3>
+                <h3>Elastic Tensor Calculator</h3>
               </div>
               <div className="card__body">
                 <p>
-                  Additional quantum chemistry utilities and visualization tools 
-                  will be added here. Stay tuned for molecular orbital viewers, 
-                  basis set explorers, and more!
+                  Analyze elastic tensors and calculate mechanical properties.
+                  Visualize directional dependencies of elastic properties with 
+                  interactive 2D plots and 3D surfaces.
                 </p>
               </div>
               <div className="card__footer">
-                <button className="button button--secondary button--block" disabled>
-                  Coming Soon
-                </button>
+                <Link
+                  className="button button--primary button--block"
+                  to="/utilities/elastic-tensor">
+                  Open Calculator
+                </Link>
               </div>
             </div>
           </div>

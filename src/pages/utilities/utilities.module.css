@@ -12,4 +12,13 @@
 
 .card__body {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Ensure equal height for all cards in the row */
+.row {
+  display: flex;
+  align-items: stretch;
 }
