@@ -59,15 +59,37 @@ export default function Utilities() {
               </div>
             </div>
           </div>
+          
+          <div className="col col--6">
+            <div className="card">
+              <div className="card__header">
+                <h3>SMILES Molecule Viewer</h3>
+              </div>
+              <div className="card__body">
+                <p>
+                  Visualize molecular structures from SMILES strings.
+                  Enter SMILES notation to instantly see 2D molecular
+                  structures and properties using RDKit.
+                </p>
+              </div>
+              <div className="card__footer">
+                <Link
+                  className="button button--primary button--block"
+                  to="/utilities/smiles-viewer">
+                  Open Viewer
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="margin-top--xl">
           <h2>About These Tools</h2>
           <p>
-            All utilities are powered by <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">
+            The quantum chemistry calculators are powered by <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">
             OCC (Open Computational Chemistry)</a>, an open-source quantum chemistry 
-            library compiled to WebAssembly. Calculations run entirely in your browser 
-            with no data sent to any server.
+            library compiled to WebAssembly. Molecular visualization uses <a href="https://www.rdkit.org/docs/JSMol.html" target="_blank" rel="noopener noreferrer">RDKit.js</a>. 
+            All calculations and visualizations run entirely in your browser with no data sent to any server.
           </p>
         </div>
       </main>

@@ -911,3 +911,145 @@
     padding: 0.125rem 0.25rem;
   }
 }
+
+/* Rotation Controls */
+.rotationSection {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: var(--ifm-background-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 4px;
+}
+
+.rotationSection h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.rotationControls {
+  margin-top: 0.75rem;
+}
+
+.rotationRow {
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.rotationLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+  min-width: 120px;
+}
+
+.rotationInput {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 80px;
+}
+
+.rotationInput:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.axisSelect {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  min-width: 200px;
+  background-color: var(--ifm-background-surface-color);
+}
+
+.axisSelect:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.customAxisInputs {
+  display: flex;
+  gap: 0.75rem;
+  margin-left: 120px;
+}
+
+.axisComponent {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.axisInput {
+  padding: 0.25rem 0.375rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 3px;
+  font-size: 0.85rem;
+  width: 60px;
+}
+
+.axisInput:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 1px var(--ifm-color-primary-lightest);
+}
+
+.rotationButton {
+  padding: 0.5rem 1rem;
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rotationButton:hover:not(:disabled) {
+  background-color: var(--ifm-color-primary-dark);
+  transform: translateY(-1px);
+}
+
+.rotationButton:disabled {
+  background-color: var(--ifm-color-emphasis-300);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Mobile responsiveness for rotation controls */
+@media (max-width: 768px) {
+  .rotationRow {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+  
+  .rotationLabel {
+    min-width: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+  
+  .customAxisInputs {
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  
+  .axisSelect {
+    min-width: auto;
+    width: 100%;
+  }
+}

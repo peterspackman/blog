@@ -19,6 +19,7 @@ import { DirectionalChart } from './DirectionalChart';
 import { PolarChart } from './PolarChart';
 import { SurfaceChart } from './SurfaceChart';
 import { DualMatrixChart } from './DualMatrixChart';
+import { applyRotationToTensor, COMMON_AXES, RotationParams } from './TensorRotation';
 
 
 export const ElasticTensor: React.FC = () => {
@@ -52,6 +53,13 @@ export const ElasticTensor: React.FC = () => {
   const [savedTensors, setSavedTensors] = useState<Array<{ name: string; data: string; timestamp: Date }>>([]);
   const [showLoadDropdown, setShowLoadDropdown] = useState<boolean>(false);
   const [showReferenceLoadDropdown, setShowReferenceLoadDropdown] = useState<boolean>(false);
+  
+  // Rotation state
+  const [enableRotation, setEnableRotation] = useState<boolean>(false);
+  const [rotationAngle, setRotationAngle] = useState<number>(0);
+  const [rotationAxis, setRotationAxis] = useState<[number, number, number]>([0, 0, 1]);
+  const [selectedAxisPreset, setSelectedAxisPreset] = useState<string>('Z');
+  const [originalTensorData, setOriginalTensorData] = useState<number[][] | null>(null);
 
   // Initialize worker on mount and load saved tensors
   useEffect(() => {
@@ -366,6 +374,56 @@ export const ElasticTensor: React.FC = () => {
     return matrix;
   };
 
+  // Function to apply rotation to tensor
+  const applyTensorRotation = (originalMatrix: number[][]): number[][] => {
+    if (!enableRotation || rotationAngle === 0) {
+      return originalMatrix;
+    }
+    
+    try {
+      const result = applyRotationToTensor(originalMatrix, rotationAngle, rotationAxis);
+      addLog(`Applied rotation: ${rotationAngle}° about axis [${rotationAxis.join(', ')}]`, 'info');
+      return result.rotatedMatrix;
+    } catch (error) {
+      addLog(`Rotation failed: ${error.message}`, 'error');
+      return originalMatrix;
+    }
+  };
+
+  // Function to handle axis preset changes
+  const handleAxisPresetChange = (preset: string) => {
+    setSelectedAxisPreset(preset);
+    if (preset === 'CUSTOM') {
+      return; // Keep current axis values
+    }
+    const axis = COMMON_AXES[preset as keyof typeof COMMON_AXES];
+    if (axis) {
+      setRotationAxis(axis);
+    }
+  };
+
+  // Function to apply rotation and re-analyze
+  const applyRotationAndAnalyze = () => {
+    if (!originalTensorData) {
+      setError('No tensor data to rotate');
+      return;
+    }
+    
+    const rotatedMatrix = applyTensorRotation(originalTensorData);
+    setTensorData(rotatedMatrix);
+    
+    // Re-run analysis with rotated tensor
+    if (worker && isWorkerReady) {
+      setIsCalculating(true);
+      worker.postMessage({
+        type: 'analyzeTensor',
+        data: {
+          tensorData: rotatedMatrix
+        }
+      });
+    }
+  };
+
   const analyzeTensor = () => {
     if (!isWorkerReady) {
       setError('Worker not ready. Please wait for initialization.');
@@ -376,31 +434,37 @@ export const ElasticTensor: React.FC = () => {
       setError('');
       setLogs([]);
       const matrix1 = parseTensorInput(tensorInput);
-      setTensorData(matrix1);
+      
+      // Store original tensor data for rotation
+      setOriginalTensorData(matrix1);
+      
+      // Apply rotation if enabled
+      const finalMatrix = applyTensorRotation(matrix1);
+      setTensorData(finalMatrix);
       setIsCalculating(true);
 
       if (comparisonMode && referenceTensorInput.trim()) {
-        // Parse reference tensor for comparison
+        // Parse reference tensor for comparison (NOT rotated)
         const referenceMatrix = parseTensorInput(referenceTensorInput);
         setReferenceTensorData(referenceMatrix);
         referenceTensorRef.current = referenceMatrix;
 
-        // First analyze the test tensor
+        // First analyze the test tensor (with rotation applied)
         worker?.postMessage({
           type: 'analyzeTensor',
           data: {
-            tensorData: matrix1
+            tensorData: finalMatrix
           }
         });
 
-        // Then analyze the reference tensor after a delay
+        // Then analyze the reference tensor after a delay (NO rotation applied)
         setTimeout(() => {
           setIsProcessingReference(true);
           processingRefRef.current = true;
           worker?.postMessage({
             type: 'analyzeTensor',
             data: {
-              tensorData: referenceMatrix
+              tensorData: referenceMatrix // Original reference tensor, no rotation
             }
           });
         }, 100);
@@ -413,7 +477,7 @@ export const ElasticTensor: React.FC = () => {
         worker?.postMessage({
           type: 'analyzeTensor',
           data: {
-            tensorData: matrix1
+            tensorData: finalMatrix
           }
         });
       }
@@ -757,6 +821,111 @@ export const ElasticTensor: React.FC = () => {
                 />
               </>
             )}
+
+            {/* Rotation Controls */}
+            <div className={styles.rotationSection}>
+              <div className={styles.header}>
+                <h4>Tensor Rotation</h4>
+              </div>
+              
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={enableRotation}
+                  onChange={(e) => setEnableRotation(e.target.checked)}
+                  className={styles.checkbox}
+                />
+                Enable Rotation
+              </label>
+              
+              {enableRotation && (
+                <div className={styles.rotationControls}>
+                  <div className={styles.rotationRow}>
+                    <label className={styles.rotationLabel}>
+                      Angle (degrees):
+                      <input
+                        type="number"
+                        value={rotationAngle}
+                        onChange={(e) => setRotationAngle(parseFloat(e.target.value) || 0)}
+                        step="1"
+                        min="-360"
+                        max="360"
+                        className={styles.rotationInput}
+                      />
+                    </label>
+                  </div>
+                  
+                  <div className={styles.rotationRow}>
+                    <label className={styles.rotationLabel}>
+                      Rotation Axis:
+                      <select
+                        value={selectedAxisPreset}
+                        onChange={(e) => handleAxisPresetChange(e.target.value)}
+                        className={styles.axisSelect}
+                      >
+                        <option value="X">X-axis (1,0,0)</option>
+                        <option value="Y">Y-axis (0,1,0)</option>
+                        <option value="Z">Z-axis (0,0,1)</option>
+                        <option value="BODY_DIAGONAL">Body diagonal (1,1,1)</option>
+                        <option value="FACE_DIAGONAL_XY">Face diagonal XY (1,1,0)</option>
+                        <option value="FACE_DIAGONAL_XZ">Face diagonal XZ (1,0,1)</option>
+                        <option value="FACE_DIAGONAL_YZ">Face diagonal YZ (0,1,1)</option>
+                        <option value="CUSTOM">Custom</option>
+                      </select>
+                    </label>
+                  </div>
+                  
+                  {selectedAxisPreset === 'CUSTOM' && (
+                    <div className={styles.rotationRow}>
+                      <div className={styles.customAxisInputs}>
+                        <label className={styles.axisComponent}>
+                          X:
+                          <input
+                            type="number"
+                            value={rotationAxis[0]}
+                            onChange={(e) => setRotationAxis([parseFloat(e.target.value) || 0, rotationAxis[1], rotationAxis[2]])}
+                            step="0.1"
+                            className={styles.axisInput}
+                          />
+                        </label>
+                        <label className={styles.axisComponent}>
+                          Y:
+                          <input
+                            type="number"
+                            value={rotationAxis[1]}
+                            onChange={(e) => setRotationAxis([rotationAxis[0], parseFloat(e.target.value) || 0, rotationAxis[2]])}
+                            step="0.1"
+                            className={styles.axisInput}
+                          />
+                        </label>
+                        <label className={styles.axisComponent}>
+                          Z:
+                          <input
+                            type="number"
+                            value={rotationAxis[2]}
+                            onChange={(e) => setRotationAxis([rotationAxis[0], rotationAxis[1], parseFloat(e.target.value) || 0])}
+                            step="0.1"
+                            className={styles.axisInput}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {originalTensorData && (
+                    <div className={styles.rotationRow}>
+                      <button
+                        onClick={applyRotationAndAnalyze}
+                        disabled={!isWorkerReady || isCalculating}
+                        className={styles.rotationButton}
+                      >
+                        Apply Rotation & Re-analyze
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <button
               onClick={analyzeTensor}
