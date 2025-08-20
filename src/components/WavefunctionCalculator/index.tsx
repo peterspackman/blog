@@ -51,8 +51,10 @@ const WavefunctionCalculator: React.FC = () => {
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
   const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('structure');
   const [error, setError] = useState<string>('');
+  const [validationError, setValidationError] = useState<string>('');
   const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
   const [cubeGridInfo, setCubeGridInfo] = useState<any>(null);
+  const [isXYZValid, setIsXYZValid] = useState<boolean>(true);
   
   // Collapsible sections state
   const [isInputExpanded, setIsInputExpanded] = useState(true);
@@ -173,6 +175,10 @@ const WavefunctionCalculator: React.FC = () => {
     // Clear any existing calculation results
     setResults(null);
     
+    // Clear any previous errors when loading new content
+    setError('');
+    setValidationError('');
+    
     try {
       // Parse XYZ to get basic info
       const lines = xyzContent.trim().split('\n');
@@ -196,7 +202,16 @@ const WavefunctionCalculator: React.FC = () => {
       addLog(`Molecule loaded: ${formula} (${numAtoms} atoms) - cleared orbital cache`, 'info');
     } catch (error) {
       console.error('Error parsing XYZ:', error);
-      setError('Failed to parse XYZ data: ' + error.message);
+      // Don't set error here, as validation will handle it
+    }
+  };
+  
+  const handleValidationChange = (isValid: boolean, error?: string) => {
+    setIsXYZValid(isValid);
+    if (!isValid && error) {
+      setValidationError(error);
+    } else {
+      setValidationError('');
     }
   };
 
@@ -235,6 +250,11 @@ const WavefunctionCalculator: React.FC = () => {
   const runCalculation = () => {
     if (!currentXYZData) {
       setError('Please load a molecule first.');
+      return;
+    }
+    
+    if (!isXYZValid) {
+      // Don't show modal for validation errors, they're already shown inline
       return;
     }
 
@@ -323,7 +343,10 @@ const WavefunctionCalculator: React.FC = () => {
             </button>
             {isInputExpanded && (
               <div className={styles.sectionContent}>
-                <FileUploader onFileLoad={handleFileLoad} />
+                <FileUploader 
+              onFileLoad={handleFileLoad} 
+              onValidationChange={handleValidationChange}
+            />
                 {moleculeInfo && (
                   <div className={styles.moleculeInfo}>
                     <div><strong>{moleculeInfo.formula}</strong> ({moleculeInfo.numAtoms} atoms)</div>
@@ -368,7 +391,7 @@ const WavefunctionCalculator: React.FC = () => {
               <button
                 className={`${styles.button} ${styles.buttonPrimary}`}
                 onClick={runCalculation}
-                disabled={isCalculating || !isWorkerReady}
+                disabled={isCalculating || !isWorkerReady || !isXYZValid}
               >
                 {isCalculating ? 'Calculating...' : 'Run Calculation'}
               </button>
@@ -493,7 +516,7 @@ const WavefunctionCalculator: React.FC = () => {
         </div>
       </div>
 
-      {error && (
+      {error && !validationError && (
         <div className={styles.errorModal}>
           <div className={styles.errorContent}>
             <h3>Error</h3>

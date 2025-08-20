@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './FileUploader.module.css';
 
 interface FileUploaderProps {
   onFileLoad: (xyzContent: string) => void;
+  onValidationChange?: (isValid: boolean, error?: string) => void;
 }
 
 // Example molecules collection
@@ -71,12 +72,65 @@ H  0.000000 -0.923000 -1.232000`
   }
 };
 
-const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
+const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationChange }) => {
   const [fileName, setFileName] = useState<string>('');
   const [xyzText, setXyzText] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
   const [selectedExample, setSelectedExample] = useState<string>('water');
+  const [isValid, setIsValid] = useState<boolean>(true);
+  const [validationError, setValidationError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Validate XYZ format
+  const validateXYZ = (content: string): { isValid: boolean; error?: string } => {
+    try {
+      const lines = content.trim().split('\n').filter(line => line.trim());
+      if (lines.length < 3) {
+        return { isValid: false, error: 'XYZ file must have at least 3 lines' };
+      }
+      
+      const numAtoms = parseInt(lines[0]);
+      if (isNaN(numAtoms) || numAtoms <= 0) {
+        return { isValid: false, error: 'First line must be a positive integer (number of atoms)' };
+      }
+      
+      // Check if we have enough atom lines
+      const atomLines = lines.slice(2);
+      if (atomLines.length < numAtoms) {
+        return { isValid: false, error: `Expected ${numAtoms} atom lines, but found ${atomLines.length}` };
+      }
+      
+      // Validate each atom line
+      const validElements = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 
+                            'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
+                            'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
+                            'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr'];
+      
+      for (let i = 0; i < numAtoms; i++) {
+        const parts = atomLines[i].trim().split(/\s+/);
+        if (parts.length < 4) {
+          return { isValid: false, error: `Line ${i + 3}: Expected element symbol and 3 coordinates` };
+        }
+        
+        const element = parts[0];
+        if (!validElements.includes(element)) {
+          return { isValid: false, error: `Line ${i + 3}: Unknown element '${element}'` };
+        }
+        
+        for (let j = 1; j <= 3; j++) {
+          const coord = parseFloat(parts[j]);
+          if (isNaN(coord)) {
+            return { isValid: false, error: `Line ${i + 3}: Invalid coordinate '${parts[j]}'` };
+          }
+        }
+      }
+      
+      return { isValid: true };
+    } catch (error) {
+      return { isValid: false, error: 'Failed to parse XYZ format: ' + error.message };
+    }
+  };
 
   // Load water molecule by default on mount
   useEffect(() => {
@@ -84,8 +138,22 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
     setXyzText(defaultMolecule.xyz);
     setFileName('');
     setSelectedExample('water');
+    setIsValid(true);
+    setValidationError('');
     onFileLoad(defaultMolecule.xyz);
+    if (onValidationChange) {
+      onValidationChange(true);
+    }
   }, []); // Empty dependency array - only run once on mount
+  
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleFile = async (file: File) => {
     const extension = file.name.split('.').pop()?.toLowerCase();
@@ -99,7 +167,18 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
     try {
       const content = await file.text();
       setXyzText(content);
-      onFileLoad(content);
+      
+      const validation = validateXYZ(content);
+      setIsValid(validation.isValid);
+      setValidationError(validation.error || '');
+      
+      if (validation.isValid) {
+        onFileLoad(content);
+      }
+      
+      if (onValidationChange) {
+        onValidationChange(validation.isValid, validation.error);
+      }
     } catch (error) {
       console.error('Error reading file:', error);
       alert('Failed to read file: ' + error.message);
@@ -131,11 +210,36 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setXyzText(text);
-    if (text.trim()) {
-      setFileName('');
-      setSelectedExample(''); // Clear example selection when manually editing
-      onFileLoad(text);
+    setFileName('');
+    setSelectedExample(''); // Clear example selection when manually editing
+    
+    // Clear any existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
+    
+    // Debounce validation by 300ms
+    debounceTimerRef.current = setTimeout(() => {
+      if (text.trim()) {
+        const validation = validateXYZ(text);
+        setIsValid(validation.isValid);
+        setValidationError(validation.error || '');
+        
+        if (validation.isValid) {
+          onFileLoad(text);
+        }
+        
+        if (onValidationChange) {
+          onValidationChange(validation.isValid, validation.error);
+        }
+      } else {
+        setIsValid(true);
+        setValidationError('');
+        if (onValidationChange) {
+          onValidationChange(true);
+        }
+      }
+    }, 300);
   };
 
   const handleExampleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -145,7 +249,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
       setXyzText(molecule.xyz);
       setFileName('');
       setSelectedExample(exampleKey);
+      setIsValid(true);
+      setValidationError('');
       onFileLoad(molecule.xyz);
+      if (onValidationChange) {
+        onValidationChange(true);
+      }
       // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -157,6 +266,11 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
     setFileName('');
     setXyzText('');
     setSelectedExample('');
+    setIsValid(true);
+    setValidationError('');
+    if (onValidationChange) {
+      onValidationChange(true);
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -197,7 +311,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
         </div>
         
         <div
-          className={`${styles.combinedInput} ${isDragging ? styles.dragging : ''}`}
+          className={`${styles.combinedInput} ${isDragging ? styles.dragging : ''} ${!isValid ? styles.invalid : xyzText.trim() ? styles.valid : ''}`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -217,6 +331,11 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad }) => {
             style={{ display: 'none' }}
           />
         </div>
+        {!isValid && validationError && (
+          <div className={styles.errorMessage}>
+            {validationError}
+          </div>
+        )}
       </div>
     </div>
   );

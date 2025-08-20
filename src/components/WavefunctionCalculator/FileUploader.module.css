@@ -89,11 +89,22 @@
 
 .combinedInput {
   position: relative;
-  transition: background-color 0.3s;
+  transition: all 0.3s;
+  border: 2px solid transparent;
 }
 
 .combinedInput.dragging {
   background-color: var(--ifm-color-primary-lightest);
+}
+
+.combinedInput.valid {
+  border-color: var(--ifm-color-success);
+  background-color: var(--ifm-color-success-lightest);
+}
+
+.combinedInput.invalid {
+  border-color: var(--ifm-color-danger);
+  background-color: var(--ifm-color-danger-lightest);
 }
 
 
@@ -130,4 +141,12 @@
   outline: none;
   border-color: var(--ifm-color-primary);
   box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.errorMessage {
+  padding: 0.5rem;
+  background-color: var(--ifm-color-danger-contrast-background);
+  color: var(--ifm-color-danger-darker);
+  font-size: 0.75rem;
+  border-top: 1px solid var(--ifm-color-danger);
 }
