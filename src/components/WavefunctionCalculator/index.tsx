@@ -103,6 +103,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [trajectoryMode, setTrajectoryMode] = useState<'optimization' | 'normal_mode'>('optimization');
   const [selectedNormalMode, setSelectedNormalMode] = useState<number | null>(null);
   const [hideLowModes, setHideLowModes] = useState<boolean>(true);
+  const [isTrajectoryControlsExpanded, setIsTrajectoryControlsExpanded] = useState<boolean>(true);
 
   // Initialize worker on mount
   useEffect(() => {
@@ -818,29 +819,34 @@ const WavefunctionCalculator: React.FC = () => {
                         </div>
                         
                         <div className={styles.modesList}>
-                          {getFilteredFrequencies().map(({ freq, index }) => (
-                            <div key={index} className={styles.modeItem}>
-                              <div className={styles.modeInfo}>
-                                <div className={styles.modeNumber}>Mode {index + 1}</div>
-                                <div className={styles.modeValue}>
-                                  {freq < 0 ? `${Math.abs(freq).toFixed(1)}i` : freq.toFixed(1)} cm⁻¹
-                                </div>
-                                {freq < 0 && <div className={styles.imaginaryBadge}>imag</div>}
-                              </div>
-                              <button
+                          {getFilteredFrequencies().map(({ freq, index }) => {
+                            const isSelected = trajectoryMode === 'normal_mode' && selectedNormalMode === index;
+                            return (
+                              <div 
+                                key={index} 
+                                className={`${styles.modeItem} ${isSelected ? styles.modeSelected : ''}`}
                                 onClick={() => {
                                   setTrajectoryMode('normal_mode');
                                   setSelectedNormalMode(index);
                                 }}
-                                className={`${styles.modeVisualizeButton} ${
-                                  trajectoryMode === 'normal_mode' && selectedNormalMode === index ? styles.active : ''
-                                }`}
-                                disabled={!results.frequencies.normalModes || results.frequencies.normalModes.length === 0}
+                                style={{ cursor: 'pointer' }}
+                                title={`Click to visualize mode ${index + 1}`}
                               >
-                                {trajectoryMode === 'normal_mode' && selectedNormalMode === index ? 'Playing' : 'Play'}
-                              </button>
-                            </div>
-                          ))}
+                                <div className={styles.modeInfo}>
+                                  <div className={styles.modeNumber}>Mode {index + 1}</div>
+                                  <div className={styles.modeValue}>
+                                    {freq < 0 ? `${Math.abs(freq).toFixed(1)}i` : freq.toFixed(1)} cm⁻¹
+                                  </div>
+                                  {freq < 0 && <div className={styles.imaginaryBadge}>imag</div>}
+                                </div>
+                                {isSelected && (
+                                  <div className={styles.modeSelectedIndicator}>
+                                    ▶ Playing
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                         
                         <div className={styles.frequencySummary}>

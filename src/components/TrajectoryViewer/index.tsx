@@ -35,6 +35,7 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   const [frameEnergies, setFrameEnergies] = useState<(number | null)[]>([]);
   const [frameComments, setFrameComments] = useState<string[]>([]);
   const [minEnergy, setMinEnergy] = useState<number | null>(null);
+  const [showOverlayControls, setShowOverlayControls] = useState<boolean>(false);
 
   // Initialize NGL Stage
   useEffect(() => {
@@ -66,6 +67,11 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
 
   // Parse energy from comment line
   const parseEnergyFromComment = (comment: string): number | null => {
+    // Skip normal mode comments entirely
+    if (comment.includes('cm⁻¹') || comment.includes('cm-1') || comment.toLowerCase().includes('mode')) {
+      return null;
+    }
+    
     // Look for patterns like "Energy=-228.523534709", "E = -150.234", or "E -1431.486658226695"
     const energyPatterns = [
       /Energy\s*=\s*(-?\d+\.?\d*)/i,
@@ -110,10 +116,15 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       const commentLine = lines[i + 1] || '';
       comments.push(commentLine);
       const energy = parseEnergyFromComment(commentLine);
+      console.log(`Comment: "${commentLine}" -> Energy: ${energy}`);
       energies.push(energy);
       
       i += numAtoms + 2;
     }
+    
+    // Debug logging
+    console.log('Parsed energies:', energies);
+    console.log('Comments:', comments);
     
     // Store parsed data
     setFrameEnergies(energies);
@@ -121,10 +132,13 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     
     // Find minimum energy for relative calculations
     const validEnergies = energies.filter(e => e !== null) as number[];
+    console.log('Valid energies:', validEnergies);
     if (validEnergies.length > 0) {
       setMinEnergy(Math.min(...validEnergies));
+      console.log('Set minEnergy to:', Math.min(...validEnergies));
     } else {
       setMinEnergy(null);
+      console.log('Set minEnergy to: null');
     }
     
     return frames;
@@ -465,58 +479,19 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       <div className={styles.header}>
         <h4>{moleculeName}</h4>
         <div className={styles.controls}>
+          <button 
+            onClick={() => setShowOverlayControls(!showOverlayControls)} 
+            className={styles.controlButton}
+            title="Toggle display options"
+          >
+            Options
+          </button>
           <button onClick={resetView} className={styles.controlButton}>
             Reset View
           </button>
           <button onClick={toggleFullscreen} className={styles.controlButton}>
             Fullscreen
           </button>
-        </div>
-      </div>
-
-      {/* Representation controls */}
-      <div className={styles.representationControls}>
-        <div className={styles.controlGroup}>
-          <div className={styles.inlineControlGroup}>
-            <label className={styles.controlLabel}>Style:</label>
-            <select 
-              value={representation} 
-              onChange={(e) => setRepresentation(e.target.value)}
-              className={styles.controlSelect}
-            >
-              <option value="ball+stick">Ball & Stick</option>
-              <option value="line">Line</option>
-              <option value="spacefill">Spacefill</option>
-              <option value="licorice">Licorice</option>
-              <option value="cartoon">Cartoon</option>
-            </select>
-          </div>
-          
-          <div className={styles.inlineControlGroup}>
-            <label className={styles.controlLabel}>Color:</label>
-            <select 
-              value={colorScheme}
-              onChange={(e) => setColorScheme(e.target.value)}
-              className={styles.controlSelect}
-            >
-              <option value="element">Element</option>
-              <option value="chainname">Chain</option>
-              <option value="residueindex">Residue</option>
-              <option value="bfactor">B-factor</option>
-            </select>
-          </div>
-          
-          <div className={styles.inlineControlGroup}>
-            <input 
-              type="checkbox" 
-              checked={showHydrogens}
-              onChange={(e) => setShowHydrogens(e.target.checked)}
-              id="showH"
-            />
-            <label htmlFor="showH" className={styles.controlLabel}>
-              Show Hydrogens
-            </label>
-          </div>
         </div>
       </div>
 
@@ -544,7 +519,14 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
                 {frameComments[currentFrame]}
               </div>
             )}
-            {frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null && (
+            {(() => {
+              console.log('Energy display check:', {
+                currentFrameEnergy: frameEnergies[currentFrame],
+                minEnergy,
+                shouldShow: frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null
+              });
+              return frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null;
+            })() && (
               <div className={styles.frameEnergy}>
                 {(() => {
                   const currentEnergy = frameEnergies[currentFrame]!;
@@ -557,77 +539,113 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
             )}
           </div>
         )}
+
+        {/* Display controls overlay */}
+        {showOverlayControls && (
+          <div className={styles.displayControlsOverlay}>
+            <div className={styles.overlayControls}>
+              <div className={styles.overlayControlGroup}>
+                <label className={styles.overlayLabel}>Style:</label>
+                <select 
+                  value={representation} 
+                  onChange={(e) => setRepresentation(e.target.value)}
+                  className={styles.overlaySelect}
+                >
+                  <option value="ball+stick">Ball & Stick</option>
+                  <option value="line">Line</option>
+                  <option value="spacefill">Spacefill</option>
+                  <option value="licorice">Licorice</option>
+                  <option value="cartoon">Cartoon</option>
+                </select>
+              </div>
+              
+              <div className={styles.overlayControlGroup}>
+                <label className={styles.overlayLabel}>Color:</label>
+                <select 
+                  value={colorScheme}
+                  onChange={(e) => setColorScheme(e.target.value)}
+                  className={styles.overlaySelect}
+                >
+                  <option value="element">Element</option>
+                  <option value="chainname">Chain</option>
+                  <option value="residueindex">Residue</option>
+                  <option value="bfactor">B-factor</option>
+                </select>
+              </div>
+              
+              <div className={styles.overlayControlGroup}>
+                <input 
+                  type="checkbox" 
+                  checked={showHydrogens}
+                  onChange={(e) => setShowHydrogens(e.target.checked)}
+                  id="showH-overlay"
+                  className={styles.overlayCheckbox}
+                />
+                <label htmlFor="showH-overlay" className={styles.overlayLabel}>
+                  Show Hydrogens
+                </label>
+              </div>
+              
+              <div className={styles.overlayControlGroup}>
+                <label className={styles.overlayLabel}>FPS:</label>
+                <input
+                  type="range"
+                  min="10"
+                  max="60"
+                  step="5"
+                  value={playbackFPS}
+                  onChange={(e) => updateFPS(parseInt(e.target.value))}
+                  className={styles.overlaySlider}
+                />
+                <span className={styles.overlayValue}>{playbackFPS}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Trajectory controls */}
+      {/* Trajectory controls - horizontal layout */}
       {totalFrames > 1 && (
         <div className={styles.trajectoryControls}>
-          
-          <div className={styles.playerControls}>
-            <button 
-              onClick={() => setFrame(0)}
-              className={`${styles.playerButton} ${styles.firstFrame}`}
-              disabled={currentFrame === 0}
-              title="First frame"
-            >
-            </button>
-            <button 
-              onClick={() => setFrame(Math.max(0, currentFrame - 1))}
-              className={`${styles.playerButton} ${styles.prevFrame}`}
-              disabled={currentFrame === 0}
-              title="Previous frame"
-            >
-            </button>
-            <button 
-              onClick={isPlaying ? pause : play}
-              className={`${styles.playerButton} ${styles.playPauseButton} ${isPlaying ? styles.playing : styles.paused}`}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-            </button>
-            <button 
-              onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
-              className={`${styles.playerButton} ${styles.nextFrame}`}
-              disabled={currentFrame === totalFrames - 1}
-              title="Next frame"
-            >
-            </button>
-            <button 
-              onClick={() => setFrame(totalFrames - 1)}
-              className={`${styles.playerButton} ${styles.lastFrame}`}
-              disabled={currentFrame === totalFrames - 1}
-              title="Last frame"
-            >
-            </button>
-          </div>
-          
-          <div className={styles.sliderContainer}>
-            <input
-              type="range"
-              min="0"
-              max={totalFrames - 1}
-              value={currentFrame}
-              onChange={(e) => setFrame(parseInt(e.target.value))}
-              className={styles.frameSlider}
-            />
-          </div>
-          
-          <div className={styles.speedControl}>
-            <label className={styles.speedLabel}>FPS:</label>
-            <input
-              type="range"
-              min="10"
-              max="60"
-              step="5"
-              value={playbackFPS}
-              onChange={(e) => updateFPS(parseInt(e.target.value))}
-              className={styles.speedSlider}
-            />
-            <span className={styles.speedValue}>{playbackFPS}</span>
-          </div>
-          
-          <div className={styles.keyboardHints}>
-            <span className={styles.hint}>Spacebar: Play/Pause</span>
-            <span className={styles.hint}>← →: Frame by frame</span>
+          <div className={styles.compactControls}>
+            {/* Left side - Player controls */}
+            <div className={styles.playerControls}>
+              <button 
+                onClick={() => setFrame(Math.max(0, currentFrame - 1))}
+                className={styles.playerButton}
+                disabled={currentFrame === 0}
+                title="Previous frame"
+              >
+                ⏮
+              </button>
+              <button 
+                onClick={isPlaying ? pause : play}
+                className={`${styles.playerButton} ${styles.playPauseButton}`}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? '⏸' : '⏵'}
+              </button>
+              <button 
+                onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
+                className={styles.playerButton}
+                disabled={currentFrame === totalFrames - 1}
+                title="Next frame"
+              >
+                ⏭
+              </button>
+            </div>
+            
+            {/* Center/Right - Frame slider */}
+            <div className={styles.frameControls}>
+              <input
+                type="range"
+                min="0"
+                max={totalFrames - 1}
+                value={currentFrame}
+                onChange={(e) => setFrame(parseInt(e.target.value))}
+                className={styles.frameSlider}
+              />
+            </div>
           </div>
         </div>
       )}
