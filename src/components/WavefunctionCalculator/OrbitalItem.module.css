@@ -95,6 +95,27 @@
   flex-shrink: 0;
 }
 
+.orbitalColorPicker {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 3px;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.orbitalColorPicker:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.orbitalColorPicker:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .orbitalItem {

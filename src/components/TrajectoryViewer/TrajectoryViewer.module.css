@@ -1,0 +1,508 @@
+.container {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  background-color: var(--ifm-background-surface-color);
+  overflow: hidden;
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.header h4 {
+  margin: 0;
+  color: var(--ifm-heading-color);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.controlButton {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--ifm-color-primary-light);
+  background-color: white;
+  color: var(--ifm-color-primary);
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.controlButton:hover {
+  background-color: var(--ifm-color-primary);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.representationControls {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--ifm-background-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.controlGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.inlineControlGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controlLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+}
+
+.controlSelect {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  background-color: white;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.controlSelect:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.controlSelect:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.viewer {
+  position: relative;
+  background: white;
+  height: 500px;
+  aspect-ratio: 16 / 9;
+}
+
+.loadingOverlay,
+.errorOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.95);
+  z-index: 10;
+}
+
+.loadingSpinner {
+  font-size: 1rem;
+  color: var(--ifm-color-primary);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.errorMessage {
+  color: var(--ifm-color-danger);
+  font-size: 0.875rem;
+  padding: 1rem;
+  background: var(--ifm-color-danger-lightest);
+  border: 1px solid var(--ifm-color-danger-light);
+  border-radius: 0.375rem;
+  max-width: 400px;
+}
+
+.frameInfoOverlay {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  background: rgba(var(--ifm-background-surface-color-rgb, 255, 255, 255), 0.9);
+  color: var(--ifm-font-color-base);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  backdrop-filter: blur(8px);
+  z-index: 5;
+  max-width: 300px;
+}
+
+.frameNumber {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--ifm-color-primary);
+}
+
+.frameComment {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 0.25rem;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.frameEnergy {
+  font-weight: 600;
+  color: var(--ifm-color-success-dark);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.trajectoryControls {
+  background: linear-gradient(to bottom, var(--ifm-background-color), var(--ifm-background-surface-color));
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.trajectoryInfo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+}
+
+.frameInfo {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+  background: var(--ifm-color-emphasis-100);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+}
+
+.playerControls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.playerButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--ifm-color-primary-light);
+  background: white;
+  color: var(--ifm-color-primary);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.playerButton:hover {
+  background: var(--ifm-color-primary);
+  color: white;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.playerButton:active {
+  transform: scale(0.95);
+}
+
+.playerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.playerButton:disabled:hover {
+  background: white;
+  color: var(--ifm-color-primary);
+  transform: none;
+  box-shadow: none;
+}
+
+/* CSS-based icons for better appearance */
+.playerButton.firstFrame::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 8px 6px 0;
+  border-color: transparent currentColor transparent transparent;
+  margin-right: 2px;
+}
+
+.playerButton.firstFrame::after {
+  content: '';
+  width: 2px;
+  height: 12px;
+  background: currentColor;
+  position: absolute;
+  left: 12px;
+}
+
+.playerButton.prevFrame::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 8px 6px 0;
+  border-color: transparent currentColor transparent transparent;
+}
+
+.playerButton.nextFrame::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 8px;
+  border-color: transparent transparent transparent currentColor;
+}
+
+.playerButton.lastFrame::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 8px;
+  border-color: transparent transparent transparent currentColor;
+  margin-left: 2px;
+}
+
+.playerButton.lastFrame::after {
+  content: '';
+  width: 2px;
+  height: 12px;
+  background: currentColor;
+  position: absolute;
+  right: 12px;
+}
+
+.playPauseButton {
+  width: 44px;
+  height: 44px;
+  font-size: 1.125rem;
+  background: var(--ifm-color-primary);
+  color: white;
+  border-color: var(--ifm-color-primary);
+}
+
+.playPauseButton:hover {
+  background: var(--ifm-color-primary-darker);
+  border-color: var(--ifm-color-primary-darker);
+}
+
+.playPauseButton.playing::before {
+  content: '';
+  width: 3px;
+  height: 12px;
+  background: currentColor;
+  margin-right: 2px;
+}
+
+.playPauseButton.playing::after {
+  content: '';
+  width: 3px;
+  height: 12px;
+  background: currentColor;
+  margin-left: 2px;
+}
+
+.playPauseButton.paused::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 8px 0 8px 12px;
+  border-color: transparent transparent transparent currentColor;
+  margin-left: 2px;
+}
+
+.sliderContainer {
+  padding: 0 1rem;
+}
+
+.frameSlider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ifm-color-emphasis-200);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.frameSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.frameSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--ifm-color-primary-darker);
+}
+
+.frameSlider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.frameSlider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  background: var(--ifm-color-primary-darker);
+}
+
+.speedControl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0 1rem;
+}
+
+.speedLabel {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+  margin: 0;
+  min-width: 50px;
+}
+
+.speedSlider {
+  flex: 1;
+  max-width: 200px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ifm-color-emphasis-200);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.speedSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.speedSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: var(--ifm-color-primary-darker);
+}
+
+.speedSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.speedSlider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  background: var(--ifm-color-primary-darker);
+}
+
+.speedValue {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  min-width: 50px;
+  text-align: right;
+}
+
+.keyboardHints {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.hint {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+  background: var(--ifm-color-emphasis-100);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .container {
+    height: 500px;
+  }
+  
+  .controlGroup {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .playerControls {
+    gap: 0.25rem;
+  }
+  
+  .playerButton {
+    width: 32px;
+    height: 32px;
+    font-size: 0.875rem;
+  }
+  
+  .playPauseButton {
+    width: 38px;
+    height: 38px;
+    font-size: 1rem;
+  }
+}

@@ -81,6 +81,28 @@ export default function Utilities() {
               </div>
             </div>
           </div>
+          
+          <div className="col col--6">
+            <div className="card">
+              <div className="card__header">
+                <h3>XYZ Trajectory Viewer</h3>
+              </div>
+              <div className="card__body">
+                <p>
+                  Visualize molecular trajectories from multi-frame XYZ data.
+                  Load optimization trajectories or molecular dynamics simulations
+                  with playback controls.
+                </p>
+              </div>
+              <div className="card__footer">
+                <Link
+                  className="button button--primary button--block"
+                  to="/utilities/xyz-trajectory">
+                  Open Viewer
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
         
         <div className="margin-top--xl">

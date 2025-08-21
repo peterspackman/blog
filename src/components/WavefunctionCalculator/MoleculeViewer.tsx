@@ -20,7 +20,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   wavefunctionResults, 
   cubeResults,
   cubeGridInfo,
-  onRequestCubeComputation 
+  onRequestCubeComputation
 }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
@@ -36,9 +36,22 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [showBothPhases, setShowBothPhases] = useState<boolean>(false);
   const [opacity, setOpacity] = useState<number>(1.0);
   const [isComputingMO, setIsComputingMO] = useState(false);
-  const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(new Map());
+  // Initialize orbital colors from localStorage
+  const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(() => {
+    try {
+      const savedColors = localStorage.getItem('orbitalColors');
+      if (savedColors) {
+        const parsed = JSON.parse(savedColors);
+        return new Map(Object.entries(parsed).map(([k, v]) => [parseInt(k), v as string]));
+      }
+    } catch (error) {
+      console.warn('Failed to load orbital colors from localStorage:', error);
+    }
+    return new Map();
+  });
   const [gridSteps, setGridSteps] = useState<number>(40);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isMOSettingsExpanded, setIsMOSettingsExpanded] = useState<boolean>(true);
   const [showGridBounds, setShowGridBounds] = useState<boolean>(false);
   const gridBoundsComponentRef = useRef<any>(null);
@@ -228,6 +241,39 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     updateRepresentation();
   }, [representation, showHydrogens, colorScheme]);
 
+
+  // Function to load molecule geometry
+  const loadGeometry = async (xyzDataToLoad: string) => {
+    if (!nglStageRef.current) return;
+    
+    try {
+      // Clear existing components
+      nglStageRef.current.removeAllComponents();
+
+      // Convert XYZ to SDF
+      const sdfData = convertXYZToSDF(xyzDataToLoad, moleculeName);
+      
+      // Create blob from SDF data
+      const blob = new Blob([sdfData], { type: 'text/plain' });
+      
+      // Load structure from blob
+      const structure = await nglStageRef.current.loadFile(blob, { 
+        ext: 'sdf',
+        name: moleculeName
+      });
+
+      // Store component reference
+      componentRef.current = structure;
+
+      // Apply initial representation
+      updateRepresentation();
+      
+    } catch (err) {
+      console.error('Error loading geometry:', err);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     if (!xyzData || !nglStageRef.current) return;
 
@@ -236,27 +282,8 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       setError('');
 
       try {
-        // Clear existing components
-        nglStageRef.current!.removeAllComponents();
-
-        // Convert XYZ to SDF
-        const sdfData = convertXYZToSDF(xyzData, moleculeName);
-        
-        // Create blob from SDF data
-        const blob = new Blob([sdfData], { type: 'text/plain' });
-        
-        // Load structure from blob
-        const structure = await nglStageRef.current!.loadFile(blob, { 
-          ext: 'sdf',
-          name: moleculeName 
-        });
-
-        // Store component reference
-        componentRef.current = structure;
-
-        // Apply initial representation
-        updateRepresentation();
-        
+        // Load single molecule
+        await loadGeometry(xyzData);
         setIsLoading(false);
       } catch (err) {
         console.error('Error loading molecule:', err);
@@ -331,13 +358,38 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       }
     }
 
-    // Cleanup timeout on unmount
+    // Cleanup timeouts on unmount
     return () => {
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
+      if (colorChangeTimeoutRef.current) {
+        clearTimeout(colorChangeTimeoutRef.current);
+      }
     };
   }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps]);
+
+  // Handle orbital color changes
+  const handleOrbitalColorChange = (orbitalIndex: number, color: string) => {
+    setOrbitalColors(prev => {
+      const newColors = new Map(prev);
+      newColors.set(orbitalIndex, color);
+      return newColors;
+    });
+    
+    // Clear any pending color change timeout
+    if (colorChangeTimeoutRef.current) {
+      clearTimeout(colorChangeTimeoutRef.current);
+    }
+    
+    // If this orbital is currently visible, re-render all MOs to update the color
+    if (selectedOrbitals.has(orbitalIndex)) {
+      colorChangeTimeoutRef.current = setTimeout(() => {
+        visualizeAllSelectedMOs();
+        colorChangeTimeoutRef.current = null;
+      }, 50);
+    }
+  };
 
   const computeAndVisualizeMOs = async (orbitalIndices: number[]) => {
     if (!onRequestCubeComputation || !nglStageRef.current) {
@@ -373,6 +425,12 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       sliceDirection, 
       slicePosition 
     });
+    
+    // Clear any pending color change timeout when orbital selection changes
+    if (colorChangeTimeoutRef.current) {
+      clearTimeout(colorChangeTimeoutRef.current);
+      colorChangeTimeoutRef.current = null;
+    }
     
     if (!nglStageRef.current) return;
 
@@ -471,14 +529,11 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
       const moComponents = [];
       const colors = ['#4A90E2', '#FF8C42', '#7B68EE', '#32CD32', '#FF6B6B', '#9B59B6'];
-      
-      // Store color mapping for visual indicators
-      const newOrbitalColors = new Map<number, string>();
 
       // If no orbitals selected, clear everything and return
       if (selectedOrbitals.size === 0) {
         moComponentRef.current = [];
-        setOrbitalColors(newOrbitalColors);
+        // Don't clear orbitalColors - keep color preferences for when orbitals are reselected
         // Force a re-render by resetting the stage view
         nglStageRef.current.autoView();
         return;
@@ -498,10 +553,17 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
           });
 
           if (cubeComponent) {
-            const color = colors[index % colors.length];
-            
-            // Store color mapping
-            newOrbitalColors.set(orbitalIndex, color);
+            // Use stored color if available, otherwise assign next default color
+            let color = orbitalColors.get(orbitalIndex);
+            if (!color) {
+              color = colors[index % colors.length];
+              // Store the new default color assignment
+              setOrbitalColors(prev => {
+                const updated = new Map(prev);
+                updated.set(orbitalIndex, color);
+                return updated;
+              });
+            }
 
             // Add representation based on selected style
             if (orbitalRenderStyle === 'surface') {
@@ -584,7 +646,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       }
 
       moComponentRef.current = moComponents;
-      setOrbitalColors(newOrbitalColors);
       nglStageRef.current.autoView();
     } catch (error) {
       console.error('Error visualizing molecular orbitals:', error);
@@ -735,6 +796,16 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
     updateGridBoundsVisualization();
   }, [showGridBounds, cubeGridInfo]);
 
+  // Save orbital colors to localStorage whenever they change
+  useEffect(() => {
+    try {
+      const colorsObject = Object.fromEntries(orbitalColors);
+      localStorage.setItem('orbitalColors', JSON.stringify(colorsObject));
+    } catch (error) {
+      console.warn('Failed to save orbital colors to localStorage:', error);
+    }
+  }, [orbitalColors]);
+
   if (!xyzData) {
     return (
       <div className={styles.container}>
@@ -799,6 +870,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
           </select>
         </div>
       </div>
+
 
       <div className={styles.mainContent}>
         <div className={styles.viewerContainer}>
@@ -1020,6 +1092,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
               )}
             </div>
 
+
             {/* Orbital List */}
             <div className={styles.orbitalList}>
               {displayedOrbitals.map((orbital, idx) => {
@@ -1040,7 +1113,8 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                     isHOMO={isHOMO}
                     isLUMO={isLUMO}
                     isSelected={isSelected}
-                    colorIndicator={isSelected ? orbitalColor : undefined}
+                    colorIndicator={orbitalColor}
+                    onColorChange={(color) => handleOrbitalColorChange(orbital.index, color)}
                     onClick={() => toggleOrbitalSelection(orbital.index)}
                   />
                 );

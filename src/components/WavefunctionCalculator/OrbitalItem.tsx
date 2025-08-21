@@ -12,6 +12,7 @@ interface OrbitalItemProps {
   isLUMO?: boolean;
   isSelected?: boolean;
   colorIndicator?: string;
+  onColorChange?: (color: string) => void;
   onClick?: () => void;
   className?: string;
 }
@@ -22,6 +23,7 @@ const OrbitalItem: React.FC<OrbitalItemProps> = ({
   isLUMO = false,
   isSelected = false,
   colorIndicator,
+  onColorChange,
   onClick,
   className = ''
 }) => {
@@ -54,11 +56,25 @@ const OrbitalItem: React.FC<OrbitalItemProps> = ({
           </div>
         )}
         {colorIndicator && (
-          <div 
-            className={styles.orbitalColorIndicator}
-            style={{ backgroundColor: colorIndicator }}
-            title={`Plotted in ${colorIndicator}`}
-          />
+          isSelected ? (
+            <input
+              type="color"
+              value={colorIndicator}
+              onChange={(e) => {
+                e.stopPropagation();
+                onColorChange?.(e.target.value);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className={styles.orbitalColorPicker}
+              title={`Change color for MO ${orbital.index}`}
+            />
+          ) : (
+            <div 
+              className={styles.orbitalColorIndicator}
+              style={{ backgroundColor: colorIndicator }}
+              title={`Last used color: ${colorIndicator}`}
+            />
+          )
         )}
       </div>
     </div>

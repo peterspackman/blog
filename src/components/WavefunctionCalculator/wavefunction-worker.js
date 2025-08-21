@@ -3,6 +3,7 @@
 
 let OCC = null;
 let occModule = null;
+let optimizationModule = null;
 
 // Initialize OCC module when worker starts
 self.addEventListener('message', async function(e) {
@@ -15,7 +16,11 @@ self.addEventListener('message', async function(e) {
                 break;
                 
             case 'calculate':
-                await runCalculation(data);
+                if (data.optimize) {
+                    await runOptimizationCalculation(data);
+                } else {
+                    await runCalculation(data);
+                }
                 break;
                 
             case 'setLogLevel':
@@ -58,6 +63,14 @@ async function initializeOCC(config) {
         
         // Load the WASM module
         occModule = await OCC.loadOCC();
+        
+        // Load optimization module
+        try {
+            optimizationModule = await import('./wavefunction-worker-optimization.js');
+            postMessage({ type: 'log', level: 2, message: 'Optimization module loaded' });
+        } catch (e) {
+            postMessage({ type: 'log', level: 3, message: 'Optimization module not available' });
+        }
         
         // Set up logging callback to forward logs to main thread
         if (occModule.registerLogCallback) {
@@ -675,6 +688,75 @@ async function computeCube(params) {
             error: error.message,
             cubeType: params.cubeType,
             orbitalIndex: params.orbitalIndex
+        });
+    }
+}
+
+async function runOptimizationCalculation(params) {
+    if (!optimizationModule) {
+        throw new Error('Optimization module not loaded');
+    }
+    
+    try {
+        const result = await optimizationModule.runOptimization(params, OCC, occModule);
+        
+        // Convert optimization results to expected format
+        const trajectory = result.optimization;
+        
+        // Prepare results object
+        const results = {
+            energy: trajectory.finalEnergy,
+            energyInEV: trajectory.finalEnergy * 27.2114,
+            elapsedMs: result.elapsedMs,
+            converged: trajectory.converged,
+            optimization: {
+                trajectory: trajectory,
+                finalXYZ: result.finalXYZ,
+                steps: trajectory.steps,
+                energies: trajectory.energies,
+                gradientNorms: trajectory.gradientNorms
+            },
+            frequencies: result.frequencies
+        };
+        
+        // If we have final wavefunction data, add it to results and store for cube generation
+        if (result.finalWavefunctionData) {
+            const finalWfnData = result.finalWavefunctionData;
+            
+            // Add ALL wavefunction data to results (same as regular calculation)
+            results.wavefunctionData = finalWfnData.wavefunctionData;
+            results.orbitalEnergies = finalWfnData.orbitalEnergies;
+            results.orbitalOccupations = finalWfnData.orbitalOccupations;
+            results.properties = finalWfnData.properties;
+            results.matrices = finalWfnData.matrices;
+            
+            // Store calculation data for cube computation on optimized geometry
+            self.currentMolecule = finalWfnData.molecule;
+            
+            // Create a pseudo-calculation object for cube generation
+            self.currentCalculation = {
+                basis: finalWfnData.basis,
+                wavefunction: finalWfnData.wavefunction,
+                method: finalWfnData.method
+            };
+            
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: 'Final wavefunction data available for orbital visualization and analysis' 
+            });
+        }
+        
+        postMessage({
+            type: 'result',
+            success: true,
+            results: results
+        });
+    } catch (error) {
+        postMessage({
+            type: 'result',
+            success: false,
+            error: error.message
         });
     }
 }

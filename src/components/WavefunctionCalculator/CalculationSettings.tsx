@@ -12,6 +12,10 @@ interface CalculationSettingsProps {
   setEnergyTolerance: (tolerance: number) => void;
   logLevel: number;
   setLogLevel: (level: number) => void;
+  optimize: boolean;
+  setOptimize: (optimize: boolean) => void;
+  computeFrequencies: boolean;
+  setComputeFrequencies: (compute: boolean) => void;
 }
 
 const CalculationSettings: React.FC<CalculationSettingsProps> = ({
@@ -24,7 +28,11 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
   energyTolerance,
   setEnergyTolerance,
   logLevel,
-  setLogLevel
+  setLogLevel,
+  optimize,
+  setOptimize,
+  computeFrequencies,
+  setComputeFrequencies
 }) => {
   return (
     <>
@@ -40,10 +48,6 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="dft-pbe0">DFT (PBE0)</option>
             <option value="dft-blyp">DFT (BLYP)</option>
             <option value="dft-wb97x">DFT (ωB97X)</option>
-            <option value="dft-wb97m">DFT (ωB97M)</option>
-            <option value="dft-m062x">DFT (M06-2X)</option>
-            <option value="dft-r2scan">DFT (r²SCAN)</option>
-            <option value="dft-tpss">DFT (TPSS)</option>
           </select>
         </div>
         
@@ -67,6 +71,39 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="aug-pcseg-1">aug-pc-1</option>
             <option value="aug-pcseg-2">aug-pc-2</option>
           </select>
+        </div>
+      </div>
+
+      <div className={styles.section}>
+        <h3>Calculation Options</h3>
+        
+        <div className={styles.field}>
+          <label className={styles.checkboxLabel}>
+            <input
+              type="checkbox"
+              checked={optimize}
+              onChange={(e) => setOptimize(e.target.checked)}
+            />
+            <span>Geometry Optimization</span>
+          </label>
+          <small className={styles.fieldDescription}>
+            Optimize molecular geometry to find minimum energy structure
+          </small>
+        </div>
+        
+        <div className={styles.field}>
+          <label className={`${styles.checkboxLabel} ${!optimize ? styles.disabled : ''}`}>
+            <input
+              type="checkbox"
+              checked={computeFrequencies}
+              onChange={(e) => setComputeFrequencies(e.target.checked)}
+              disabled={!optimize}
+            />
+            <span>Vibrational Frequencies</span>
+          </label>
+          <small className={styles.fieldDescription}>
+            Calculate vibrational frequencies after optimization (requires optimization)
+          </small>
         </div>
       </div>
 

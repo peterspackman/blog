@@ -651,3 +651,195 @@
     font-size: 0.7rem;
   }
 }
+
+/* Trajectory Controls */
+.trajectoryControls {
+  background: var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  padding: 1rem;
+}
+
+.trajectoryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.trajectoryHeader h5 {
+  margin: 0;
+  color: var(--ifm-heading-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.trajectoryInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+  text-align: right;
+}
+
+.energyDisplay {
+  font-family: monospace;
+  color: var(--ifm-color-primary);
+  font-weight: 500;
+}
+
+.gradientDisplay {
+  font-family: monospace;
+  color: var(--ifm-color-info);
+  font-weight: 500;
+}
+
+.trajectoryPlayer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.playerControls {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.playerButton {
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  background-color: var(--ifm-background-color);
+  color: var(--ifm-color-emphasis-700);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.playerButton:hover:not(:disabled) {
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border-color: var(--ifm-color-primary);
+}
+
+.playerButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.trajectorySlider {
+  flex: 1;
+  padding: 0 0.5rem;
+}
+
+.sliderInput {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ifm-color-emphasis-300);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.sliderInput::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+}
+
+.sliderInput::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  cursor: pointer;
+  border: none;
+}
+
+.speedControl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.speedControl label {
+  font-weight: 500;
+}
+
+.speedSelect {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  background-color: var(--ifm-background-color);
+  color: var(--ifm-color-emphasis-700);
+  border-radius: 0.25rem;
+}
+
+.convergenceStatus {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--ifm-color-success-contrast-background);
+  color: var(--ifm-color-success-contrast-foreground);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .trajectoryControls {
+    padding: 0.75rem;
+  }
+  
+  .trajectoryHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .trajectoryInfo {
+    text-align: left;
+    font-size: 0.7rem;
+  }
+  
+  .playerControls {
+    gap: 0.25rem;
+  }
+  
+  .playerButton {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    min-width: 2.2rem;
+  }
+  
+  .speedControl {
+    font-size: 0.7rem;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .speedSelect {
+    font-size: 0.7rem;
+  }
+  
+  .convergenceStatus {
+    font-size: 0.7rem;
+    padding: 0.4rem 0.6rem;
+  }
+}
+

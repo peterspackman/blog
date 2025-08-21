@@ -8,6 +8,15 @@ interface FileUploaderProps {
 
 // Example molecules collection
 const exampleMolecules = {
+  formaldehyde: {
+    name: 'Formaldehyde (CH₂O)',
+    xyz: `4
+Formaldehyde
+H  1.0686 -0.1411  1.0408
+C  0.5979  0.0151  0.0688
+H  1.2687  0.2002 -0.7717
+O -0.5960 -0.0151 -0.0686`
+  },
   water: {
     name: 'Water (H₂O)',
     xyz: `3
@@ -76,7 +85,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
   const [fileName, setFileName] = useState<string>('');
   const [xyzText, setXyzText] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
-  const [selectedExample, setSelectedExample] = useState<string>('water');
+  const [selectedExample, setSelectedExample] = useState<string>('formaldehyde');
   const [isValid, setIsValid] = useState<boolean>(true);
   const [validationError, setValidationError] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,12 +141,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
     }
   };
 
-  // Load water molecule by default on mount
+  // Load formaldehyde molecule by default on mount
   useEffect(() => {
-    const defaultMolecule = exampleMolecules.water;
+    const defaultMolecule = exampleMolecules.formaldehyde;
     setXyzText(defaultMolecule.xyz);
     setFileName('');
-    setSelectedExample('water');
+    setSelectedExample('formaldehyde');
     setIsValid(true);
     setValidationError('');
     onFileLoad(defaultMolecule.xyz);

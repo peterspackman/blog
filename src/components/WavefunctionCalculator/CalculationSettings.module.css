@@ -41,3 +41,43 @@
 .field input[type="number"] {
   font-family: monospace;
 }
+
+.checkboxLabel {
+  display: flex !important;
+  align-items: center;
+  font-weight: normal !important;
+  cursor: pointer;
+  margin-bottom: 0.25rem !important;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+  cursor: pointer;
+}
+
+.checkboxLabel span {
+  font-size: 0.875rem;
+  color: var(--ifm-font-color-base);
+}
+
+.checkboxLabel.disabled {
+  cursor: not-allowed;
+}
+
+.checkboxLabel.disabled span {
+  color: var(--ifm-color-emphasis-500);
+}
+
+.checkboxLabel.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.fieldDescription {
+  display: block;
+  margin-top: 0.25rem;
+  margin-left: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+  line-height: 1.4;
+}
