@@ -115,9 +115,31 @@ const config: Config = {
         },
         { to: '/blog', label: 'blog', position: 'left' },
         {
-          to: '/utilities',
-          position: 'left',
+          type: 'dropdown',
           label: 'utilities',
+          position: 'left',
+          items: [
+            {
+              label: 'All Utilities',
+              to: '/utilities',
+            },
+            {
+              label: 'Wavefunction Calculator',
+              to: '/utilities/wavefunction-calculator',
+            },
+            {
+              label: 'XYZ Trajectory Viewer',
+              to: '/utilities/xyz-trajectory',
+            },
+            {
+              label: 'Elastic Tensor Analysis',
+              to: '/utilities/elastic-tensor',
+            },
+            {
+              label: 'SMILES Viewer',
+              to: '/utilities/smiles-viewer',
+            },
+          ],
         },
         {
           type: 'dropdown',

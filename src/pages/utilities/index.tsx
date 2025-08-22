@@ -3,116 +3,84 @@ import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
 import styles from './utilities.module.css';
 
+const utilities = [
+  {
+    title: 'Wavefunction Calculator',
+    description: 'Perform quantum chemistry calculations (HF, DFT) directly in your browser. Compute energies, orbitals, and molecular properties.',
+    href: '/utilities/wavefunction-calculator'
+  },
+  {
+    title: 'XYZ Trajectory Viewer',
+    description: 'Visualize molecular trajectories and animations. Support for optimization paths, MD simulations, and unit cell visualization.',
+    href: '/utilities/xyz-trajectory'
+  },
+  {
+    title: 'Elastic Tensor Analysis',
+    description: 'Analyze elastic tensors and mechanical properties. Interactive 2D/3D visualizations of directional dependencies.',
+    href: '/utilities/elastic-tensor'
+  },
+  {
+    title: 'SMILES Viewer',
+    description: 'Convert SMILES strings to molecular structures. Instant 2D visualization powered by RDKit.js.',
+    href: '/utilities/smiles-viewer'
+  }
+];
+
+function UtilityCard({ utility }: { utility: typeof utilities[0] }) {
+  return (
+    <div className="col col--6 margin-bottom--lg">
+      <div className={`card ${styles.utilityCard}`}>
+        <div className={`card__header ${styles.cardHeader}`}>
+          <h3 className={styles.cardTitle}>{utility.title}</h3>
+        </div>
+        <div className={`card__body ${styles.cardBody}`}>
+          <p className={styles.cardDescription}>{utility.description}</p>
+        </div>
+        <div className={`card__footer ${styles.cardFooter}`}>
+          <Link
+            className="button button--primary button--block"
+            to={utility.href}>
+            Open Tool
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Utilities() {
   return (
     <Layout
       title="Utilities"
-      description="Quantum Chemistry Utilities and Calculators">
-      <main className="container margin-vert--lg">
-        <h1>Quantum Chemistry Utilities</h1>
-        <p className="lead">
-          Interactive tools and calculators for quantum chemistry calculations, 
-          running entirely in your browser using WebAssembly.
-        </p>
-        
-        <div className={`row margin-top--lg ${styles.row}`}>
-          <div className="col col--6">
-            <div className="card">
-              <div className="card__header">
-                <h3>Wavefunction Calculator</h3>
-              </div>
-              <div className="card__body">
-                <p>
-                  Perform quantum chemistry calculations (HF, DFT) on molecules 
-                  directly in your browser. Upload XYZ files and compute energies, 
-                  orbitals, and molecular properties.
-                </p>
-              </div>
-              <div className="card__footer">
-                <Link
-                  className="button button--primary button--block"
-                  to="/utilities/wavefunction-calculator">
-                  Open Calculator
-                </Link>
-              </div>
+      description="Interactive Quantum Chemistry Tools and Calculators">
+      <main className={styles.utilitiesMain}>
+        <div className="container">
+          <div className={styles.heroSection}>
+            <h1 className={styles.heroTitle}>
+              Quantum Chemistry Utilities
+            </h1>
+            <p className={styles.heroSubtitle}>
+              Interactive tools and calculators running entirely in your browser using WebAssembly
+            </p>
+          </div>
+
+          <div className={styles.utilitiesSection}>
+            <div className="row">
+              {utilities.map((utility, idx) => (
+                <UtilityCard key={idx} utility={utility} />
+              ))}
             </div>
           </div>
-          
-          <div className="col col--6">
-            <div className="card">
-              <div className="card__header">
-                <h3>Elastic Tensor Calculator</h3>
-              </div>
-              <div className="card__body">
-                <p>
-                  Analyze elastic tensors and calculate mechanical properties.
-                  Visualize directional dependencies of elastic properties with 
-                  interactive 2D plots and 3D surfaces.
-                </p>
-              </div>
-              <div className="card__footer">
-                <Link
-                  className="button button--primary button--block"
-                  to="/utilities/elastic-tensor">
-                  Open Calculator
-                </Link>
-              </div>
-            </div>
+
+          <div className={styles.infoSection}>
+            <h2>Technologies</h2>
+            <p>
+              These tools are powered by <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">OCC (Open Computational Chemistry)</a> for quantum chemistry calculations, 
+              <a href="https://www.rdkit.org/" target="_blank" rel="noopener noreferrer"> RDKit.js</a> for molecular structure manipulation, 
+              and <a href="https://nglviewer.org/" target="_blank" rel="noopener noreferrer"> NGL Viewer</a> for 3D visualization.
+              All computations run locally in your browser.
+            </p>
           </div>
-          
-          <div className="col col--6">
-            <div className="card">
-              <div className="card__header">
-                <h3>SMILES Molecule Viewer</h3>
-              </div>
-              <div className="card__body">
-                <p>
-                  Visualize molecular structures from SMILES strings.
-                  Enter SMILES notation to instantly see 2D molecular
-                  structures and properties using RDKit.
-                </p>
-              </div>
-              <div className="card__footer">
-                <Link
-                  className="button button--primary button--block"
-                  to="/utilities/smiles-viewer">
-                  Open Viewer
-                </Link>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col col--6">
-            <div className="card">
-              <div className="card__header">
-                <h3>XYZ Trajectory Viewer</h3>
-              </div>
-              <div className="card__body">
-                <p>
-                  Visualize molecular trajectories from multi-frame XYZ data.
-                  Load optimization trajectories or molecular dynamics simulations
-                  with playback controls.
-                </p>
-              </div>
-              <div className="card__footer">
-                <Link
-                  className="button button--primary button--block"
-                  to="/utilities/xyz-trajectory">
-                  Open Viewer
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="margin-top--xl">
-          <h2>About These Tools</h2>
-          <p>
-            The quantum chemistry calculators are powered by <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">
-            OCC (Open Computational Chemistry)</a>, an open-source quantum chemistry 
-            library compiled to WebAssembly. Molecular visualization uses <a href="https://www.rdkit.org/docs/JSMol.html" target="_blank" rel="noopener noreferrer">RDKit.js</a>. 
-            All calculations and visualizations run entirely in your browser with no data sent to any server.
-          </p>
         </div>
       </main>
     </Layout>

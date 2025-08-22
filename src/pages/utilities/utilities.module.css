@@ -1,29 +1,126 @@
+/* Main layout */
+.utilitiesMain {
+  padding: 2rem 0 4rem;
+}
+
+/* Hero section */
+.heroSection {
+  text-align: center;
+  padding: 2rem 0 3rem;
+}
+
+.heroTitle {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.heroSubtitle {
+  font-size: 1.25rem;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Utilities section */
+.utilitiesSection {
+  padding: 2rem 0;
+}
+
+/* Card styles */
+.utilityCard {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.utilityCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+  border-color: var(--ifm-color-primary);
+}
+
+.cardHeader {
+  padding: 1.5rem !important;
+  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--ifm-color-emphasis-100);
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.cardBody {
+  flex: 1;
+  padding: 1.5rem !important;
+}
+
+.cardDescription {
+  color: var(--ifm-color-emphasis-700);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.cardFooter {
+  padding: 1rem 1.5rem !important;
+  background: var(--ifm-background-surface-color);
+  border-top: 1px solid var(--ifm-color-emphasis-100);
+}
+
+/* Info section */
+.infoSection {
+  margin-top: 4rem;
+  padding: 3rem 0;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.infoSection h2 {
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.infoSection p {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  line-height: 1.6;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.infoSection a {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.infoSection a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive design */
+@media (max-width: 996px) {
+  .heroTitle {
+    font-size: 2rem;
+  }
+  
+  .heroSubtitle {
+    font-size: 1.125rem;
+  }
+}
+
+
+/* Legacy styles for trajectory viewer pages - keeping for compatibility */
 .lead {
   font-size: 1.25rem;
   color: var(--ifm-color-emphasis-700);
   margin-bottom: 2rem;
 }
 
-.card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.card__body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-/* Ensure equal height for all cards in the row */
-.row {
-  display: flex;
-  align-items: stretch;
-}
-
-/* Trajectory viewer layout */
 .utilityPage {
   padding: 2rem 0;
 }

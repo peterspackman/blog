@@ -94,7 +94,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
   // Validate XYZ format
   const validateXYZ = (content: string): { isValid: boolean; error?: string } => {
     try {
-      const lines = content.trim().split('\n').filter(line => line.trim());
+      const lines = content.trim().split('\n');
       if (lines.length < 3) {
         return { isValid: false, error: 'XYZ file must have at least 3 lines' };
       }
@@ -104,7 +104,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
         return { isValid: false, error: 'First line must be a positive integer (number of atoms)' };
       }
       
-      // Check if we have enough atom lines
+      // Skip comment line (can be empty/blank) and get atom lines
       const atomLines = lines.slice(2);
       if (atomLines.length < numAtoms) {
         return { isValid: false, error: `Expected ${numAtoms} atom lines, but found ${atomLines.length}` };
@@ -112,7 +112,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
       
       // Validate each atom line (basic format validation only - OCC will handle element validation)
       for (let i = 0; i < numAtoms; i++) {
-        const parts = atomLines[i].trim().split(/\s+/);
+        const atomLine = atomLines[i];
+        if (!atomLine || !atomLine.trim()) {
+          return { isValid: false, error: `Line ${i + 3}: Empty atom line` };
+        }
+        
+        const parts = atomLine.trim().split(/\s+/);
         if (parts.length < 4) {
           return { isValid: false, error: `Line ${i + 3}: Expected element symbol and 3 coordinates` };
         }

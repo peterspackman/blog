@@ -9,6 +9,7 @@ type SoftwareProjectProps = {
   imageUrl?: string;
   link: string;
   github?: string;
+  jsLink?: string;
   language: string;
 };
 
@@ -18,6 +19,7 @@ const SoftwareProject: React.FC<SoftwareProjectProps> = ({
   imageUrl,
   link,
   github,
+  jsLink,
   language,
 }) => {
   return (
@@ -38,6 +40,11 @@ const SoftwareProject: React.FC<SoftwareProjectProps> = ({
           {github && (
             <Link className="button button--secondary" to={github}>
               GitHub
+            </Link>
+          )}
+          {jsLink && (
+            <Link className="button button--secondary" to={jsLink}>
+              Try in Browser
             </Link>
           )}
         </div>
@@ -75,7 +82,8 @@ export default function Software() {
               imageUrl="/img/occ.png"
               link="https://peterspackman.github.io/occ"
               github="https://github.com/peterspackman/occ"
-              language="C++ / Python"
+              jsLink="/utilities/wavefunction-calculator"
+              language="C++ / Python / JS"
             />
 
             <SoftwareProject
