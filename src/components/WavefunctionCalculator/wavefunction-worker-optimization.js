@@ -23,6 +23,28 @@ async function runOptimization(params, OCC, occModule) {
         // Create initial molecule from XYZ data
         const initialMolecule = await OCC.moleculeFromXYZ(params.xyzData);
         
+        // Set molecular charge if provided
+        if (params.charge !== undefined && params.charge !== 0) {
+            initialMolecule.setCharge(params.charge);
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: `Molecular charge set to: ${params.charge}` 
+            });
+        }
+        
+        // Validate electron count for restricted calculations
+        const numElectrons = initialMolecule.numElectrons();
+        if (numElectrons % 2 !== 0) {
+            throw new Error(`Unrestricted calculations are not supported. Molecule has ${numElectrons} electrons (odd number). Please adjust the charge to get an even number of electrons.`);
+        }
+        
+        postMessage({ 
+            type: 'log', 
+            level: 2, 
+            message: `Initial molecule: ${initialMolecule.size()} atoms, ${numElectrons} electrons (charge: ${params.charge || 0})` 
+        });
+        
         // Set up convergence criteria
         const criteria = new occModule.ConvergenceCriteria();
         criteria.gradientMax = params.optGradientMax || 1e-4;
@@ -130,6 +152,21 @@ async function runOptimization(params, OCC, occModule) {
         // Get final results
         trajectory.finalMolecule = optimizer.getNextGeometry();
         trajectory.finalEnergy = optimizer.currentEnergy();
+        
+        // Ensure the final molecule has the correct charge set
+        if (params.charge !== undefined && params.charge !== 0) {
+            trajectory.finalMolecule.setCharge(params.charge);
+        }
+        
+        // Validate electron count on final molecule
+        const finalElectrons = trajectory.finalMolecule.numElectrons();
+        if (finalElectrons % 2 !== 0) {
+            postMessage({ 
+                type: 'log', 
+                level: 3, 
+                message: `Warning: Final molecule has ${finalElectrons} electrons (odd number). This may cause issues with frequency calculations.` 
+            });
+        }
         
         const finalXYZ = occModule.moleculeToXYZ(trajectory.finalMolecule);
         
@@ -441,7 +478,7 @@ async function computeFrequencies(molecule, params, OCC, occModule) {
         });
         
         // Compute Hessian
-        const hessian = hessEvaluator.compute(wfn.molecularOrbitals);
+        const hessian = hessEvaluator.compute(wfn);
         
         postMessage({ 
             type: 'log', 

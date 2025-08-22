@@ -18,7 +18,7 @@
     "@docusaurus/core": "3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.0.0",
-    "@peterspackman/occjs": "^0.8.0",
+    "@peterspackman/occjs": "^0.8.1",
     "@peterspackman/selfies": "^0.2.0",
     "@rdkit/rdkit": "^2025.3.4-1.0.0",
     "@react-three/drei": "^10.0.3",

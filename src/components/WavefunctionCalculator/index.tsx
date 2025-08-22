@@ -8,6 +8,7 @@ import MatrixDisplay from './MatrixDisplay';
 import MoleculeViewer from './MoleculeViewer';
 import OrbitalItem from './OrbitalItem';
 import TrajectoryViewer from '@site/src/components/TrajectoryViewer';
+import { NormalModeTrajectory } from './NormalModeTrajectory';
 
 interface CalculationResult {
   energy: number;
@@ -54,6 +55,7 @@ interface CalculationResult {
     nModes: number;
     nAtoms: number;
     summary: string;
+    normalModes?: number[][];
   };
 }
 
@@ -71,7 +73,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [results, setResults] = useState<CalculationResult | null>(null);
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
-  const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties'>('structure');
+  const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties' | 'optimization'>('structure');
   const [error, setError] = useState<string>('');
   const [validationError, setValidationError] = useState<string>('');
   const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
@@ -90,6 +92,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [logLevel, setLogLevel] = useState(2);
   const [optimize, setOptimize] = useState(false);
   const [computeFrequencies, setComputeFrequencies] = useState(false);
+  const [charge, setCharge] = useState(0);
   
   // Handle optimization toggle - turn off frequencies when optimization is disabled
   const handleOptimizeChange = (enabled: boolean) => {
@@ -104,6 +107,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [selectedNormalMode, setSelectedNormalMode] = useState<number | null>(null);
   const [hideLowModes, setHideLowModes] = useState<boolean>(true);
   const [isTrajectoryControlsExpanded, setIsTrajectoryControlsExpanded] = useState<boolean>(true);
+  const [precomputedTrajectories, setPrecomputedTrajectories] = useState<Map<number, string>>(new Map());
 
   // Initialize worker on mount
   useEffect(() => {
@@ -267,6 +271,14 @@ const WavefunctionCalculator: React.FC = () => {
       setResults(data.results);
       setActiveTab('results');
       addLog('Calculation completed successfully!', 'info');
+      
+      // Pre-compute normal mode trajectories if frequencies were calculated
+      if (data.results.frequencies?.frequencies && data.results.optimization?.finalXYZ) {
+        addLog(`Found frequency data: ${data.results.frequencies.frequencies.length} frequencies, normalModes: ${data.results.frequencies.normalModes ? 'available' : 'missing'}`, 'info');
+        precomputeNormalModeTrajectories(data.results);
+      } else {
+        addLog('No frequency data or optimized geometry available for trajectory pre-computation', 'info');
+      }
     } else {
       setError('Calculation failed: ' + data.error);
     }
@@ -308,11 +320,12 @@ const WavefunctionCalculator: React.FC = () => {
       return;
     }
 
-    // Clear previous results
+    // Clear previous results and trajectories
     setResults(null);
     setLogs([]);
     setActiveTab('output');
     setIsCalculating(true);
+    setPrecomputedTrajectories(new Map()); // Clear trajectory cache
 
     // Set log level
     worker.postMessage({
@@ -328,7 +341,8 @@ const WavefunctionCalculator: React.FC = () => {
       maxIterations,
       energyTolerance,
       optimize,
-      computeFrequencies
+      computeFrequencies,
+      charge
     };
 
     addLog('Starting calculation...', 'info');
@@ -404,101 +418,53 @@ const WavefunctionCalculator: React.FC = () => {
     return currentXYZData;
   };
 
+  // Pre-compute all normal mode trajectories to avoid delays when clicking
+  const precomputeNormalModeTrajectories = (calculationResults: any) => {
+    if (!calculationResults.frequencies?.frequencies || !calculationResults.optimization?.finalXYZ) {
+      return;
+    }
+
+    addLog('Pre-computing normal mode trajectories...', 'info');
+    
+    const trajectories = NormalModeTrajectory.precomputeAllTrajectories(
+      calculationResults.optimization.finalXYZ,
+      calculationResults.frequencies.frequencies,
+      calculationResults.frequencies.normalModes || []
+    );
+    
+    setPrecomputedTrajectories(trajectories);
+    addLog(`Pre-computed ${trajectories.size} normal mode trajectories`, 'info');
+  };
+
   // Generate normal mode trajectory by sampling along the normal mode vector
   const generateNormalModeTrajectory = (modeIndex: number): string => {
-    if (!results?.optimization?.finalXYZ || !results?.frequencies?.normalModes) {
-      console.log('Missing data for normal mode trajectory:', {
-        hasXYZ: !!results?.optimization?.finalXYZ,
-        hasNormalModes: !!results?.frequencies?.normalModes,
-        normalModesLength: results?.frequencies?.normalModes?.length
-      });
+    // First check if we have a pre-computed trajectory
+    const precomputed = precomputedTrajectories.get(modeIndex);
+    if (precomputed) {
+      return precomputed;
+    }
+    // Fallback to real-time generation using utility class
+    if (!results?.optimization?.finalXYZ || !results?.frequencies?.frequencies) {
       return '';
     }
 
-    const finalGeometry = results.optimization.finalXYZ;
-    const normalMode = results.frequencies.normalModes[modeIndex];
+    const normalMode = results.frequencies.normalModes?.[modeIndex];
     const frequency = results.frequencies.frequencies[modeIndex];
     
     if (!normalMode || normalMode.length === 0) {
-      console.log('Normal mode data not available for mode', modeIndex, 'normalMode:', normalMode);
-      // Create a simple placeholder trajectory if normal mode data is missing
-      return createPlaceholderTrajectory(finalGeometry, frequency, modeIndex);
+      return NormalModeTrajectory.createPlaceholderTrajectory(
+        results.optimization.finalXYZ, 
+        frequency, 
+        modeIndex
+      );
     }
 
-    // Parse the final geometry
-    const lines = finalGeometry.trim().split('\n');
-    const numAtoms = parseInt(lines[0]);
-    const comment = lines[1];
-    
-    if (lines.length < numAtoms + 2) {
-      return '';
-    }
-
-    // Extract atom positions
-    const atoms: Array<{element: string, x: number, y: number, z: number}> = [];
-    for (let i = 2; i < 2 + numAtoms; i++) {
-      const parts = lines[i].trim().split(/\s+/);
-      atoms.push({
-        element: parts[0],
-        x: parseFloat(parts[1]),
-        y: parseFloat(parts[2]),
-        z: parseFloat(parts[3])
-      });
-    }
-
-    // Generate trajectory frames by displacing along the normal mode
-    const frames: string[] = [];
-    const nFrames = 20; // Number of frames in the animation
-    const amplitude = 0.3; // Displacement amplitude in Angstroms
-    
-    for (let frame = 0; frame < nFrames; frame++) {
-      const phase = (2 * Math.PI * frame) / nFrames;
-      const displacement = amplitude * Math.sin(phase);
-      
-      // Create displaced geometry
-      const frameLines = [numAtoms.toString()];
-      frameLines.push(`Mode ${modeIndex + 1}: ${Math.abs(frequency).toFixed(2)} cm⁻¹ ${frequency < 0 ? '(imaginary)' : ''}`);
-      
-      for (let atomIdx = 0; atomIdx < numAtoms; atomIdx++) {
-        const atom = atoms[atomIdx];
-        // Normal mode vector has 3 components per atom (x, y, z)
-        const modeX = normalMode[atomIdx * 3] || 0;
-        const modeY = normalMode[atomIdx * 3 + 1] || 0;
-        const modeZ = normalMode[atomIdx * 3 + 2] || 0;
-        
-        const newX = atom.x + displacement * modeX;
-        const newY = atom.y + displacement * modeY;
-        const newZ = atom.z + displacement * modeZ;
-        
-        frameLines.push(`${atom.element}  ${newX.toFixed(6)}  ${newY.toFixed(6)}  ${newZ.toFixed(6)}`);
-      }
-      
-      frames.push(frameLines.join('\n'));
-    }
-    
-    return frames.join('\n');
-  };
-
-  // Create a placeholder trajectory when normal mode data is not available
-  const createPlaceholderTrajectory = (finalGeometry: string, frequency: number, modeIndex: number): string => {
-    const lines = finalGeometry.trim().split('\n');
-    const numAtoms = parseInt(lines[0]);
-    
-    // Create a few frames with the same geometry but different comments
-    const frames: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      const frameLines = [numAtoms.toString()];
-      frameLines.push(`Mode ${modeIndex + 1}: ${Math.abs(frequency).toFixed(2)} cm⁻¹ (normal mode data unavailable)`);
-      
-      // Copy the original atom lines
-      for (let j = 2; j < lines.length; j++) {
-        frameLines.push(lines[j]);
-      }
-      
-      frames.push(frameLines.join('\n'));
-    }
-    
-    return frames.join('\n');
+    return NormalModeTrajectory.generateTrajectory(
+      results.optimization.finalXYZ,
+      normalMode,
+      frequency,
+      modeIndex
+    );
   };
 
   // Get trajectory data based on current mode
@@ -510,6 +476,7 @@ const WavefunctionCalculator: React.FC = () => {
     }
     return '';
   };
+
 
   // Get trajectory name based on current mode
   const getCurrentTrajectoryName = (): string => {
@@ -539,7 +506,8 @@ const WavefunctionCalculator: React.FC = () => {
             {isWorkerReady ? '✓ Ready' : '⏳ Loading...'}
           </div>
 
-          <div className={styles.collapsibleSection}>
+          <div className={styles.scrollableContent}>
+            <div className={styles.collapsibleSection}>
             <button 
               className={styles.sectionHeader}
               onClick={() => setIsInputExpanded(!isInputExpanded)}
@@ -592,11 +560,14 @@ const WavefunctionCalculator: React.FC = () => {
                     setOptimize={handleOptimizeChange}
                     computeFrequencies={computeFrequencies}
                     setComputeFrequencies={setComputeFrequencies}
+                    charge={charge}
+                    setCharge={setCharge}
                   />
                 </div>
               )}
             </div>
           )}
+          </div>
 
           {currentXYZData && (
             <div className={styles.stickyButtons}>

@@ -64,12 +64,18 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [colorRange, setColorRange] = useState<[number, number]>([0, 0.05]);
   const [isColorRangeExpanded, setIsColorRangeExpanded] = useState<boolean>(false);
 
+  // Get theme-aware background color
+  const getBackgroundColor = () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark ? '#1b1b1d' : '#ffffff';
+  };
+
   useEffect(() => {
     if (!stageRef.current) return;
 
     // Initialize NGL Stage with more tolerant clipping planes
     nglStageRef.current = new NGL.Stage(stageRef.current, {
-      backgroundColor: 'white',
+      backgroundColor: getBackgroundColor(),
       quality: 'medium',
       clipNear: 0.000001,  // Very small near clipping plane
       clipFar: 100,
@@ -87,8 +93,23 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
     window.addEventListener('resize', handleResize);
 
+    // Listen for theme changes
+    const handleThemeChange = () => {
+      if (nglStageRef.current) {
+        nglStageRef.current.setParameters({ backgroundColor: getBackgroundColor() });
+      }
+    };
+
+    // Use MutationObserver to watch for theme changes
+    const observer = new MutationObserver(handleThemeChange);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      observer.disconnect();
       if (nglStageRef.current) {
         nglStageRef.current.dispose();
       }

@@ -1,15 +1,15 @@
 .section {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .section h3 {
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.375rem;
   color: var(--ifm-heading-color);
 }
 
 .field {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.375rem;
 }
 
 .field label {
@@ -75,9 +75,9 @@
 
 .fieldDescription {
   display: block;
-  margin-top: 0.25rem;
+  margin-top: 0.125rem;
   margin-left: 1.5rem;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--ifm-color-emphasis-600);
-  line-height: 1.4;
+  line-height: 1.3;
 }

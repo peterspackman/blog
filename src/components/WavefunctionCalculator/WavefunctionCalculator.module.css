@@ -12,10 +12,11 @@
   width: 300px;
   background-color: var(--ifm-background-color);
   border-right: 1px solid var(--ifm-color-emphasis-200);
-  padding: 1rem;
+  padding: 0.75rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
 }
 
 .content {
@@ -89,10 +90,10 @@
 }
 
 .collapsibleSection {
-  margin-bottom: 0.75rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.375rem;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .sectionHeader {
@@ -128,7 +129,7 @@
 }
 
 .sectionContent {
-  padding: 0.75rem;
+  padding: 0.5rem;
   background-color: var(--ifm-background-surface-color);
 }
 
@@ -184,10 +185,20 @@
   margin-bottom: 0.25rem;
 }
 
+.scrollableContent {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0; /* Important for flex shrinking */
+}
+
 .stickyButtons {
-  margin-top: auto;
+  margin-top: 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--ifm-color-emphasis-200);
+  flex-shrink: 0;
 }
 
 .button:disabled {

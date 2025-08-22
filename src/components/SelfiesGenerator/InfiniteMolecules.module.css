@@ -61,7 +61,7 @@
 }
 
 .moleculeViewer {
-  background: white;
+  background: var(--ifm-background-surface-color);
   height: 200px;
   display: flex;
   align-items: center;

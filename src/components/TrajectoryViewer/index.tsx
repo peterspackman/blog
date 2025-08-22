@@ -2,6 +2,272 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as NGL from 'ngl';
 import styles from './TrajectoryViewer.module.css';
 
+// Custom unit cell representation that we can update manually
+class CustomUnitCellRepresentation {
+  private component: any;
+  private stage: any;
+  private shapeComponent: any = null;
+  private frameUnitcells: any[] = [];
+  
+  constructor(component: any, stage: any) {
+    this.component = component;
+    this.stage = stage;
+  }
+  
+  setFrameUnitcells(frameComments: string[]) {
+    this.frameUnitcells = frameComments.map(comment => {
+      if (!comment.includes('Lattice=')) return null;
+      
+      const latticeMatch = comment.match(/Lattice="([^"]+)"/);
+      if (!latticeMatch) return null;
+      
+      const latticeValues = latticeMatch[1].split(/\s+/).map(v => parseFloat(v));
+      if (latticeValues.length !== 9) return null;
+      
+      // Parse lattice vectors: [a1 a2 a3 b1 b2 b3 c1 c2 c3]
+      const a = [latticeValues[0], latticeValues[1], latticeValues[2]];
+      const b = [latticeValues[3], latticeValues[4], latticeValues[5]];
+      const c = [latticeValues[6], latticeValues[7], latticeValues[8]];
+      
+      return { a, b, c };
+    });
+  }
+  
+  updateFrame(frameIndex: number) {
+    if (frameIndex < 0 || frameIndex >= this.frameUnitcells.length) return;
+    
+    const unitcell = this.frameUnitcells[frameIndex];
+    if (!unitcell) return;
+    
+    // Remove existing unit cell visualization
+    this.remove();
+    
+    // Create new unit cell visualization
+    this.createUnitCellShape(unitcell);
+  }
+  
+  createUnitCellShape(unitcell: any) {
+    const { a, b, c } = unitcell;
+    
+    // Get structure center for positioning
+    const structure = this.component.structure;
+    const center = structure.center;
+    
+    // Calculate the 8 corners of the unit cell
+    const corners = [
+      [0, 0, 0],
+      [1, 0, 0],
+      [0, 1, 0], 
+      [0, 0, 1],
+      [1, 1, 0],
+      [1, 0, 1],
+      [0, 1, 1],
+      [1, 1, 1]
+    ].map(([na, nb, nc]) => [
+      center.x + na * a[0] + nb * b[0] + nc * c[0],
+      center.y + na * a[1] + nb * b[1] + nc * c[1], 
+      center.z + na * a[2] + nb * b[2] + nc * c[2]
+    ]);
+    
+    // Create shape with unit cell edges
+    const shape = new NGL.Shape('unitcell');
+    
+    // Define the 12 edges of a cube
+    const edges = [
+      [0, 1], [0, 2], [0, 3], // from origin
+      [1, 4], [1, 5], // from (1,0,0)
+      [2, 4], [2, 6], // from (0,1,0)
+      [3, 5], [3, 6], // from (0,0,1)
+      [4, 7], [5, 7], [6, 7] // to (1,1,1)
+    ];
+    
+    // Add thick lines for each edge
+    edges.forEach(([i, j]) => {
+      shape.addWideline(
+        corners[i] as [number, number, number],
+        corners[j] as [number, number, number],
+        [1, 0.5, 0] // orange color
+      );
+    });
+    
+    // Add the shape to the stage
+    this.shapeComponent = this.stage.addComponentFromObject(shape);
+    this.shapeComponent.addRepresentation('buffer', {
+      linewidth: 5, // Make lines thicker
+      opacity: 0.8
+    });
+  }
+  
+  remove() {
+    if (this.shapeComponent) {
+      this.stage.removeComponent(this.shapeComponent);
+      this.shapeComponent = null;
+    }
+  }
+  
+  setVisible(visible: boolean) {
+    if (this.shapeComponent) {
+      this.shapeComponent.setVisibility(visible);
+    }
+  }
+}
+
+// Utility class for converting XYZ trajectory data to PDB format
+class PDBConverter {
+  /**
+   * Convert multiple XYZ frames to a single PDB trajectory file
+   */
+  static convertXYZTrajToPDB(xyzTrajectory: string, moleculeName = 'MOL'): string {
+    const frames = this.parseXYZTrajectory(xyzTrajectory);
+    return this.convertFramesToPDB(frames, moleculeName);
+  }
+
+  /**
+   * Calculate unit cell volume from lattice parameters
+   */
+  private static calculateVolume(a: number, b: number, c: number, alpha: number, beta: number, gamma: number): number {
+    // Convert angles to radians
+    const alphaRad = alpha * Math.PI / 180;
+    const betaRad = beta * Math.PI / 180;
+    const gammaRad = gamma * Math.PI / 180;
+    
+    // Calculate volume using the formula for triclinic cells
+    const cosAlpha = Math.cos(alphaRad);
+    const cosBeta = Math.cos(betaRad);
+    const cosGamma = Math.cos(gammaRad);
+    
+    const volume = a * b * c * Math.sqrt(
+      1 + 2 * cosAlpha * cosBeta * cosGamma - 
+      cosAlpha * cosAlpha - cosBeta * cosBeta - cosGamma * cosGamma
+    );
+    
+    return volume;
+  }
+
+  /**
+   * Parse lattice information from extended XYZ comment line
+   */
+  private static parseLatticeInfo(commentLine: string): { a: number; b: number; c: number; alpha: number; beta: number; gamma: number; volume: number } | null {
+    const latticeMatch = commentLine.match(/Lattice="([^"]+)"/);
+    if (!latticeMatch) return null;
+    
+    const latticeValues = latticeMatch[1].split(/\s+/).map(v => parseFloat(v));
+    if (latticeValues.length !== 9) return null;
+    
+    // Parse lattice vectors: [a1 a2 a3 b1 b2 b3 c1 c2 c3]
+    const a1 = latticeValues[0], a2 = latticeValues[1], a3 = latticeValues[2];
+    const b1 = latticeValues[3], b2 = latticeValues[4], b3 = latticeValues[5];
+    const c1 = latticeValues[6], c2 = latticeValues[7], c3 = latticeValues[8];
+    
+    // Calculate lattice parameters
+    const a = Math.sqrt(a1*a1 + a2*a2 + a3*a3);
+    const b = Math.sqrt(b1*b1 + b2*b2 + b3*b3);
+    const c = Math.sqrt(c1*c1 + c2*c2 + c3*c3);
+    
+    // Calculate angles
+    const alpha = Math.acos((b1*c1 + b2*c2 + b3*c3) / (b * c)) * 180 / Math.PI;
+    const beta = Math.acos((a1*c1 + a2*c2 + a3*c3) / (a * c)) * 180 / Math.PI;
+    const gamma = Math.acos((a1*b1 + a2*b2 + a3*b3) / (a * b)) * 180 / Math.PI;
+    
+    // Calculate volume
+    const volume = this.calculateVolume(a, b, c, alpha, beta, gamma);
+    
+    return { a, b, c, alpha, beta, gamma, volume };
+  }
+
+  /**
+   * Convert array of XYZ frame strings to PDB format
+   */
+  static convertFramesToPDB(frames: string[], moleculeName = 'MOL'): string {
+    let pdbContent = '';
+    
+    frames.forEach((xyzFrame, frameIndex) => {
+      pdbContent += `MODEL     ${(frameIndex + 1).toString().padStart(4, ' ')}\n`;
+      
+      const lines = xyzFrame.trim().split('\n');
+      const numAtoms = parseInt(lines[0]);
+      const commentLine = lines[1] || '';
+      
+      // Parse lattice information if present
+      const latticeInfo = this.parseLatticeInfo(commentLine);
+      if (latticeInfo) {
+        // Add CRYST1 record for unit cell information
+        const a = latticeInfo.a.toFixed(3).padStart(9, ' ');
+        const b = latticeInfo.b.toFixed(3).padStart(9, ' ');
+        const c = latticeInfo.c.toFixed(3).padStart(9, ' ');
+        const alpha = latticeInfo.alpha.toFixed(2).padStart(7, ' ');
+        const beta = latticeInfo.beta.toFixed(2).padStart(7, ' ');
+        const gamma = latticeInfo.gamma.toFixed(2).padStart(7, ' ');
+        
+        pdbContent += `CRYST1${a}${b}${c}${alpha}${beta}${gamma} P 1           1\n`;
+      }
+      
+      for (let i = 0; i < numAtoms; i++) {
+        const atomLine = lines[i + 2];
+        const parts = atomLine.trim().split(/\s+/);
+        const element = parts[0];
+        const x = parseFloat(parts[1]);
+        const y = parseFloat(parts[2]);
+        const z = parseFloat(parts[3]);
+        
+        const atomNum = (i + 1).toString().padStart(5, ' ');
+        const atomName = element.padEnd(4, ' ');
+        const resName = moleculeName.substring(0, 3).padEnd(3, ' ');
+        const chainID = 'A';
+        const resSeq = '1'.padStart(4, ' ');
+        
+        // Format coordinates to PDB standard
+        const xStr = x.toFixed(3).padStart(8, ' ');
+        const yStr = y.toFixed(3).padStart(8, ' ');
+        const zStr = z.toFixed(3).padStart(8, ' ');
+        
+        // Create ATOM record following PDB format
+        pdbContent += `ATOM  ${atomNum} ${atomName} ${resName} ${chainID}${resSeq}    ${xStr}${yStr}${zStr}  1.00  0.00           ${element.padEnd(2, ' ')}\n`;
+      }
+      
+      pdbContent += 'ENDMDL\n';
+    });
+    
+    pdbContent += 'END\n';
+    return pdbContent;
+  }
+
+  /**
+   * Parse multi-frame XYZ trajectory string into individual frames
+   */
+  private static parseXYZTrajectory(trajectory: string): string[] {
+    const frames: string[] = [];
+    const lines = trajectory.trim().split('\n');
+    let i = 0;
+    
+    while (i < lines.length) {
+      if (!lines[i] || lines[i].trim() === '') {
+        i++;
+        continue;
+      }
+      
+      const numAtoms = parseInt(lines[i]);
+      if (isNaN(numAtoms) || numAtoms <= 0) {
+        i++;
+        continue;
+      }
+      
+      // Check if we have enough lines for this frame
+      if (i + numAtoms + 1 >= lines.length) {
+        break;
+      }
+      
+      // Extract this frame
+      const frameLines = lines.slice(i, i + numAtoms + 2);
+      frames.push(frameLines.join('\n'));
+      
+      i += numAtoms + 2;
+    }
+    
+    return frames;
+  }
+}
+
 interface TrajectoryViewerProps {
   trajectoryData?: string;  // Multi-frame XYZ data
   xyzFrames?: string[];     // Or already parsed frames
@@ -36,13 +302,26 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   const [frameComments, setFrameComments] = useState<string[]>([]);
   const [minEnergy, setMinEnergy] = useState<number | null>(null);
   const [showOverlayControls, setShowOverlayControls] = useState<boolean>(false);
+  const [hasLattice, setHasLattice] = useState<boolean>(false);
+  const [showUnitCell, setShowUnitCell] = useState<boolean>(false);
+  const [supercellX, setSupercellX] = useState<number>(1);
+  const [supercellY, setSupercellY] = useState<number>(1);
+  const [supercellZ, setSupercellZ] = useState<number>(1);
+  const [frameVolumes, setFrameVolumes] = useState<(number | null)[]>([]);
+  const [customUnitCell, setCustomUnitCell] = useState<CustomUnitCellRepresentation | null>(null);
+
+  // Get theme-aware background color
+  const getBackgroundColor = () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark ? '#1b1b1d' : '#ffffff';
+  };
 
   // Initialize NGL Stage
   useEffect(() => {
     if (!stageRef.current) return;
 
     nglStageRef.current = new NGL.Stage(stageRef.current, {
-      backgroundColor: 'white',
+      backgroundColor: getBackgroundColor(),
       quality: 'medium',
       clipNear: 0.000001,
       clipFar: 100,
@@ -57,28 +336,36 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
 
     window.addEventListener('resize', handleResize);
 
+    // Listen for theme changes
+    const handleThemeChange = () => {
+      if (nglStageRef.current) {
+        nglStageRef.current.setParameters({ backgroundColor: getBackgroundColor() });
+      }
+    };
+
+    // Use MutationObserver to watch for theme changes
+    const observer = new MutationObserver(handleThemeChange);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    });
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      observer.disconnect();
       if (nglStageRef.current) {
         nglStageRef.current.dispose();
       }
     };
   }, []);
 
-  // Parse energy from comment line
-  const parseEnergyFromComment = (comment: string): number | null => {
-    // Skip normal mode comments entirely
-    if (comment.includes('cm⁻¹') || comment.includes('cm-1') || comment.toLowerCase().includes('mode')) {
-      return null;
-    }
-    
-    // Look for patterns like "Energy=-228.523534709", "E = -150.234", or "E -1431.486658226695"
+  // Parse energy from extended XYZ comment line
+  const parseExtendedXYZEnergy = (comment: string): number | null => {
+    // Extended XYZ format: Energy=value or E=value in the comment line
     const energyPatterns = [
       /Energy\s*=\s*(-?\d+\.?\d*)/i,
       /E\s*=\s*(-?\d+\.?\d*)/i,
-      /E\s+(-?\d+\.?\d*)/i,  // ORCA format: "E -1431.486658226695"
-      /energy:\s*(-?\d+\.?\d*)/i,
-      /(-?\d+\.\d+)\s*(?:hartree|ha|au)/i
+      /energy:\s*(-?\d+\.?\d*)/i
     ];
     
     for (const pattern of energyPatterns) {
@@ -90,16 +377,104 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
         }
       }
     }
-    
     return null;
   };
 
+  // Parse energy from ORCA trajectory comment line
+  const parseORCAEnergy = (comment: string): number | null => {
+    // ORCA format: "ORCA...blah... E -1431.486658226695"
+    if (comment.toUpperCase().includes('ORCA')) {
+      const match = comment.match(/E\s+(-?\d+\.?\d*)/i);
+      if (match) {
+        const energy = parseFloat(match[1]);
+        if (!isNaN(energy)) {
+          return energy;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Parse energy from comment line using appropriate format
+  const parseEnergyFromComment = (comment: string): number | null => {
+    // Skip normal mode comments entirely
+    if (comment.includes('cm⁻¹') || comment.includes('cm-1') || comment.toLowerCase().includes('mode')) {
+      return null;
+    }
+    
+    // Skip Frame= metadata lines
+    if (comment.includes('Frame=')) {
+      return null;
+    }
+    
+    // Try ORCA format first (more specific)
+    if (comment.toUpperCase().includes('ORCA')) {
+      return parseORCAEnergy(comment);
+    }
+    
+    // Try extended XYZ format if it contains energy-related keywords
+    if (comment.includes('Energy=') || comment.includes('E=') || comment.includes('energy:')) {
+      return parseExtendedXYZEnergy(comment);
+    }
+    
+    // For lattice-containing lines, only parse energy if explicit energy keywords are present
+    if (comment.includes('Lattice=')) {
+      return parseExtendedXYZEnergy(comment);
+    }
+    
+    // Default: don't try to parse energy from arbitrary lines
+    return null;
+  };
+
+  // Parse volume from comment line if lattice information is present
+  const parseVolumeFromComment = (comment: string): number | null => {
+    // Parse lattice information directly
+    const latticeMatch = comment.match(/Lattice="([^"]+)"/);
+    if (!latticeMatch) return null;
+    
+    const latticeValues = latticeMatch[1].split(/\s+/).map(v => parseFloat(v));
+    if (latticeValues.length !== 9) return null;
+    
+    // Parse lattice vectors: [a1 a2 a3 b1 b2 b3 c1 c2 c3]
+    const a1 = latticeValues[0], a2 = latticeValues[1], a3 = latticeValues[2];
+    const b1 = latticeValues[3], b2 = latticeValues[4], b3 = latticeValues[5];
+    const c1 = latticeValues[6], c2 = latticeValues[7], c3 = latticeValues[8];
+    
+    // Calculate lattice parameters
+    const a = Math.sqrt(a1*a1 + a2*a2 + a3*a3);
+    const b = Math.sqrt(b1*b1 + b2*b2 + b3*b3);
+    const c = Math.sqrt(c1*c1 + c2*c2 + c3*c3);
+    
+    // Calculate angles
+    const alpha = Math.acos((b1*c1 + b2*c2 + b3*c3) / (b * c)) * 180 / Math.PI;
+    const beta = Math.acos((a1*c1 + a2*c2 + a3*c3) / (a * c)) * 180 / Math.PI;
+    const gamma = Math.acos((a1*b1 + a2*b2 + a3*b3) / (a * b)) * 180 / Math.PI;
+    
+    // Calculate volume using the formula for triclinic cells
+    const alphaRad = alpha * Math.PI / 180;
+    const betaRad = beta * Math.PI / 180;
+    const gammaRad = gamma * Math.PI / 180;
+    
+    const cosAlpha = Math.cos(alphaRad);
+    const cosBeta = Math.cos(betaRad);
+    const cosGamma = Math.cos(gammaRad);
+    
+    const volume = a * b * c * Math.sqrt(
+      1 + 2 * cosAlpha * cosBeta * cosGamma - 
+      cosAlpha * cosAlpha - cosBeta * cosBeta - cosGamma * cosGamma
+    );
+    
+    return volume;
+  };
+
   // Parse XYZ frames from multi-frame string
-  const parseXYZFrames = (xyzText: string): string[] => {
+  const parseXYZFrames = (xyzText: string): { frames: string[], comments: string[], hasLattice: boolean } => {
     const lines = xyzText.trim().split('\n');
     const frames: string[] = [];
     const energies: (number | null)[] = [];
     const comments: string[] = [];
+    const volumes: (number | null)[] = [];
+    let latticeDetected = false;
     let i = 0;
     
     while (i < lines.length) {
@@ -112,80 +487,45 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       const frameLines = lines.slice(i, i + numAtoms + 2);
       frames.push(frameLines.join('\n'));
       
-      // Extract comment line and parse energy
+      // Extract comment line and parse energy and volume
       const commentLine = lines[i + 1] || '';
       comments.push(commentLine);
       const energy = parseEnergyFromComment(commentLine);
-      console.log(`Comment: "${commentLine}" -> Energy: ${energy}`);
       energies.push(energy);
+      
+      // Parse volume if lattice information is present
+      const volume = parseVolumeFromComment(commentLine);
+      volumes.push(volume);
+      
+      // Check for lattice information in the comment line
+      if (commentLine.includes('Lattice=')) {
+        latticeDetected = true;
+      }
       
       i += numAtoms + 2;
     }
     
-    // Debug logging
-    console.log('Parsed energies:', energies);
-    console.log('Comments:', comments);
-    
     // Store parsed data
     setFrameEnergies(energies);
     setFrameComments(comments);
+    setFrameVolumes(volumes);
+    setHasLattice(latticeDetected);
     
     // Find minimum energy for relative calculations
     const validEnergies = energies.filter(e => e !== null) as number[];
-    console.log('Valid energies:', validEnergies);
     if (validEnergies.length > 0) {
       setMinEnergy(Math.min(...validEnergies));
-      console.log('Set minEnergy to:', Math.min(...validEnergies));
     } else {
       setMinEnergy(null);
-      console.log('Set minEnergy to: null');
     }
     
-    return frames;
+    return { frames, comments, hasLattice: latticeDetected };
   };
 
   // Convert XYZ frames to multi-model PDB format
-  const convertXYZToPDB = (frames: string[]): string => {
-    let pdbContent = '';
-    
-    frames.forEach((xyzFrame, frameIndex) => {
-      pdbContent += `MODEL     ${(frameIndex + 1).toString().padStart(4, ' ')}\n`;
-      
-      const lines = xyzFrame.trim().split('\n');
-      const numAtoms = parseInt(lines[0]);
-      
-      for (let i = 0; i < numAtoms; i++) {
-        const atomLine = lines[i + 2];
-        const parts = atomLine.trim().split(/\s+/);
-        const element = parts[0];
-        const x = parseFloat(parts[1]);
-        const y = parseFloat(parts[2]);
-        const z = parseFloat(parts[3]);
-        
-        const atomNum = (i + 1).toString().padStart(5, ' ');
-        const atomName = element.padEnd(4, ' ');
-        const resName = 'MOL';
-        const chainID = 'A';
-        const resNum = '1'.padStart(4, ' ');
-        const xCoord = x.toFixed(3).padStart(8, ' ');
-        const yCoord = y.toFixed(3).padStart(8, ' ');
-        const zCoord = z.toFixed(3).padStart(8, ' ');
-        const occupancy = '1.00'.padStart(6, ' ');
-        const tempFactor = '0.00'.padStart(6, ' ');
-        const elementSymbol = element.padStart(2, ' ');
-        
-        pdbContent += `ATOM  ${atomNum} ${atomName} ${resName} ${chainID}${resNum}    ${xCoord}${yCoord}${zCoord}${occupancy}${tempFactor}          ${elementSymbol}\n`;
-      }
-      
-      pdbContent += 'ENDMDL\n';
-    });
-    
-    pdbContent += 'END\n';
-    return pdbContent;
-  };
 
   // Load trajectory
-  const loadTrajectory = async (frames: string[]) => {
+  const loadTrajectory = async (frames: string[], comments: string[] = [], latticeDetected: boolean = false) => {
     if (!nglStageRef.current) return;
     
     setIsLoading(true);
@@ -197,8 +537,8 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       trajectoryRef.current = null;
       playerRef.current = null;
       
-      // Convert to PDB format
-      const pdbData = convertXYZToPDB(frames);
+      // Convert to PDB format using the new PDBConverter
+      const pdbData = PDBConverter.convertFramesToPDB(frames, moleculeName);
       const blob = new Blob([pdbData], { type: 'text/plain' });
       
       // Load with trajectory support
@@ -257,6 +597,20 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       // Auto view
       nglStageRef.current.autoView();
       
+      // Create custom unit cell representation if we have lattice data
+      console.log('Trajectory loaded. latticeDetected:', latticeDetected, 'comments.length:', comments.length);
+      if (latticeDetected && comments.length > 0) {
+        console.log('Creating CustomUnitCellRepresentation...');
+        const unitCell = new CustomUnitCellRepresentation(structure, nglStageRef.current);
+        unitCell.setFrameUnitcells(comments);
+        setCustomUnitCell(unitCell);
+        setHasLattice(true);
+        console.log('CustomUnitCellRepresentation created:', unitCell);
+      } else {
+        console.log('Not creating unit cell: latticeDetected =', latticeDetected, 'comments =', comments.length);
+        setHasLattice(false);
+      }
+      
       // Auto play if requested
       if (autoPlay && playerRef.current) {
         setTimeout(() => playerRef.current.play(), 500);
@@ -306,6 +660,118 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     nglStageRef.current?.autoView();
   };
 
+  // Generate supercell by replicating atoms with lattice translations
+  const generateSupercell = (xyzFrames: string[]): string[] => {
+    if (supercellX === 1 && supercellY === 1 && supercellZ === 1) {
+      return xyzFrames; // No supercell needed
+    }
+
+    return xyzFrames.map(frame => {
+      const lines = frame.trim().split('\n');
+      const numAtoms = parseInt(lines[0]);
+      const commentLine = lines[1] || '';
+      
+      // Parse lattice information
+      const latticeMatch = commentLine.match(/Lattice="([^"]+)"/);
+      if (!latticeMatch) {
+        return frame; // No lattice info, return original
+      }
+      
+      const latticeValues = latticeMatch[1].split(/\s+/).map(v => parseFloat(v));
+      if (latticeValues.length !== 9) {
+        return frame; // Invalid lattice, return original
+      }
+      
+      // Lattice vectors: [a1 a2 a3 b1 b2 b3 c1 c2 c3]
+      const a = [latticeValues[0], latticeValues[1], latticeValues[2]];
+      const b = [latticeValues[3], latticeValues[4], latticeValues[5]];
+      const c = [latticeValues[6], latticeValues[7], latticeValues[8]];
+      
+      // Parse original atoms
+      const originalAtoms = [];
+      for (let i = 0; i < numAtoms; i++) {
+        const atomLine = lines[i + 2];
+        const parts = atomLine.trim().split(/\s+/);
+        originalAtoms.push({
+          element: parts[0],
+          x: parseFloat(parts[1]),
+          y: parseFloat(parts[2]),
+          z: parseFloat(parts[3])
+        });
+      }
+      
+      // Generate supercell atoms
+      const supercellAtoms = [];
+      for (let nx = 0; nx < supercellX; nx++) {
+        for (let ny = 0; ny < supercellY; ny++) {
+          for (let nz = 0; nz < supercellZ; nz++) {
+            // Calculate translation vector
+            const translation = [
+              nx * a[0] + ny * b[0] + nz * c[0],
+              nx * a[1] + ny * b[1] + nz * c[1],
+              nx * a[2] + ny * b[2] + nz * c[2]
+            ];
+            
+            // Add translated atoms
+            originalAtoms.forEach(atom => {
+              supercellAtoms.push({
+                element: atom.element,
+                x: atom.x + translation[0],
+                y: atom.y + translation[1],
+                z: atom.z + translation[2]
+              });
+            });
+          }
+        }
+      }
+      
+      // Build supercell frame
+      const supercellLines = [supercellAtoms.length.toString()];
+      
+      // Update comment line to reflect supercell
+      const updatedComment = commentLine.replace(
+        /Lattice="([^"]+)"/,
+        (match, latticeStr) => {
+          // Scale lattice vectors by supercell dimensions
+          const scaledLattice = [
+            a[0] * supercellX, a[1] * supercellX, a[2] * supercellX,
+            b[0] * supercellY, b[1] * supercellY, b[2] * supercellY,
+            c[0] * supercellZ, c[1] * supercellZ, c[2] * supercellZ
+          ];
+          return `Lattice="${scaledLattice.join(' ')}"`;
+        }
+      );
+      supercellLines.push(updatedComment);
+      
+      // Add atom lines
+      supercellAtoms.forEach(atom => {
+        supercellLines.push(`${atom.element}  ${atom.x.toFixed(6)}  ${atom.y.toFixed(6)}  ${atom.z.toFixed(6)}`);
+      });
+      
+      return supercellLines.join('\n');
+    });
+  };
+
+  // Update unit cell visualization using our custom representation
+  const updateCellVisualization = () => {
+    if (!customUnitCell || !hasLattice) return;
+    
+    if (showUnitCell) {
+      // Update the custom unit cell for the current frame
+      customUnitCell.updateFrame(currentFrame);
+      customUnitCell.setVisible(true);
+    } else {
+      customUnitCell.setVisible(false);
+    }
+  };
+
+  // Remove unit cell visualization
+  const removeCellVisualization = () => {
+    if (customUnitCell) {
+      customUnitCell.remove();
+    }
+  };
+
   // Load trajectory when data changes
   useEffect(() => {
     // Cleanup function to stop any ongoing operations
@@ -326,25 +792,49 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     };
 
     if (trajectoryData) {
-      const frames = parseXYZFrames(trajectoryData);
-      if (frames.length > 0) {
+      const parsed = parseXYZFrames(trajectoryData);
+      if (parsed.frames.length > 0) {
         cleanup();
+        // Apply supercell generation if needed
+        const processedFrames = generateSupercell(parsed.frames);
         // Small delay to ensure cleanup is complete
-        setTimeout(() => loadTrajectory(frames), 50);
+        setTimeout(() => loadTrajectory(processedFrames, parsed.comments, parsed.hasLattice), 50);
       }
     } else if (xyzFrames && xyzFrames.length > 0) {
       cleanup();
-      setTimeout(() => loadTrajectory(xyzFrames), 50);
+      // For xyzFrames, we need to parse comments from the frames themselves
+      // Convert frames back to text and parse
+      const xyzText = xyzFrames.join('\n\n');
+      const parsed = parseXYZFrames(xyzText);
+      // Apply supercell generation if needed
+      const processedFrames = generateSupercell(parsed.frames);
+      setTimeout(() => loadTrajectory(processedFrames, parsed.comments, parsed.hasLattice), 50);
     }
 
     // Return cleanup function for component unmount
     return cleanup;
-  }, [trajectoryData, xyzFrames]);
+  }, [trajectoryData, xyzFrames, supercellX, supercellY, supercellZ]);
 
   // Update representation when settings change
   useEffect(() => {
     updateRepresentation();
   }, [representation, showHydrogens, colorScheme]);
+
+  // Update cell visualization when settings change
+  useEffect(() => {
+    if (showUnitCell) {
+      updateCellVisualization();
+    } else {
+      removeCellVisualization();
+    }
+  }, [showUnitCell, supercellX, supercellY, supercellZ, hasLattice, customUnitCell]);
+
+  // Update unit cell when frame changes (if enabled)
+  useEffect(() => {
+    if (showUnitCell && hasLattice) {
+      updateCellVisualization();
+    }
+  }, [currentFrame, showUnitCell, hasLattice, customUnitCell]);
 
   // Playback controls
   const play = () => {
@@ -519,14 +1009,7 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
                 {frameComments[currentFrame]}
               </div>
             )}
-            {(() => {
-              console.log('Energy display check:', {
-                currentFrameEnergy: frameEnergies[currentFrame],
-                minEnergy,
-                shouldShow: frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null
-              });
-              return frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null;
-            })() && (
+            {frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null && (
               <div className={styles.frameEnergy}>
                 {(() => {
                   const currentEnergy = frameEnergies[currentFrame]!;
@@ -535,6 +1018,11 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
                   const sign = relativeEnergy >= 0 ? '+' : '';
                   return `${sign}${relativeKJ.toFixed(2)} kJ/mol`;
                 })()}
+              </div>
+            )}
+            {frameVolumes[currentFrame] !== null && frameVolumes[currentFrame] !== undefined && (
+              <div className={styles.frameVolume}>
+                Volume: {frameVolumes[currentFrame]!.toFixed(2)} Å³
               </div>
             )}
           </div>
@@ -599,6 +1087,64 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
                 />
                 <span className={styles.overlayValue}>{playbackFPS}</span>
               </div>
+              
+              {/* Unit cell controls - only show when lattice is available */}
+              {hasLattice && (
+                <>
+                  <div className={styles.overlayControlGroup}>
+                    <input 
+                      type="checkbox" 
+                      checked={showUnitCell}
+                      onChange={(e) => setShowUnitCell(e.target.checked)}
+                      id="showUnitCell-overlay"
+                      className={styles.overlayCheckbox}
+                    />
+                    <label htmlFor="showUnitCell-overlay" className={styles.overlayLabel}>
+                      Show Unit Cell
+                    </label>
+                  </div>
+                  
+                  {showUnitCell && (
+                    <>
+                      <div className={styles.overlayControlGroup}>
+                        <label className={styles.overlayLabel}>Supercell X:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={supercellX}
+                          onChange={(e) => setSupercellX(parseInt(e.target.value) || 1)}
+                          className={styles.overlayNumberInput}
+                        />
+                      </div>
+                      
+                      <div className={styles.overlayControlGroup}>
+                        <label className={styles.overlayLabel}>Supercell Y:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={supercellY}
+                          onChange={(e) => setSupercellY(parseInt(e.target.value) || 1)}
+                          className={styles.overlayNumberInput}
+                        />
+                      </div>
+                      
+                      <div className={styles.overlayControlGroup}>
+                        <label className={styles.overlayLabel}>Supercell Z:</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="5"
+                          value={supercellZ}
+                          onChange={(e) => setSupercellZ(parseInt(e.target.value) || 1)}
+                          className={styles.overlayNumberInput}
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}

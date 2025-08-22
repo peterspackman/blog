@@ -16,6 +16,8 @@ interface CalculationSettingsProps {
   setOptimize: (optimize: boolean) => void;
   computeFrequencies: boolean;
   setComputeFrequencies: (compute: boolean) => void;
+  charge: number;
+  setCharge: (charge: number) => void;
 }
 
 const CalculationSettings: React.FC<CalculationSettingsProps> = ({
@@ -32,7 +34,9 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
   optimize,
   setOptimize,
   computeFrequencies,
-  setComputeFrequencies
+  setComputeFrequencies,
+  charge,
+  setCharge
 }) => {
   return (
     <>
@@ -71,6 +75,21 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="aug-pcseg-1">aug-pc-1</option>
             <option value="aug-pcseg-2">aug-pc-2</option>
           </select>
+        </div>
+        
+        <div className={styles.field}>
+          <label>Molecular Charge</label>
+          <input
+            type="number"
+            min="-5"
+            max="5"
+            step="1"
+            value={charge}
+            onChange={(e) => setCharge(parseInt(e.target.value) || 0)}
+          />
+          <small className={styles.fieldDescription}>
+            Net charge on the molecule (restricted to even electron counts)
+          </small>
         </div>
       </div>
 

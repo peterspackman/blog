@@ -18,6 +18,21 @@ interface CalculationResult {
   };
   matrices?: any;
   orbitalEnergies?: number[];
+  optimization?: {
+    trajectory: {
+      energies: number[];
+      gradientNorms: number[];
+      geometries: string[];
+      converged: boolean;
+      steps: number;
+      finalEnergy: number;
+      finalMolecule: any;
+    };
+    finalXYZ: string;
+    steps: number;
+    energies: number[];
+    gradientNorms: number[];
+  };
 }
 
 interface ResultsDisplayProps {
@@ -70,6 +85,22 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
         mimeType = 'application/json';
         break;
     }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadOptimizedXYZ = () => {
+    if (!results.optimization?.finalXYZ) return;
+
+    const content = results.optimization.finalXYZ;
+    const filename = 'optimized_geometry.xyz';
+    const mimeType = 'text/plain';
 
     const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
@@ -146,6 +177,37 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
             >
               ↓ FCHK {!results.wavefunctionData.fchk && '(unavailable)'}
             </button>
+          </div>
+        </div>
+      )}
+      
+      {results.optimization && (
+        <div className={styles.exportSection}>
+          <h4>Export Optimized Geometry</h4>
+          <div className={styles.exportButtons}>
+            <button 
+              className={styles.exportButton}
+              onClick={downloadOptimizedXYZ}
+              title="Download optimized geometry in XYZ format"
+            >
+              ↓ Optimized XYZ
+            </button>
+          </div>
+          <div className={styles.optimizationInfo}>
+            <div className={styles.infoItem}>
+              <span>Status:</span>
+              <span className={`${styles.convergenceStatus} ${results.optimization.trajectory.converged ? styles.converged : styles.notConverged}`}>
+                {results.optimization.trajectory.converged ? '✓ Converged' : '✗ Not Converged'}
+              </span>
+            </div>
+            <div className={styles.infoItem}>
+              <span>Steps:</span>
+              <span>{results.optimization.steps}</span>
+            </div>
+            <div className={styles.infoItem}>
+              <span>Final Energy:</span>
+              <span>{results.energy.toFixed(8)} Eh</span>
+            </div>
           </div>
         </div>
       )}

@@ -124,10 +124,26 @@ async function runCalculation(params) {
         
         const molecule = await OCC.moleculeFromXYZ(params.xyzData);
         
+        // Set molecular charge if provided
+        if (params.charge !== undefined && params.charge !== 0) {
+            molecule.setCharge(params.charge);
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: `Molecular charge set to: ${params.charge}` 
+            });
+        }
+        
+        // Validate electron count for restricted calculations
+        const numElectrons = molecule.numElectrons();
+        if (numElectrons % 2 !== 0) {
+            throw new Error(`Unrestricted calculations are not supported. Molecule has ${numElectrons} electrons (odd number). Please adjust the charge to get an even number of electrons.`);
+        }
+        
         postMessage({ 
             type: 'log', 
             level: 2, 
-            message: `Molecule created: ${molecule.size()} atoms` 
+            message: `Molecule created: ${molecule.size()} atoms, ${numElectrons} electrons (charge: ${params.charge || 0})` 
         });
         
         // Create calculation

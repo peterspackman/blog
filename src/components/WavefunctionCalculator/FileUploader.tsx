@@ -110,12 +110,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
         return { isValid: false, error: `Expected ${numAtoms} atom lines, but found ${atomLines.length}` };
       }
       
-      // Validate each atom line
-      const validElements = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 
-                            'Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar', 'K', 'Ca',
-                            'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn',
-                            'Ga', 'Ge', 'As', 'Se', 'Br', 'Kr'];
-      
+      // Validate each atom line (basic format validation only - OCC will handle element validation)
       for (let i = 0; i < numAtoms; i++) {
         const parts = atomLines[i].trim().split(/\s+/);
         if (parts.length < 4) {
@@ -123,8 +118,9 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
         }
         
         const element = parts[0];
-        if (!validElements.includes(element)) {
-          return { isValid: false, error: `Line ${i + 3}: Unknown element '${element}'` };
+        // Basic check for valid element symbol format (starts with capital letter)
+        if (!/^[A-Z][a-z]?$/.test(element)) {
+          return { isValid: false, error: `Line ${i + 3}: Invalid element symbol format '${element}'` };
         }
         
         for (let j = 1; j <= 3; j++) {
