@@ -59,26 +59,78 @@ const config: Config = {
         name: 'occjs-webpack-plugin',
         configureWebpack(config, isServer, utils) {
           return {
+            devServer: {
+              headers: {
+                'Cross-Origin-Embedder-Policy': 'require-corp',
+                'Cross-Origin-Opener-Policy': 'same-origin',
+              },
+              static: {
+                serveIndex: true,
+              },
+              // Add proper MIME types for WebAssembly
+              onBeforeSetupMiddleware: (devServer) => {
+                devServer.app.use((req, res, next) => {
+                  if (req.url.endsWith('.wasm')) {
+                    res.setHeader('Content-Type', 'application/wasm');
+                  }
+                  next();
+                });
+              },
+            },
             module: {
               rules: [
                 {
-                  test: /node_modules\/@peterspackman\/occjs\/dist\/occjs\.js$/,
-                  use: {
-                    loader: 'string-replace-loader',
-                    options: {
-                      search: /await import\("module"\)/g,
-                      replace: '(function() { throw new Error("Node.js module not available in browser"); })()',
-                      flags: 'g'
+                  test: /occjs\.js$/,
+                  use: [
+                    {
+                      loader: 'string-replace-loader',
+                      options: {
+                        search: /await import\("module"\)/g,
+                        replace: '(function() { throw new Error("Node.js module not available in browser"); })()',
+                        flags: 'g'
+                      }
+                    },
+                    {
+                      loader: 'string-replace-loader',
+                      options: {
+                        search: /require\(['"]worker_threads['"]\)/g,
+                        replace: 'null',
+                        flags: 'g'
+                      }
+                    },
+                    {
+                      loader: 'string-replace-loader',
+                      options: {
+                        search: /import.*from ['"]worker_threads['"];?/g,
+                        replace: '// worker_threads import removed for browser',
+                        flags: 'g'
+                      }
                     }
-                  }
+                  ]
+                },
+                {
+                  test: /\.wasm$/,
+                  type: 'asset/resource',
                 }
               ]
             },
             resolve: {
               fallback: {
-                // Only fallback for occjs package
+                // Fallbacks for Node.js modules used by occjs and lmpjs
                 module: false,
+                worker_threads: false,
+                fs: false,
+                path: false,
+                crypto: false,
+                os: false,
+                util: false,
+                stream: false,
+                buffer: false,
+                events: false,
               }
+            },
+            experiments: {
+              asyncWebAssembly: true,
             }
           };
         },
@@ -94,6 +146,7 @@ const config: Config = {
       crossorigin: "anonymous",
     },
   ],
+
 
   themeConfig: {
     image: 'img/docusaurus-social-card.jpg',
@@ -138,6 +191,10 @@ const config: Config = {
             {
               label: 'SMILES Viewer',
               to: '/utilities/smiles-viewer',
+            },
+            {
+              label: 'LAMMPS Interface',
+              to: '/utilities/lammps-interface',
             },
           ],
         },

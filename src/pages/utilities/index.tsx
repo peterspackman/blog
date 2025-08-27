@@ -23,6 +23,11 @@ const utilities = [
     title: 'SMILES Viewer',
     description: 'Convert SMILES strings to molecular structures. Instant 2D visualization powered by RDKit.js.',
     href: '/utilities/smiles-viewer'
+  },
+  {
+    title: 'LAMMPS Interface',
+    description: 'Run LAMMPS molecular dynamics simulations directly in your browser. Upload input files and run simulations using WebAssembly.',
+    href: '/utilities/lammps-interface'
   }
 ];
 
