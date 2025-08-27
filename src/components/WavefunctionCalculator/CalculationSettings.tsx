@@ -18,6 +18,8 @@ interface CalculationSettingsProps {
   setComputeFrequencies: (compute: boolean) => void;
   charge: number;
   setCharge: (charge: number) => void;
+  threads: number;
+  setThreads: (threads: number) => void;
 }
 
 const CalculationSettings: React.FC<CalculationSettingsProps> = ({
@@ -36,7 +38,9 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
   computeFrequencies,
   setComputeFrequencies,
   charge,
-  setCharge
+  setCharge,
+  threads,
+  setThreads
 }) => {
   return (
     <>
@@ -164,6 +168,20 @@ const CalculationSettings: React.FC<CalculationSettingsProps> = ({
             <option value="4">Error</option>
             <option value="5">Critical</option>
           </select>
+        </div>
+        
+        <div className={styles.field}>
+          <label>Number of Threads</label>
+          <input
+            type="number"
+            min="1"
+            max="16"
+            value={threads}
+            onChange={(e) => setThreads(parseInt(e.target.value) || 1)}
+          />
+          <small className={styles.fieldDescription}>
+            Number of parallel threads to use for calculations
+          </small>
         </div>
       </div>
     </>

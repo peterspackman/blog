@@ -31,6 +31,10 @@ self.addEventListener('message', async function(e) {
                 await computeCube(data);
                 break;
                 
+            case 'warmup':
+                await warmupCalculation();
+                break;
+                
             default:
                 postMessage({ type: 'error', error: `Unknown message type: ${type}` });
         }
@@ -154,6 +158,16 @@ async function runCalculation(params) {
         });
         
         const calc = await OCC.createQMCalculation(molecule, params.basisSet);
+        
+        // Set number of threads if specified
+        if (params.threads && params.threads > 0) {
+            occModule.setNumThreads(params.threads);
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: `Set number of threads to: ${params.threads}` 
+            });
+        }
         
         // Set up SCF settings
         const settings = new OCC.SCFSettings()
@@ -714,6 +728,16 @@ async function runOptimizationCalculation(params) {
     }
     
     try {
+        // Set number of threads if specified
+        if (params.threads && params.threads > 0) {
+            occModule.setNumThreads(params.threads);
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: `Set number of threads to: ${params.threads}` 
+            });
+        }
+        
         const result = await optimizationModule.runOptimization(params, OCC, occModule);
         
         // Convert optimization results to expected format
@@ -773,6 +797,52 @@ async function runOptimizationCalculation(params) {
             type: 'result',
             success: false,
             error: error.message
+        });
+    }
+}
+
+async function warmupCalculation() {
+    try {
+        postMessage({ type: 'log', level: 2, message: 'Warming up WebAssembly module with 8 threads...' });
+        
+        // Set thread count to 8 for warmup
+        if (occModule && occModule.setNumThreads) {
+            occModule.setNumThreads(8);
+            postMessage({ 
+                type: 'log', 
+                level: 2, 
+                message: 'Set warmup threads to 8' 
+            });
+        }
+        
+        // Create a simple H2 molecule for warmup
+        const h2XYZ = `2
+H2 molecule
+H  0.0  0.0  0.0
+H  0.0  0.0  0.74`;
+        
+        const molecule = await OCC.moleculeFromXYZ(h2XYZ);
+        const calc = await OCC.createQMCalculation(molecule, 'sto-3g');
+        
+        // Set up minimal SCF settings
+        const settings = new OCC.SCFSettings()
+            .setMaxIterations(5)
+            .setEnergyTolerance(1e-4);
+        
+        // Run a quick HF calculation to warm up the module and thread pool
+        await calc.scf(settings);
+        
+        postMessage({ 
+            type: 'log', 
+            level: 2, 
+            message: 'WebAssembly module and thread pool warmed up successfully' 
+        });
+        
+    } catch (error) {
+        postMessage({ 
+            type: 'log', 
+            level: 1, 
+            message: `Warmup failed (this is usually okay): ${error.message}` 
         });
     }
 }

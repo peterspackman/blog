@@ -93,6 +93,7 @@ const WavefunctionCalculator: React.FC = () => {
   const [optimize, setOptimize] = useState(false);
   const [computeFrequencies, setComputeFrequencies] = useState(false);
   const [charge, setCharge] = useState(0);
+  const [threads, setThreads] = useState(4);
   
   // Handle optimization toggle - turn off frequencies when optimization is disabled
   const handleOptimizeChange = (enabled: boolean) => {
@@ -140,6 +141,16 @@ const WavefunctionCalculator: React.FC = () => {
         type: 'init',
         data: {}
       });
+      
+      // Send warmup request after initialization
+      setTimeout(() => {
+        if (newWorker) {
+          newWorker.postMessage({
+            type: 'warmup',
+            data: {}
+          });
+        }
+      }, 100);
     } catch (error) {
       console.error('Failed to initialize worker:', error);
       setError('Failed to initialize Web Worker: ' + error.message);
@@ -342,7 +353,8 @@ const WavefunctionCalculator: React.FC = () => {
       energyTolerance,
       optimize,
       computeFrequencies,
-      charge
+      charge,
+      threads
     };
 
     addLog('Starting calculation...', 'info');
@@ -562,6 +574,8 @@ const WavefunctionCalculator: React.FC = () => {
                     setComputeFrequencies={setComputeFrequencies}
                     charge={charge}
                     setCharge={setCharge}
+                    threads={threads}
+                    setThreads={setThreads}
                   />
                 </div>
               )}
