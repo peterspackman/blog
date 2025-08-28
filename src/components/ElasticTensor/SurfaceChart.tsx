@@ -11,28 +11,22 @@ interface MultiSurfaceDataset {
 }
 
 const SurfaceChart: React.FC<{
-  data?: SurfaceData | null;
   multiSurfaceData?: MultiSurfaceDataset[];
   property: string;
   useScatter?: boolean;
-}> = ({ data, multiSurfaceData, property, useScatter = true }) => {
+}> = ({ multiSurfaceData, property, useScatter = true }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
     
-    // Use multi-tensor data if available, otherwise fall back to legacy data
-    const datasetsToUse = multiSurfaceData && multiSurfaceData.length > 0 
-      ? multiSurfaceData 
-      : (data ? [{ data, tensorId: 'legacy', name: 'Tensor', colorIndex: 0 }] : []);
-    
-    if (datasetsToUse.length === 0) return;
+    if (!multiSurfaceData || multiSurfaceData.length === 0) return;
 
     const chart = echarts.init(chartRef.current);
 
     // Calculate overall data range across all datasets for consistent scaling
     let allFlatData: number[] = [];
-    datasetsToUse.forEach(dataset => {
+    multiSurfaceData.forEach(dataset => {
       allFlatData = [...allFlatData, ...dataset.data.surfaceData.flat()];
     });
     allFlatData.sort((a, b) => a - b);
@@ -102,8 +96,8 @@ const SurfaceChart: React.FC<{
         }
       },
       legend: {
-        show: datasetsToUse.length > 1,
-        data: datasetsToUse.map(dataset => ({
+        show: multiSurfaceData.length > 1,
+        data: multiSurfaceData.map(dataset => ({
           name: dataset.name,
           itemStyle: {
             color: getComputedTensorColor(dataset.colorIndex)
@@ -113,7 +107,7 @@ const SurfaceChart: React.FC<{
           color: 'var(--ifm-color-emphasis-800)'
         }
       },
-      series: datasetsToUse.map((dataset, index) => {
+      series: multiSurfaceData.map((dataset, index) => {
         const tensorColor = getComputedTensorColor(dataset.colorIndex);
         console.log(`Tensor ${dataset.name} (index ${dataset.colorIndex}): color = ${tensorColor}`);
         const surfaceData = dataset.data;
@@ -207,7 +201,7 @@ const SurfaceChart: React.FC<{
       window.removeEventListener('resize', handleResize);
       chart.dispose();
     };
-  }, [data, multiSurfaceData, property, useScatter]);
+  }, [multiSurfaceData, property, useScatter]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', minHeight: '400px' }} />;
 };

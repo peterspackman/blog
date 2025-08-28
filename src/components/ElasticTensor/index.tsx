@@ -401,18 +401,6 @@ export const ElasticTensor: React.FC = () => {
         }
         break;
 
-      case 'analysisResult':
-        // Legacy support - no longer used with multi-tensor approach
-        setIsCalculating(false);
-        break;
-
-      case 'directionalDataResult':
-        // Legacy support - no longer used with multi-tensor approach
-        break;
-
-      case '3DSurfaceResult':
-        // Legacy support - no longer used with multi-tensor approach
-        break;
 
       case 'error':
         console.error('Worker error:', data.error);
@@ -505,11 +493,6 @@ export const ElasticTensor: React.FC = () => {
   };
 
 
-  // This function is no longer needed with the new unified analysis
-  const generateDirectionalDataForBoth = () => {
-    // Legacy function kept for compatibility - does nothing
-    console.log('generateDirectionalDataForBoth called but not needed with new unified analysis');
-  };
 
   const parseTensorInput = (input: string): number[][] => {
     const lines = input.trim().split('\n').filter(line => line.trim());

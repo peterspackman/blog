@@ -10,39 +10,23 @@ interface MultiTensorDataset {
 }
 
 const PolarChart: React.FC<{
-  data?: DirectionalData[];
   property: string;
   plane: string;
-  referenceData?: DirectionalData[];
-  comparisonMode?: boolean;
-  showDifference?: boolean;
-  testTensorName?: string;
-  referenceTensorName?: string;
   multiTensorData?: MultiTensorDataset[];
-}> = ({ data, property, plane, referenceData, comparisonMode = false, showDifference = false, testTensorName = 'Test Tensor', referenceTensorName = 'Reference Tensor', multiTensorData }) => {
+}> = ({ property, plane, multiTensorData }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!chartRef.current) return;
     
-    // Use multi-tensor data if available, otherwise fall back to legacy data
-    const datasetsToUse = multiTensorData && multiTensorData.length > 0 
-      ? multiTensorData 
-      : (data && data.length > 0 ? [{ 
-          data, 
-          tensorId: 'legacy', 
-          name: testTensorName, 
-          colorIndex: 0 
-        }] : []);
-    
-    if (datasetsToUse.length === 0) return;
+    if (!multiTensorData || multiTensorData.length === 0) return;
     
     const colors = getComputedTensorColors();
 
     const chart = echarts.init(chartRef.current);
 
     // Process all datasets and find overall ranges
-    const processedDatasets = datasetsToUse.map(dataset => {
+    const processedDatasets = multiTensorData.map(dataset => {
       const polarCoords = dataset.data.map(d => {
         // If WASM method provided x, y coordinates, use them
         if (d.x !== undefined && d.y !== undefined) {
@@ -227,7 +211,7 @@ const PolarChart: React.FC<{
         return series;
       })(),
       legend: {
-        show: datasetsToUse.length > 1,
+        show: multiTensorData.length > 1,
         top: 30,
         textStyle: {
           color: 'var(--ifm-color-emphasis-800)',
@@ -260,7 +244,7 @@ const PolarChart: React.FC<{
       window.removeEventListener('resize', handleResize);
       chart.dispose();
     };
-  }, [data, property, plane, referenceData, comparisonMode, showDifference, testTensorName, referenceTensorName, multiTensorData]);
+  }, [property, plane, multiTensorData]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', aspectRatio: '1/1' }} />;
 };
