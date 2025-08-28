@@ -178,6 +178,18 @@ function getComputedTensorColors() {
   };
 }
 
+// Helper function to get computed tensor color by index
+function getComputedTensorColor(colorIndex: number): string {
+  const computedStyle = getComputedStyle(document.documentElement);
+  const fallbackColors = [
+    '#ff6600', '#0066cc', '#009900', '#cc6600', '#9900cc',
+    '#00cc99', '#cc0099', '#6600cc', '#cc3300', '#0099cc'
+  ];
+  
+  return computedStyle.getPropertyValue(`--tensor-color-${colorIndex}`).trim() || 
+         fallbackColors[colorIndex % fallbackColors.length];
+}
+
 // Helper function to get text color based on background intensity
 function getMatrixTextColor(value: number, minValue: number, maxValue: number, isDifference: boolean = false): string {
   if (isDifference) {
@@ -203,5 +215,6 @@ export {
   TENSOR_COLORS,
   getTensorColor,
   getMatrixTextColor,
-  getComputedTensorColors
+  getComputedTensorColors,
+  getComputedTensorColor
 };

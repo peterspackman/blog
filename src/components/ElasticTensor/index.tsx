@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import 'echarts-gl';
 import styles from './ElasticTensor.module.css';
-import { 
-  AnalysisResult, 
-  DirectionalData, 
-  SurfaceData, 
+import {
+  AnalysisResult,
+  DirectionalData,
+  SurfaceData,
   ElasticProperties,
   getPropertyTitle,
   getPropertyUnit,
@@ -13,7 +13,8 @@ import {
   getDifferenceSign,
   copyTableToClipboard,
   TENSOR_COLORS,
-  getTensorColor
+  getTensorColor,
+  getComputedTensorColor
 } from './CommonFunctions';
 import { DirectionalChart } from './DirectionalChart';
 import { PolarChart } from './PolarChart';
@@ -34,20 +35,17 @@ export const ElasticTensor: React.FC = () => {
     data: number[][] | null;
     isSelected: boolean;
   }
-  
+
   const [selectedTensors, setSelectedTensors] = useState<TensorInfo[]>([]);
   const [tensorAnalysisResults, setTensorAnalysisResults] = useState<{ [id: string]: any }>({});
-  const [primaryTensorId, setPrimaryTensorId] = useState<string>('');
-  const [comparisonTensorId, setComparisonTensorId] = useState<string | null>(null);
-  
+
   // UI state
   const [selectedProperty, setSelectedProperty] = useState<string>('youngs');
   const [selectedPlane, setSelectedPlane] = useState<string>('xy');
   const [show3D, setShow3D] = useState<boolean>(false);
   const [use3DScatter, setUse3DScatter] = useState<boolean>(true);
-  const [comparisonMode, setComparisonMode] = useState<boolean>(false);
   const [showDifference, setShowDifference] = useState<boolean>(false);
-  
+
   // Helper functions for tensor management
   const addTensor = () => {
     const newId = `tensor-${Date.now()}`;
@@ -57,93 +55,121 @@ export const ElasticTensor: React.FC = () => {
     ]);
     return newId;
   };
-  
+
   const removeTensor = (id: string) => {
     setSelectedTensors(prev => prev.filter(t => t.id !== id));
-    if (primaryTensorId === id) {
-      const remaining = selectedTensors.filter(t => t.id !== id);
-      setPrimaryTensorId(remaining[0]?.id || '');
-    }
-    if (comparisonTensorId === id) {
-      setComparisonTensorId(null);
-    }
   };
-  
+
   const updateTensor = (id: string, updates: Partial<TensorInfo>) => {
-    setSelectedTensors(prev => prev.map(t => 
+    setSelectedTensors(prev => prev.map(t =>
       t.id === id ? { ...t, ...updates } : t
     ));
   };
-  
-  // Computed values for backward compatibility
-  const primaryTensor = selectedTensors.find(t => t.id === primaryTensorId);
-  const comparisonTensor = comparisonTensorId ? selectedTensors.find(t => t.id === comparisonTensorId) : null;
-  
-  const tensorInput = primaryTensor?.input || '';
-  const tensorData = primaryTensor?.data || null;
-  const referenceTensorInput = comparisonTensor?.input || '';
-  const referenceTensorData = comparisonTensor?.data || null;
-  
-  const analysisResults = primaryTensor ? tensorAnalysisResults[primaryTensor.id] : null;
-  const referenceAnalysisResults = comparisonTensor ? tensorAnalysisResults[comparisonTensor.id] : null;
-  
-  // Extract data for the current property and create the expected structure for charts
-  const directionalData: { [key: string]: any } = {};
-  const referenceDirectionalData: { [key: string]: any } = {};
-  
-  // Populate directional data for all planes with current property
-  ['xy', 'xz', 'yz'].forEach(plane => {
-    directionalData[plane] = analysisResults?.directionalData?.[plane]?.[selectedProperty] || [];
-    referenceDirectionalData[plane] = referenceAnalysisResults?.directionalData?.[plane]?.[selectedProperty] || [];
-  });
-  
-  const surfaceData = analysisResults?.surfaceData?.[selectedProperty] || null;
-  const referenceSurfaceData = referenceAnalysisResults?.surfaceData?.[selectedProperty] || null;
+
+  // Multi-selection functions
+  const toggleTensorSelection = (id: string) => {
+    setSelectedTensors(prev => prev.map(t =>
+      t.id === id ? { ...t, isSelected: !t.isSelected } : t
+    ));
+  };
+
+  const getSelectedTensors = () => {
+    return selectedTensors.filter(t => t.isSelected);
+  };
+
+  const getFilteredTensors = () => {
+    if (!tensorSearchQuery.trim()) {
+      return selectedTensors;
+    }
+    return selectedTensors.filter(tensor => 
+      tensor.name.toLowerCase().includes(tensorSearchQuery.toLowerCase())
+    );
+  };
+
+  const clearAllSelections = () => {
+    setSelectedTensors(prev => prev.map(t => ({ ...t, isSelected: false })));
+  };
+
+  const clearAllTensors = () => {
+    if (window.confirm(`Are you sure you want to remove all ${selectedTensors.length} tensors? This will also clear them from storage and cannot be undone.`)) {
+      setSelectedTensors([]);
+      setTensorAnalysisResults({});
+      
+      // Also clear from localStorage
+      try {
+        localStorage.setItem('elasticTensors', JSON.stringify([]));
+        setSavedTensors([]);
+        addLog('Cleared all tensors and storage', 'info');
+      } catch (error) {
+        console.error('Failed to clear storage:', error);
+      }
+    }
+  };
+
+  const getTensorColorIndex = (tensorId: string) => {
+    const selectedList = getSelectedTensors();
+    const index = selectedList.findIndex(t => t.id === tensorId);
+    return index >= 0 ? index % 10 : 0; // Cycle through 10 colors
+  };
+
+  const getTensorColor = (tensorId: string) => {
+    const colorIndex = getTensorColorIndex(tensorId);
+    return `var(--tensor-color-${colorIndex})`;
+  };
+
+  // Multi-tensor support
+  const selectedTensorsList = getSelectedTensors();
+
+  // Extract multi-tensor data for charts
+  const getMultiTensorData = () => {
+    const selectedTensorList = getSelectedTensors();
+    const multiTensorData: { [plane: string]: Array<{ data: any[], tensorId: string, name: string, colorIndex: number }> } = {
+      xy: [],
+      xz: [],
+      yz: []
+    };
+
+    const surfaceDataList: Array<{ data: any, tensorId: string, name: string, colorIndex: number }> = [];
+
+    selectedTensorList.forEach((tensor) => {
+      const results = tensorAnalysisResults[tensor.id];
+      if (results) {
+        const colorIndex = getTensorColorIndex(tensor.id);
+
+        // Add directional data for each plane
+        ['xy', 'xz', 'yz'].forEach(plane => {
+          const planeData = results.directionalData?.[plane]?.[selectedProperty] || [];
+          if (planeData.length > 0) {
+            multiTensorData[plane].push({
+              data: planeData,
+              tensorId: tensor.id,
+              name: tensor.name || 'Unnamed',
+              colorIndex
+            });
+          }
+        });
+
+        // Add surface data
+        const surfData = results.surfaceData?.[selectedProperty];
+        if (surfData) {
+          surfaceDataList.push({
+            data: surfData,
+            tensorId: tensor.id,
+            name: tensor.name || 'Unnamed',
+            colorIndex
+          });
+        }
+      }
+    });
+
+    return { directionalData: multiTensorData, surfaceData: surfaceDataList };
+  };
+
+  const multiData = getMultiTensorData();
+
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string>('');
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
-  // Names from current tensors
-  const tensorName = primaryTensor?.name || '';
-  const referenceTensorName = comparisonTensor?.name || '';
-  
-  const setTensorName = (name: string) => {
-    if (primaryTensor) {
-      updateTensor(primaryTensor.id, { name });
-    }
-  };
-  
-  const setReferenceTensorName = (name: string) => {
-    if (comparisonTensor) {
-      updateTensor(comparisonTensor.id, { name });
-    }
-  };
-  
-  const setTensorInput = (input: string) => {
-    if (primaryTensor) {
-      updateTensor(primaryTensor.id, { input });
-    }
-  };
-  
-  const setReferenceTensorInput = (input: string) => {
-    if (comparisonTensor) {
-      updateTensor(comparisonTensor.id, { input });
-    }
-  };
-  
-  // Update comparison mode to set/unset comparison tensor
-  const handleComparisonModeChange = (enabled: boolean) => {
-    setComparisonMode(enabled);
-    if (enabled && !comparisonTensorId) {
-      // Set the second tensor as comparison if available
-      const secondTensor = selectedTensors.find(t => t.id !== primaryTensorId);
-      if (secondTensor) {
-        setComparisonTensorId(secondTensor.id);
-      }
-      // If no second tensor available, user will need to select one from dropdown
-    } else if (!enabled) {
-      setComparisonTensorId(null);
-    }
-  };
 
   // Handle adding tensors from modal
   const handleAddTensors = (tensors: Array<{ name: string; input: string; source: 'paste' | 'file' }>) => {
@@ -155,31 +181,81 @@ export const ElasticTensor: React.FC = () => {
       isSelected: false
     }));
 
-    setSelectedTensors(prev => [...prev, ...newTensors]);
-    
-    // If we don't have a primary tensor set, set the first new one
-    if (!primaryTensorId && newTensors.length > 0) {
-      setPrimaryTensorId(newTensors[0].id);
+    // Save all tensors to localStorage in one batch
+    try {
+      const newSavedTensors = tensors.map(tensor => ({
+        name: tensor.name.trim(),
+        data: tensor.input.trim(),
+        timestamp: new Date()
+      }));
+      
+      // Remove any existing tensors with the same names, then add new ones
+      const existingNames = new Set(newSavedTensors.map(t => t.name));
+      const filteredExisting = savedTensors.filter(t => !existingNames.has(t.name));
+      const updatedTensors = [...newSavedTensors, ...filteredExisting];
+      
+      setSavedTensors(updatedTensors);
+      localStorage.setItem('elasticTensors', JSON.stringify(updatedTensors));
+    } catch (error) {
+      console.error('Failed to save tensors:', error);
+      setError('Failed to save tensors to localStorage');
     }
-    
-    addLog(`Added ${tensors.length} tensor(s)`, 'info');
+
+    setSelectedTensors(prev => [...prev, ...newTensors]);
+
+    addLog(`Added and saved ${tensors.length} tensor(s)`, 'info');
   };
 
-  // Handle loading saved tensor from modal
-  const handleLoadSaved = (name: string) => {
-    const tensor = savedTensors.find(t => t.name === name);
-    if (tensor) {
-      handleAddTensors([{
-        name,
-        input: tensor.data,
-        source: 'paste'
-      }]);
-    }
-  };
   const [savedTensors, setSavedTensors] = useState<Array<{ name: string; data: string; timestamp: Date }>>([]);
   const [showAddTensorModal, setShowAddTensorModal] = useState<boolean>(false);
   const [showLoadDropdown, setShowLoadDropdown] = useState<boolean>(false);
   const [showReferenceLoadDropdown, setShowReferenceLoadDropdown] = useState<boolean>(false);
+  const [tensorSearchQuery, setTensorSearchQuery] = useState<string>('');
+  const [dragActive, setDragActive] = useState(false);
+
+  // Handle drag and drop for tensor files
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    handleFiles(files);
+  };
+
+  const handleFiles = async (files: File[]) => {
+    const newTensors: Array<{ name: string; input: string; source: 'paste' | 'file' }> = [];
+    
+    for (const file of files) {
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        try {
+          const content = await file.text();
+          const name = file.name.replace(/\.(txt|dat)$/i, '');
+          newTensors.push({
+            name,
+            input: content.trim(),
+            source: 'file'
+          });
+        } catch (error) {
+          console.error(`Failed to read file ${file.name}:`, error);
+        }
+      }
+    }
+
+    if (newTensors.length > 0) {
+      handleAddTensors(newTensors);
+    }
+  };
 
   // Initialize tensors from localStorage and add examples if needed
   useEffect(() => {
@@ -236,11 +312,7 @@ export const ElasticTensor: React.FC = () => {
         }
 
         setSelectedTensors(initialTensors);
-        
-        // Set primary tensor to the first one
-        if (initialTensors.length > 0) {
-          setPrimaryTensorId(initialTensors[0].id);
-        }
+
       } catch (error) {
         console.error('Failed to load initial tensors:', error);
         // addLog not available yet, so just log to console
@@ -249,7 +321,7 @@ export const ElasticTensor: React.FC = () => {
 
     loadInitialTensors();
   }, []); // Empty dependency array - run once on mount
-  
+
   // Rotation state
   const [enableRotation, setEnableRotation] = useState<boolean>(false);
   const [rotationAngle, setRotationAngle] = useState<number>(0);
@@ -330,65 +402,16 @@ export const ElasticTensor: React.FC = () => {
         break;
 
       case 'analysisResult':
-        // Legacy support for old message type - map to primary tensor
-        if (data.success) {
-          const tensorId = primaryTensorId;
-          if (tensorId) {
-            setTensorAnalysisResults(prev => ({
-              ...prev,
-              [tensorId]: data.data
-            }));
-          }
-          setIsCalculating(false);
-        } else {
-          setError('Analysis failed: ' + data.error);
-          setIsCalculating(false);
-        }
+        // Legacy support - no longer used with multi-tensor approach
+        setIsCalculating(false);
         break;
 
       case 'directionalDataResult':
-        // Legacy support - update the stored results
-        if (data.success) {
-          const tensorId = data.isReference ? comparisonTensorId : primaryTensorId;
-          if (tensorId) {
-            setTensorAnalysisResults(prev => ({
-              ...prev,
-              [tensorId]: {
-                ...prev[tensorId],
-                directionalData: {
-                  ...prev[tensorId]?.directionalData,
-                  [data.plane]: {
-                    ...prev[tensorId]?.directionalData?.[data.plane],
-                    [selectedProperty]: data.data
-                  }
-                }
-              }
-            }));
-          }
-        } else {
-          setError('Directional data generation failed: ' + data.error);
-        }
+        // Legacy support - no longer used with multi-tensor approach
         break;
 
       case '3DSurfaceResult':
-        // Legacy support - update the stored results
-        if (data.success) {
-          const tensorId = data.isReference ? comparisonTensorId : primaryTensorId;
-          if (tensorId) {
-            setTensorAnalysisResults(prev => ({
-              ...prev,
-              [tensorId]: {
-                ...prev[tensorId],
-                surfaceData: {
-                  ...prev[tensorId]?.surfaceData,
-                  [data.data.property]: data.data
-                }
-              }
-            }));
-          }
-        } else {
-          setError('3D surface generation failed: ' + data.error);
-        }
+        // Legacy support - no longer used with multi-tensor approach
         break;
 
       case 'error':
@@ -481,17 +504,6 @@ export const ElasticTensor: React.FC = () => {
     }
   };
 
-  // Helper functions to get display names
-  const getTestTensorName = () => tensorName.trim() || 'Test Tensor';
-  const getReferenceTensorName = () => referenceTensorName.trim() || 'Reference Tensor';
-  const getDifferenceName = () => {
-    const testName = getTestTensorName();
-    const refName = getReferenceTensorName();
-    if (testName === 'Test Tensor' || refName === 'Reference Tensor') {
-      return 'Difference (Test - Reference)';
-    }
-    return `Difference (${testName} - ${refName})`;
-  };
 
   // This function is no longer needed with the new unified analysis
   const generateDirectionalDataForBoth = () => {
@@ -547,7 +559,7 @@ export const ElasticTensor: React.FC = () => {
     if (!enableRotation || rotationAngle === 0) {
       return originalMatrix;
     }
-    
+
     try {
       const result = applyRotationToTensor(originalMatrix, rotationAngle, rotationAxis);
       addLog(`Applied rotation: ${rotationAngle}° about axis [${rotationAxis.join(', ')}]`, 'info');
@@ -576,10 +588,10 @@ export const ElasticTensor: React.FC = () => {
       setError('No tensor data to rotate');
       return;
     }
-    
+
     const rotatedMatrix = applyTensorRotation(originalTensorData);
     setTensorData(rotatedMatrix);
-    
+
     // Re-run analysis with rotated tensor
     if (worker && isWorkerReady) {
       setIsCalculating(true);
@@ -598,59 +610,61 @@ export const ElasticTensor: React.FC = () => {
       return;
     }
 
+    const selectedTensors = getSelectedTensors();
+
+    if (selectedTensors.length === 0) {
+      setError('No tensors selected for analysis. Click on tensors to select them.');
+      return;
+    }
+
     try {
       setError('');
       setLogs([]);
-      
-      // Prepare tensors for analysis - collect all tensors with valid input
+
+      // Prepare all selected tensors for analysis
       const tensorsToAnalyze = [];
-      
-      // Primary tensor (with rotation if enabled)
-      if (primaryTensor && primaryTensor.input.trim()) {
-        const matrix = parseTensorInput(primaryTensor.input);
-        setOriginalTensorData(matrix);
-        const finalMatrix = applyTensorRotation(matrix);
-        
-        // Update tensor data
-        updateTensor(primaryTensor.id, { data: finalMatrix });
-        
-        tensorsToAnalyze.push({
-          id: primaryTensor.id,
-          data: finalMatrix
-        });
+      let hasRotation = false;
+
+      for (const tensor of selectedTensors) {
+        if (!tensor.input.trim()) {
+          addLog(`Skipping tensor "${tensor.name || 'Unnamed'}" - no input data`, 'warning');
+          continue;
+        }
+
+        try {
+          const matrix = parseTensorInput(tensor.input);
+
+          // Apply rotation only to the first tensor if enabled (for backward compatibility)
+          let finalMatrix = matrix;
+          if (!hasRotation && enableRotation) {
+            setOriginalTensorData(matrix);
+            finalMatrix = applyTensorRotation(matrix);
+            hasRotation = true;
+            addLog(`Applied rotation to "${tensor.name || 'Unnamed'}"`, 'info');
+          }
+
+          // Update tensor data
+          updateTensor(tensor.id, { data: finalMatrix });
+
+          tensorsToAnalyze.push({
+            id: tensor.id,
+            data: finalMatrix
+          });
+
+        } catch (parseError) {
+          addLog(`Failed to parse tensor "${tensor.name || 'Unnamed'}": ${(parseError as Error).message}`, 'error');
+        }
       }
-      
-      // Comparison tensor (no rotation applied to reference)
-      if (comparisonMode && comparisonTensor && comparisonTensor.input.trim()) {
-        const referenceMatrix = parseTensorInput(comparisonTensor.input);
-        
-        // Update tensor data
-        updateTensor(comparisonTensor.id, { data: referenceMatrix });
-        
-        tensorsToAnalyze.push({
-          id: comparisonTensor.id,
-          data: referenceMatrix
-        });
-      }
-      
-      // Future extension: analyze any other selected tensors
-      // const otherSelectedTensors = selectedTensors.filter(t => 
-      //   t.isSelected && t.id !== primaryTensorId && t.id !== comparisonTensorId && t.input.trim()
-      // );
-      // for (const tensor of otherSelectedTensors) {
-      //   const matrix = parseTensorInput(tensor.input);
-      //   updateTensor(tensor.id, { data: matrix });
-      //   tensorsToAnalyze.push({ id: tensor.id, data: matrix });
-      // }
-      
+
       if (tensorsToAnalyze.length === 0) {
-        setError('No valid tensor data to analyze');
+        setError('No valid tensors to analyze. Check tensor input data.');
         return;
       }
-      
+
       setIsCalculating(true);
-      
-      // Use the new comprehensive analysis
+      addLog(`Analyzing ${tensorsToAnalyze.length} tensor(s)...`, 'info');
+
+      // Use the comprehensive analysis for all selected tensors
       worker?.postMessage({
         type: 'analyzeAll',
         data: {
@@ -658,17 +672,13 @@ export const ElasticTensor: React.FC = () => {
           properties: ['youngs', 'linear_compressibility', 'shear', 'poisson']
         }
       });
-      
+
     } catch (err) {
       setError((err as Error).message);
       setTensorAnalysisResults({});
     }
   };
 
-  // Reset difference view when comparison mode changes
-  useEffect(() => {
-    setShowDifference(false); // Start with overlay mode when comparison mode is enabled
-  }, [comparisonMode]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -742,7 +752,7 @@ export const ElasticTensor: React.FC = () => {
         <div className={styles.inputColumn}>
           <div className={styles.inputSection}>
             <div className={styles.header}>
-              <h3>Tensor Management</h3>
+              <h3>Elastic Tensors</h3>
               <div className={styles.workerStatus}>
                 <span className={`${styles.statusIndicator} ${isWorkerReady ? styles.ready : styles.loading}`}>
                   {isWorkerReady ? '●' : '○'}
@@ -751,129 +761,177 @@ export const ElasticTensor: React.FC = () => {
               </div>
             </div>
 
-            {/* Add Tensor Button */}
-            <button
+            {/* Add Tensor Drop Zone */}
+            <div
               onClick={() => setShowAddTensorModal(true)}
-              className={styles.addTensorButton}
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              className={`${styles.addTensorDropZone} ${dragActive ? styles.dragActive : ''}`}
+              style={{
+                border: '2px dashed var(--ifm-color-emphasis-300)',
+                borderRadius: '8px',
+                padding: '20px',
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                marginBottom: '16px',
+                backgroundColor: dragActive 
+                  ? 'var(--ifm-color-primary-lightest)' 
+                  : 'var(--ifm-background-surface-color)',
+                borderColor: dragActive 
+                  ? 'var(--ifm-color-primary)' 
+                  : 'var(--ifm-color-emphasis-300)'
+              }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: '8px' }}>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14,2 14,8 20,8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+                <polyline points="10,9 9,9 8,9"/>
               </svg>
-              Add Tensors
-            </button>
-
-            {/* Tensor Selection for Analysis */}
-            {selectedTensors.length > 0 && (
-              <div className={styles.tensorSelectionSection}>
-                <h4>Analysis Selection</h4>
-                <div className={styles.tensorSelector}>
-                  <label>Primary:</label>
-                  <select
-                    value={primaryTensorId}
-                    onChange={(e) => setPrimaryTensorId(e.target.value)}
-                  >
-                    {selectedTensors.map(tensor => (
-                      <option key={tensor.id} value={tensor.id}>
-                        {tensor.name || `Unnamed (${tensor.id.slice(-6)})`}
-                      </option>
-                    ))}
-                  </select>
+              <div>
+                <div style={{ fontWeight: '500', marginBottom: '4px' }}>
+                  {dragActive ? 'Drop tensor files here' : 'Add Tensors'}
                 </div>
-                
-                <div className={styles.modeToggle}>
-                  <label className={styles.checkboxLabel}>
-                    <input
-                      type="checkbox"
-                      checked={comparisonMode}
-                      onChange={(e) => handleComparisonModeChange(e.target.checked)}
-                      className={styles.checkbox}
-                    />
-                    Comparison Mode
-                  </label>
+                <div style={{ fontSize: '0.875rem', color: 'var(--ifm-color-emphasis-600)' }}>
+                  {dragActive ? 'Release to upload' : 'Drag & drop .txt files or click to browse'}
                 </div>
-
-                {comparisonMode && (
-                  <div className={styles.tensorSelector}>
-                    <label>Compare to:</label>
-                    <select
-                      value={comparisonTensorId || ''}
-                      onChange={(e) => setComparisonTensorId(e.target.value || null)}
-                    >
-                      <option value="">Select comparison tensor...</option>
-                      {selectedTensors.filter(t => t.id !== primaryTensorId).map(tensor => (
-                        <option key={tensor.id} value={tensor.id}>
-                          {tensor.name || `Unnamed (${tensor.id.slice(-6)})`}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
               </div>
-            )}
+            </div>
 
             {/* Tensor List */}
             {selectedTensors.length > 0 && (
               <div>
-                <h4>Tensors ({selectedTensors.length})</h4>
-                <div className={styles.tensorList}>
-                  {selectedTensors.map(tensor => (
-                    <div 
-                      key={tensor.id} 
-                      className={`${styles.tensorItem} ${
-                        (tensor.id === primaryTensorId || tensor.id === comparisonTensorId) ? styles.selected : ''
-                      }`}
-                    >
-                      <div className={styles.tensorInfo}>
-                        <div className={`${styles.tensorName} ${!tensor.name ? styles.empty : ''}`}>
-                          {tensor.name || `Unnamed Tensor`}
-                          {tensor.id === primaryTensorId && <span style={{ color: 'var(--ifm-color-primary)' }}> (Primary)</span>}
-                          {tensor.id === comparisonTensorId && <span style={{ color: 'var(--ifm-color-secondary)' }}> (Comparison)</span>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <h4 style={{ margin: 0 }}>Tensors ({selectedTensors.length}, {getSelectedTensors().length} selected)</h4>
+                  <button
+                    onClick={clearAllTensors}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid var(--ifm-color-danger)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      background: 'transparent',
+                      color: 'var(--ifm-color-danger)',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--ifm-color-danger)';
+                      e.currentTarget.style.color = 'white';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = 'var(--ifm-color-danger)';
+                    }}
+                    title="Remove all tensors and clear storage"
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Search tensors..."
+                    value={tensorSearchQuery}
+                    onChange={(e) => setTensorSearchQuery(e.target.value)}
+                    className={styles.tensorSearchInput}
+                    style={{
+                      flex: 1,
+                      padding: '6px 8px',
+                      border: '1px solid var(--ifm-color-emphasis-300)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      background: 'var(--ifm-background-color)',
+                      color: 'var(--ifm-color-content)'
+                    }}
+                  />
+                  <button
+                    onClick={clearAllSelections}
+                    disabled={getSelectedTensors().length === 0}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid var(--ifm-color-emphasis-300)',
+                      borderRadius: '4px',
+                      fontSize: '0.875rem',
+                      background: 'var(--ifm-background-color)',
+                      color: 'var(--ifm-color-content)',
+                      cursor: getSelectedTensors().length > 0 ? 'pointer' : 'not-allowed',
+                      opacity: getSelectedTensors().length > 0 ? 1 : 0.5
+                    }}
+                    title="Clear all selections"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className={styles.tensorList} style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {getFilteredTensors().map(tensor => {
+                    const colorIndex = getTensorColorIndex(tensor.id);
+                    return (
+                      <div
+                        key={tensor.id}
+                        className={`${styles.tensorItem} ${tensor.isSelected ? styles.selected : ''
+                          }`}
+                        onClick={() => toggleTensorSelection(tensor.id)}
+                        style={{
+                          cursor: 'pointer',
+                          backgroundColor: tensor.isSelected ? getComputedTensorColor(colorIndex) + '20' : 'transparent',
+                          borderLeft: tensor.isSelected ? `3px solid ${getComputedTensorColor(colorIndex)}` : '3px solid transparent'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                          {tensor.isSelected && (
+                            <div className={`${styles.tensorColorIndicator} tensor-color-${colorIndex}`} />
+                          )}
+                          <div className={styles.tensorInfo} style={{ flex: 1, minWidth: 0 }}>
+                            <div className={`${styles.tensorName} ${!tensor.name ? styles.empty : ''}`}>
+                              {tensor.name || `Unnamed Tensor`}
+                            </div>
+                          </div>
                         </div>
-                        <div className={styles.tensorStats}>
-                          {tensor.input ? `${tensor.input.split('\n').length} lines` : 'No data'} • 
-                          {tensor.data ? ' Processed' : ' Not processed'}
+                        <div className={styles.tensorActions}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newName = prompt('Enter tensor name:', tensor.name);
+                              if (newName !== null) {
+                                updateTensor(tensor.id, { name: newName });
+                              }
+                            }}
+                            className={styles.tensorActionButton}
+                            title="Rename tensor"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Remove from localStorage if it's saved
+                              if (tensor.name) {
+                                deleteTensor(tensor.name);
+                              }
+                              removeTensor(tensor.id);
+                            }}
+                            className={`${styles.tensorActionButton} ${styles.danger}`}
+                            title="Remove tensor and delete from storage"
+                          >
+                            ×
+                          </button>
                         </div>
                       </div>
-                      <div className={styles.tensorActions}>
-                        <button
-                          onClick={() => {
-                            const newName = prompt('Enter tensor name:', tensor.name);
-                            if (newName !== null) {
-                              updateTensor(tensor.id, { name: newName });
-                            }
-                          }}
-                          className={styles.tensorActionButton}
-                          title="Rename tensor"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => saveTensor(tensor.name || `tensor-${Date.now()}`, tensor.input)}
-                          disabled={!tensor.input}
-                          className={styles.tensorActionButton}
-                          title="Save to localStorage"
-                        >
-                          💾
-                        </button>
-                        <button
-                          onClick={() => removeTensor(tensor.id)}
-                          className={`${styles.tensorActionButton} ${styles.danger}`}
-                          title="Remove tensor"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {selectedTensors.length === 0 && (
-              <div style={{ 
-                textAlign: 'center', 
-                padding: '40px 20px', 
+              <div style={{
+                textAlign: 'center',
+                padding: '40px 20px',
                 color: 'var(--ifm-color-emphasis-600)',
                 fontStyle: 'italic'
               }}>
@@ -882,115 +940,11 @@ export const ElasticTensor: React.FC = () => {
             )}
 
 
-            {/* Rotation Controls */}
-            <div className={styles.rotationSection}>
-              <div className={styles.header}>
-                <h4>Tensor Rotation</h4>
-              </div>
-              
-              <label className={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={enableRotation}
-                  onChange={(e) => setEnableRotation(e.target.checked)}
-                  className={styles.checkbox}
-                />
-                Enable Rotation
-              </label>
-              
-              {enableRotation && (
-                <div className={styles.rotationControls}>
-                  <div className={styles.rotationRow}>
-                    <label className={styles.rotationLabel}>
-                      Angle (degrees):
-                      <input
-                        type="number"
-                        value={rotationAngle}
-                        onChange={(e) => setRotationAngle(parseFloat(e.target.value) || 0)}
-                        step="1"
-                        min="-360"
-                        max="360"
-                        className={styles.rotationInput}
-                      />
-                    </label>
-                  </div>
-                  
-                  <div className={styles.rotationRow}>
-                    <label className={styles.rotationLabel}>
-                      Rotation Axis:
-                      <select
-                        value={selectedAxisPreset}
-                        onChange={(e) => handleAxisPresetChange(e.target.value)}
-                        className={styles.axisSelect}
-                      >
-                        <option value="X">X-axis (1,0,0)</option>
-                        <option value="Y">Y-axis (0,1,0)</option>
-                        <option value="Z">Z-axis (0,0,1)</option>
-                        <option value="BODY_DIAGONAL">Body diagonal (1,1,1)</option>
-                        <option value="FACE_DIAGONAL_XY">Face diagonal XY (1,1,0)</option>
-                        <option value="FACE_DIAGONAL_XZ">Face diagonal XZ (1,0,1)</option>
-                        <option value="FACE_DIAGONAL_YZ">Face diagonal YZ (0,1,1)</option>
-                        <option value="CUSTOM">Custom</option>
-                      </select>
-                    </label>
-                  </div>
-                  
-                  {selectedAxisPreset === 'CUSTOM' && (
-                    <div className={styles.rotationRow}>
-                      <div className={styles.customAxisInputs}>
-                        <label className={styles.axisComponent}>
-                          X:
-                          <input
-                            type="number"
-                            value={rotationAxis[0]}
-                            onChange={(e) => setRotationAxis([parseFloat(e.target.value) || 0, rotationAxis[1], rotationAxis[2]])}
-                            step="0.1"
-                            className={styles.axisInput}
-                          />
-                        </label>
-                        <label className={styles.axisComponent}>
-                          Y:
-                          <input
-                            type="number"
-                            value={rotationAxis[1]}
-                            onChange={(e) => setRotationAxis([rotationAxis[0], parseFloat(e.target.value) || 0, rotationAxis[2]])}
-                            step="0.1"
-                            className={styles.axisInput}
-                          />
-                        </label>
-                        <label className={styles.axisComponent}>
-                          Z:
-                          <input
-                            type="number"
-                            value={rotationAxis[2]}
-                            onChange={(e) => setRotationAxis([rotationAxis[0], rotationAxis[1], parseFloat(e.target.value) || 0])}
-                            step="0.1"
-                            className={styles.axisInput}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {originalTensorData && (
-                    <div className={styles.rotationRow}>
-                      <button
-                        onClick={applyRotationAndAnalyze}
-                        disabled={!isWorkerReady || isCalculating}
-                        className={styles.rotationButton}
-                      >
-                        Apply Rotation & Re-analyze
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             <button
               onClick={analyzeTensor}
               disabled={!isWorkerReady || isCalculating}
-              className={styles.analyzeButton}
+              className="button button--primary button--lg"
+              style={{ width: '100%', marginBottom: '16px' }}
             >
               {isCalculating ? 'Analyzing...' : 'Analyze'}
             </button>
@@ -1013,10 +967,13 @@ export const ElasticTensor: React.FC = () => {
 
         {/* Right Column - Results */}
         <div className={styles.resultsColumn}>
-          {analysisResults && (
+          {selectedTensorsList.length > 0 && (
             <>
               {/* Positive Definiteness Error */}
-              {analysisResults.eigenvalues && !analysisResults.isPositiveDefinite && (
+              {selectedTensorsList.some(tensor => {
+                const results = tensorAnalysisResults[tensor.id];
+                return results?.eigenvalues && !results.isPositiveDefinite;
+              }) && (
                 <div className={styles.errorBanner} style={{
                   backgroundColor: '#f8d7da',
                   border: '1px solid #f5c6cb',
@@ -1034,17 +991,20 @@ export const ElasticTensor: React.FC = () => {
                     <line x1="9" y1="9" x2="15" y2="15" />
                   </svg>
                   <div>
-                    <strong style={{ color: '#721c24' }}>Error: Tensor Not Positive Definite</strong>
+                    <strong style={{ color: '#721c24' }}>Warning: Some Tensors Not Positive Definite</strong>
                     <div style={{ fontSize: '0.9em', color: '#721c24', marginTop: '4px' }}>
-                      This elastic tensor has {analysisResults.eigenvalues.filter(val => val <= 0).length} non-positive eigenvalue(s),
-                      indicating this is not a stable minimum. The calculated properties and visualizations are not physically meaningful.
+                      One or more elastic tensors have non-positive eigenvalues, indicating they are not physically stable. 
+                      Properties and visualizations for these tensors are not physically meaningful.
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Eigenvalue Error Warning */}
-              {analysisResults.eigenvalueError && (
+              {selectedTensorsList.some(tensor => {
+                const results = tensorAnalysisResults[tensor.id];
+                return results?.eigenvalueError;
+              }) && (
                 <div className={styles.warningBanner} style={{
                   backgroundColor: '#f8d7da',
                   border: '1px solid #f5c6cb',
@@ -1064,277 +1024,83 @@ export const ElasticTensor: React.FC = () => {
                   <div>
                     <strong style={{ color: '#721c24' }}>Error: Cannot Calculate Eigenvalues</strong>
                     <div style={{ fontSize: '0.9em', color: '#721c24', marginTop: '4px' }}>
-                      {analysisResults.eigenvalueError}
+                      Some tensors have eigenvalue calculation errors.
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Tables Section */}
-              <div className={styles.tablesGrid}>
+              {/* Tables Section - only show if any selected tensor has analysis results */}
+              {selectedTensorsList.some(tensor => tensorAnalysisResults[tensor.id]) && (
+                <div className={styles.tablesGrid}>
                 <div className={styles.tableCell}>
                   <h3>
-                    {comparisonMode && referenceAnalysisResults ? 'Comparison - Average Properties' : 'Average Properties'}
-                    {comparisonMode && !referenceAnalysisResults && ' (Processing Reference...)'}
-                    {comparisonMode && referenceAnalysisResults && ' ✓'}
-                    {comparisonMode && referenceAnalysisResults && (
-                      <span style={{ fontSize: '0.7em', marginLeft: '1rem', color: 'var(--ifm-color-emphasis-600)' }}>
-                        Ref Data: {referenceAnalysisResults ? 'Available' : 'None'}
-                      </span>
-                    )}
+                    Properties
                     <button
-                      onClick={() => copyTableToClipboard('averages', analysisResults)}
+                      onClick={() => {}} disabled={true}
                       className={styles.copyButton}
                       title="Copy table to clipboard"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="m5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        <path d="m5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"></path>
                       </svg>
                     </button>
                   </h3>
                   <table className={styles.propertiesTable}>
                     <thead>
                       <tr>
+                        <th>Tensor</th>
                         <th>Averaging scheme</th>
                         <th>Bulk modulus (GPa)</th>
                         <th>Young's modulus (GPa)</th>
                         <th>Shear modulus (GPa)</th>
                         <th>Poisson's ratio</th>
+                        <th>λ₁</th>
+                        <th>λ₂</th>
+                        <th>λ₃</th>
+                        <th>λ₄</th>
+                        <th>λ₅</th>
+                        <th>λ₆</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisonMode && referenceAnalysisResults ? (
-                        <>
-                          <tr>
-                            <td>Voigt</td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.bulkModulus.voigt.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.bulkModulus.voigt.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.bulkModulus.voigt - referenceAnalysisResults.properties.bulkModulus.voigt) }}>
-                                {getDifferenceSign(analysisResults.properties.bulkModulus.voigt - referenceAnalysisResults.properties.bulkModulus.voigt)}{Math.abs(analysisResults.properties.bulkModulus.voigt - referenceAnalysisResults.properties.bulkModulus.voigt).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.youngsModulus.voigt.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.youngsModulus.voigt.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.youngsModulus.voigt - referenceAnalysisResults.properties.youngsModulus.voigt) }}>
-                                ({getDifferenceSign(analysisResults.properties.youngsModulus.voigt - referenceAnalysisResults.properties.youngsModulus.voigt)}{Math.abs(analysisResults.properties.youngsModulus.voigt - referenceAnalysisResults.properties.youngsModulus.voigt).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.shearModulus.voigt.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.shearModulus.voigt.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.shearModulus.voigt - referenceAnalysisResults.properties.shearModulus.voigt) }}>
-                                ({getDifferenceSign(analysisResults.properties.shearModulus.voigt - referenceAnalysisResults.properties.shearModulus.voigt)}{Math.abs(analysisResults.properties.shearModulus.voigt - referenceAnalysisResults.properties.shearModulus.voigt).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.poissonRatio.voigt.toFixed(5)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.poissonRatio.voigt.toFixed(5)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.poissonRatio.voigt - referenceAnalysisResults.properties.poissonRatio.voigt) }}>
-                                ({getDifferenceSign(analysisResults.properties.poissonRatio.voigt - referenceAnalysisResults.properties.poissonRatio.voigt)}{Math.abs(analysisResults.properties.poissonRatio.voigt - referenceAnalysisResults.properties.poissonRatio.voigt).toFixed(5)})
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>Reuss</td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.bulkModulus.reuss.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.bulkModulus.reuss.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.bulkModulus.reuss - referenceAnalysisResults.properties.bulkModulus.reuss) }}>
-                                ({getDifferenceSign(analysisResults.properties.bulkModulus.reuss - referenceAnalysisResults.properties.bulkModulus.reuss)}{Math.abs(analysisResults.properties.bulkModulus.reuss - referenceAnalysisResults.properties.bulkModulus.reuss).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.youngsModulus.reuss.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.youngsModulus.reuss.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.youngsModulus.reuss - referenceAnalysisResults.properties.youngsModulus.reuss) }}>
-                                ({getDifferenceSign(analysisResults.properties.youngsModulus.reuss - referenceAnalysisResults.properties.youngsModulus.reuss)}{Math.abs(analysisResults.properties.youngsModulus.reuss - referenceAnalysisResults.properties.youngsModulus.reuss).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.shearModulus.reuss.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.shearModulus.reuss.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.shearModulus.reuss - referenceAnalysisResults.properties.shearModulus.reuss) }}>
-                                ({getDifferenceSign(analysisResults.properties.shearModulus.reuss - referenceAnalysisResults.properties.shearModulus.reuss)}{Math.abs(analysisResults.properties.shearModulus.reuss - referenceAnalysisResults.properties.shearModulus.reuss).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.poissonRatio.reuss.toFixed(5)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.poissonRatio.reuss.toFixed(5)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.poissonRatio.reuss - referenceAnalysisResults.properties.poissonRatio.reuss) }}>
-                                ({getDifferenceSign(analysisResults.properties.poissonRatio.reuss - referenceAnalysisResults.properties.poissonRatio.reuss)}{Math.abs(analysisResults.properties.poissonRatio.reuss - referenceAnalysisResults.properties.poissonRatio.reuss).toFixed(5)})
-                              </div>
-                            </td>
-                          </tr>
-                          <tr>
-                            <td>Hill</td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.bulkModulus.hill.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.bulkModulus.hill.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.bulkModulus.hill - referenceAnalysisResults.properties.bulkModulus.hill) }}>
-                                ({getDifferenceSign(analysisResults.properties.bulkModulus.hill - referenceAnalysisResults.properties.bulkModulus.hill)}{Math.abs(analysisResults.properties.bulkModulus.hill - referenceAnalysisResults.properties.bulkModulus.hill).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.youngsModulus.hill.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.youngsModulus.hill.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.youngsModulus.hill - referenceAnalysisResults.properties.youngsModulus.hill) }}>
-                                ({getDifferenceSign(analysisResults.properties.youngsModulus.hill - referenceAnalysisResults.properties.youngsModulus.hill)}{Math.abs(analysisResults.properties.youngsModulus.hill - referenceAnalysisResults.properties.youngsModulus.hill).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.shearModulus.hill.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.shearModulus.hill.toFixed(3)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.shearModulus.hill - referenceAnalysisResults.properties.shearModulus.hill) }}>
-                                ({getDifferenceSign(analysisResults.properties.shearModulus.hill - referenceAnalysisResults.properties.shearModulus.hill)}{Math.abs(analysisResults.properties.shearModulus.hill - referenceAnalysisResults.properties.shearModulus.hill).toFixed(3)})
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.properties.poissonRatio.hill.toFixed(5)}</span>
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.properties.poissonRatio.hill.toFixed(5)})
-                                </span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.properties.poissonRatio.hill - referenceAnalysisResults.properties.poissonRatio.hill) }}>
-                                ({getDifferenceSign(analysisResults.properties.poissonRatio.hill - referenceAnalysisResults.properties.poissonRatio.hill)}{Math.abs(analysisResults.properties.poissonRatio.hill - referenceAnalysisResults.properties.poissonRatio.hill).toFixed(5)})
-                              </div>
-                            </td>
-                          </tr>
-                        </>
-                      ) : (
-                        <>
-                          <tr>
-                            <td>Voigt</td>
-                            <td><em>K</em><sub>V</sub> = {analysisResults.properties.bulkModulus.voigt.toFixed(3)}</td>
-                            <td><em>E</em><sub>V</sub> = {analysisResults.properties.youngsModulus.voigt.toFixed(3)}</td>
-                            <td><em>G</em><sub>V</sub> = {analysisResults.properties.shearModulus.voigt.toFixed(3)}</td>
-                            <td><em>ν</em><sub>V</sub> = {analysisResults.properties.poissonRatio.voigt.toFixed(5)}</td>
-                          </tr>
-                          <tr>
-                            <td>Reuss</td>
-                            <td><em>K</em><sub>R</sub> = {analysisResults.properties.bulkModulus.reuss.toFixed(3)}</td>
-                            <td><em>E</em><sub>R</sub> = {analysisResults.properties.youngsModulus.reuss.toFixed(3)}</td>
-                            <td><em>G</em><sub>R</sub> = {analysisResults.properties.shearModulus.reuss.toFixed(3)}</td>
-                            <td><em>ν</em><sub>R</sub> = {analysisResults.properties.poissonRatio.reuss.toFixed(5)}</td>
-                          </tr>
-                          <tr>
-                            <td>Hill</td>
-                            <td><em>K</em><sub>H</sub> = {analysisResults.properties.bulkModulus.hill.toFixed(3)}</td>
-                            <td><em>E</em><sub>H</sub> = {analysisResults.properties.youngsModulus.hill.toFixed(3)}</td>
-                            <td><em>G</em><sub>H</sub> = {analysisResults.properties.shearModulus.hill.toFixed(3)}</td>
-                            <td><em>ν</em><sub>H</sub> = {analysisResults.properties.poissonRatio.hill.toFixed(5)}</td>
-                          </tr>
-                        </>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                      {getSelectedTensors().map(tensor => {
+                        const results = tensorAnalysisResults[tensor.id];
+                        const colorIndex = getTensorColorIndex(tensor.id);
+                        const color = getComputedTensorColor(colorIndex);
 
-                <div className={`${styles.tableCell} ${styles.eigenvaluesCell}`}>
-                  <h3>
-                    Eigenvalues of the stiffness matrix
-                    <button
-                      onClick={() => copyTableToClipboard('eigenvalues', analysisResults)}
-                      className={styles.copyButton}
-                      title="Copy table to clipboard"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="m5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                      </svg>
-                    </button>
-                  </h3>
-                  <table className={styles.propertiesTable}>
-                    <thead>
-                      {comparisonMode && referenceAnalysisResults ? (
-                        <tr>
-                          <th></th>
-                          <th>Values (GPa)</th>
-                          <th>Difference</th>
-                        </tr>
-                      ) : (
-                        <tr>
-                          <th></th>
-                          <th>Value (GPa)</th>
-                        </tr>
-                      )}
-                    </thead>
-                    <tbody>
-                      {comparisonMode && referenceAnalysisResults ? (
-                        analysisResults.eigenvalues.map((val, i) => (
-                          <tr key={i}>
-                            <td>λ<sub>{i + 1}</sub></td>
-                            <td>
-                              <span className={styles.testTensorText}>{val.toFixed(3)}</span>
-                              {referenceAnalysisResults.eigenvalues[i] && (
-                                <span className={styles.referenceTensorText}>
-                                  ({referenceAnalysisResults.eigenvalues[i].toFixed(3)})
-                                </span>
-                              )}
+                        if (!results) return null;
+
+                        return ['voigt', 'reuss', 'hill'].map((scheme, schemeIndex) => (
+                          <tr key={`${tensor.id}-${scheme}`}>
+                            <td style={{
+                              fontWeight: '500',
+                              borderLeft: `3px solid ${color}`,
+                              paddingLeft: '8px'
+                            }}>
+                              {tensor.name || 'Unnamed'}
                             </td>
-                            <td style={{ color: referenceAnalysisResults.eigenvalues[i] ? getDifferenceColor(val - referenceAnalysisResults.eigenvalues[i]) : 'inherit' }}>
-                              {referenceAnalysisResults.eigenvalues[i] ?
-                                `${getDifferenceSign(val - referenceAnalysisResults.eigenvalues[i])}${Math.abs(val - referenceAnalysisResults.eigenvalues[i]).toFixed(3)}` :
-                                'N/A'
-                              }
-                            </td>
+                            <td>{scheme.charAt(0).toUpperCase() + scheme.slice(1)}</td>
+                            <td>{results.properties.bulkModulus[scheme].toFixed(3)}</td>
+                            <td>{results.properties.youngsModulus[scheme].toFixed(3)}</td>
+                            <td>{results.properties.shearModulus[scheme].toFixed(3)}</td>
+                            <td>{results.properties.poissonRatio[scheme].toFixed(5)}</td>
+                            {/* Eigenvalues only in the first row (Voigt) */}
+                            {schemeIndex === 0 ?
+                              (results.eigenvalues || Array(6).fill(null)).slice(0, 6).map((eigenval, idx) => (
+                                <td key={`eig${idx}`} style={{ fontSize: '0.8rem' }}>
+                                  {eigenval !== null && eigenval !== undefined ? eigenval.toFixed(2) : 'N/A'}
+                                </td>
+                              ))
+                              :
+                              Array.from({ length: 6 }, (_, i) => (
+                                <td key={`empty-${i}`}></td>
+                              ))
+                            }
                           </tr>
-                        ))
-                      ) : (
-                        analysisResults.eigenvalues.map((val, i) => (
-                          <tr key={i}>
-                            <td>λ<sub>{i + 1}</sub></td>
-                            <td>{val.toFixed(3)}</td>
-                          </tr>
-                        ))
-                      )}
+                        ));
+                      }).flat()}
                     </tbody>
                   </table>
                 </div>
@@ -1343,7 +1109,7 @@ export const ElasticTensor: React.FC = () => {
                   <h3>
                     Variations of the elastic moduli
                     <button
-                      onClick={() => copyTableToClipboard('variations', analysisResults)}
+                      onClick={() => {}} disabled={true}
                       className={styles.copyButton}
                       title="Copy table to clipboard"
                     >
@@ -1357,171 +1123,67 @@ export const ElasticTensor: React.FC = () => {
                     <thead>
                       <tr>
                         <th></th>
-                        <th colSpan="2">Young's modulus (GPa)</th>
-                        <th colSpan="2">Linear compressibility (TPa<sup>−1</sup>)</th>
-                        <th colSpan="2">Shear modulus (GPa)</th>
-                        <th colSpan="2">Poisson's ratio</th>
+                        <th colSpan="3">Young's modulus (GPa)</th>
+                        <th colSpan="3">Linear compressibility (TPa<sup>−1</sup>)</th>
+                        <th colSpan="3">Shear modulus (GPa)</th>
+                        <th colSpan="3">Poisson's ratio</th>
                       </tr>
                       <tr>
-                        <th></th>
+                        <th>Tensor</th>
                         <th><em>E</em><sub>min</sub></th>
                         <th><em>E</em><sub>max</sub></th>
+                        <th><em>E</em><sub>aniso</sub></th>
                         <th>β<sub>min</sub></th>
                         <th>β<sub>max</sub></th>
+                        <th>β<sub>aniso</sub></th>
                         <th><em>G</em><sub>min</sub></th>
                         <th><em>G</em><sub>max</sub></th>
+                        <th><em>G</em><sub>aniso</sub></th>
                         <th>ν<sub>min</sub></th>
                         <th>ν<sub>max</sub></th>
+                        <th>ν<sub>aniso</sub></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {comparisonMode && referenceAnalysisResults ? (
-                        <>
-                          <tr>
-                            <td>Value</td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.youngsModulus.min.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.youngsModulus.min.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.youngsModulus.min - referenceAnalysisResults.extrema.youngsModulus.min) }}>
-                                {getDifferenceSign(analysisResults.extrema.youngsModulus.min - referenceAnalysisResults.extrema.youngsModulus.min)}{Math.abs(analysisResults.extrema.youngsModulus.min - referenceAnalysisResults.extrema.youngsModulus.min).toFixed(3)}
-                              </div>
+                      {getSelectedTensors().map(tensor => {
+                        const results = tensorAnalysisResults[tensor.id];
+                        const colorIndex = getTensorColorIndex(tensor.id);
+                        const color = getComputedTensorColor(colorIndex);
+
+                        if (!results) return null;
+
+                        return (
+                          <tr key={tensor.id}>
+                            <td style={{
+                              fontWeight: '500',
+                              borderLeft: `3px solid ${color}`,
+                              paddingLeft: '8px'
+                            }}>
+                              {tensor.name || 'Unnamed'}
                             </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.youngsModulus.max.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.youngsModulus.max.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.youngsModulus.max - referenceAnalysisResults.extrema.youngsModulus.max) }}>
-                                {getDifferenceSign(analysisResults.extrema.youngsModulus.max - referenceAnalysisResults.extrema.youngsModulus.max)}{Math.abs(analysisResults.extrema.youngsModulus.max - referenceAnalysisResults.extrema.youngsModulus.max).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.linearCompressibility.min.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.linearCompressibility.min.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.linearCompressibility.min - referenceAnalysisResults.extrema.linearCompressibility.min) }}>
-                                {getDifferenceSign(analysisResults.extrema.linearCompressibility.min - referenceAnalysisResults.extrema.linearCompressibility.min)}{Math.abs(analysisResults.extrema.linearCompressibility.min - referenceAnalysisResults.extrema.linearCompressibility.min).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.linearCompressibility.max.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.linearCompressibility.max.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.linearCompressibility.max - referenceAnalysisResults.extrema.linearCompressibility.max) }}>
-                                {getDifferenceSign(analysisResults.extrema.linearCompressibility.max - referenceAnalysisResults.extrema.linearCompressibility.max)}{Math.abs(analysisResults.extrema.linearCompressibility.max - referenceAnalysisResults.extrema.linearCompressibility.max).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.shearModulus.min.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.shearModulus.min.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.shearModulus.min - referenceAnalysisResults.extrema.shearModulus.min) }}>
-                                {getDifferenceSign(analysisResults.extrema.shearModulus.min - referenceAnalysisResults.extrema.shearModulus.min)}{Math.abs(analysisResults.extrema.shearModulus.min - referenceAnalysisResults.extrema.shearModulus.min).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.shearModulus.max.toFixed(3)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.shearModulus.max.toFixed(3)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.shearModulus.max - referenceAnalysisResults.extrema.shearModulus.max) }}>
-                                {getDifferenceSign(analysisResults.extrema.shearModulus.max - referenceAnalysisResults.extrema.shearModulus.max)}{Math.abs(analysisResults.extrema.shearModulus.max - referenceAnalysisResults.extrema.shearModulus.max).toFixed(3)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.poissonRatio.min.toFixed(5)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.poissonRatio.min.toFixed(5)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.poissonRatio.min - referenceAnalysisResults.extrema.poissonRatio.min) }}>
-                                {getDifferenceSign(analysisResults.extrema.poissonRatio.min - referenceAnalysisResults.extrema.poissonRatio.min)}{Math.abs(analysisResults.extrema.poissonRatio.min - referenceAnalysisResults.extrema.poissonRatio.min).toFixed(5)}
-                              </div>
-                            </td>
-                            <td>
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.poissonRatio.max.toFixed(5)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.poissonRatio.max.toFixed(5)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.poissonRatio.max - referenceAnalysisResults.extrema.poissonRatio.max) }}>
-                                {getDifferenceSign(analysisResults.extrema.poissonRatio.max - referenceAnalysisResults.extrema.poissonRatio.max)}{Math.abs(analysisResults.extrema.poissonRatio.max - referenceAnalysisResults.extrema.poissonRatio.max).toFixed(5)}
-                              </div>
-                            </td>
+                            <td>{results.extrema.youngsModulus.min.toFixed(3)}</td>
+                            <td>{results.extrema.youngsModulus.max.toFixed(3)}</td>
+                            <td>{results.extrema.youngsModulus.anisotropy.toFixed(2)}</td>
+                            <td>{results.extrema.linearCompressibility.min.toFixed(3)}</td>
+                            <td>{results.extrema.linearCompressibility.max.toFixed(3)}</td>
+                            <td>{results.extrema.linearCompressibility.anisotropy.toFixed(2)}</td>
+                            <td>{results.extrema.shearModulus.min.toFixed(3)}</td>
+                            <td>{results.extrema.shearModulus.max.toFixed(3)}</td>
+                            <td>{results.extrema.shearModulus.anisotropy.toFixed(2)}</td>
+                            <td>{results.extrema.poissonRatio.min.toFixed(5)}</td>
+                            <td>{results.extrema.poissonRatio.max.toFixed(5)}</td>
+                            <td>{isFinite(results.extrema.poissonRatio.anisotropy) ? results.extrema.poissonRatio.anisotropy.toFixed(2) : '∞'}</td>
                           </tr>
-                          <tr>
-                            <td>Anisotropy</td>
-                            <td colSpan="2">
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.youngsModulus.anisotropy.toFixed(2)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.youngsModulus.anisotropy.toFixed(2)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.youngsModulus.anisotropy - referenceAnalysisResults.extrema.youngsModulus.anisotropy) }}>
-                                {getDifferenceSign(analysisResults.extrema.youngsModulus.anisotropy - referenceAnalysisResults.extrema.youngsModulus.anisotropy)}{Math.abs(analysisResults.extrema.youngsModulus.anisotropy - referenceAnalysisResults.extrema.youngsModulus.anisotropy).toFixed(2)}
-                              </div>
-                            </td>
-                            <td colSpan="2">
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.linearCompressibility.anisotropy.toFixed(4)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.linearCompressibility.anisotropy.toFixed(4)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.linearCompressibility.anisotropy - referenceAnalysisResults.extrema.linearCompressibility.anisotropy) }}>
-                                {getDifferenceSign(analysisResults.extrema.linearCompressibility.anisotropy - referenceAnalysisResults.extrema.linearCompressibility.anisotropy)}{Math.abs(analysisResults.extrema.linearCompressibility.anisotropy - referenceAnalysisResults.extrema.linearCompressibility.anisotropy).toFixed(4)}
-                              </div>
-                            </td>
-                            <td colSpan="2">
-                              <div>
-                                <span className={styles.testTensorText}>{analysisResults.extrema.shearModulus.anisotropy.toFixed(2)}</span>
-                                <span className={styles.referenceTensorText}>({referenceAnalysisResults.extrema.shearModulus.anisotropy.toFixed(2)})</span>
-                              </div>
-                              <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.shearModulus.anisotropy - referenceAnalysisResults.extrema.shearModulus.anisotropy) }}>
-                                {getDifferenceSign(analysisResults.extrema.shearModulus.anisotropy - referenceAnalysisResults.extrema.shearModulus.anisotropy)}{Math.abs(analysisResults.extrema.shearModulus.anisotropy - referenceAnalysisResults.extrema.shearModulus.anisotropy).toFixed(2)}
-                              </div>
-                            </td>
-                            <td colSpan="2">
-                              <div>
-                                <span className={styles.testTensorText}>{isFinite(analysisResults.extrema.poissonRatio.anisotropy) ? analysisResults.extrema.poissonRatio.anisotropy.toFixed(2) : '∞'}</span>
-                                <span className={styles.referenceTensorText}>({isFinite(referenceAnalysisResults.extrema.poissonRatio.anisotropy) ? referenceAnalysisResults.extrema.poissonRatio.anisotropy.toFixed(2) : '∞'})</span>
-                              </div>
-                              {isFinite(analysisResults.extrema.poissonRatio.anisotropy) && isFinite(referenceAnalysisResults.extrema.poissonRatio.anisotropy) && (
-                                <div style={{ fontSize: '0.8em', color: getDifferenceColor(analysisResults.extrema.poissonRatio.anisotropy - referenceAnalysisResults.extrema.poissonRatio.anisotropy) }}>
-                                  {getDifferenceSign(analysisResults.extrema.poissonRatio.anisotropy - referenceAnalysisResults.extrema.poissonRatio.anisotropy)}{Math.abs(analysisResults.extrema.poissonRatio.anisotropy - referenceAnalysisResults.extrema.poissonRatio.anisotropy).toFixed(2)}
-                                </div>
-                              )}
-                            </td>
-                          </tr>
-                        </>
-                      ) : (
-                        <>
-                          <tr>
-                            <td>Value</td>
-                            <td>{analysisResults.extrema.youngsModulus.min.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.youngsModulus.max.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.linearCompressibility.min.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.linearCompressibility.max.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.shearModulus.min.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.shearModulus.max.toFixed(3)}</td>
-                            <td>{analysisResults.extrema.poissonRatio.min.toFixed(5)}</td>
-                            <td>{analysisResults.extrema.poissonRatio.max.toFixed(5)}</td>
-                          </tr>
-                          <tr>
-                            <td>Anisotropy</td>
-                            <td colSpan="2">{analysisResults.extrema.youngsModulus.anisotropy.toFixed(2)}</td>
-                            <td colSpan="2">{analysisResults.extrema.linearCompressibility.anisotropy.toFixed(4)}</td>
-                            <td colSpan="2">{analysisResults.extrema.shearModulus.anisotropy.toFixed(2)}</td>
-                            <td colSpan="2">{isFinite(analysisResults.extrema.poissonRatio.anisotropy) ? analysisResults.extrema.poissonRatio.anisotropy.toFixed(2) : '∞'}</td>
-                          </tr>
-                        </>
-                      )}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               </div>
+              )}
 
-              {/* Charts Section */}
+              {/* Charts Section - only show if any selected tensor has analysis results */}
+              {selectedTensorsList.some(tensor => tensorAnalysisResults[tensor.id]) && (
               <div className={styles.chartsSection}>
                 <div className={styles.chartControls}>
                   <select
@@ -1533,7 +1195,7 @@ export const ElasticTensor: React.FC = () => {
                     <option value="linear_compressibility">Linear Compressibility</option>
                     <option value="shear">Shear Modulus</option>
                     <option value="poisson">Poisson's Ratio</option>
-                    <option value="matrix">Tensor Matrices</option>
+                    <option value="matrix">Tensor Matrix Components</option>
                   </select>
 
                   <label className={styles.checkboxLabel}>
@@ -1572,68 +1234,143 @@ export const ElasticTensor: React.FC = () => {
                     </div>
                   )}
 
-                  {comparisonMode && referenceAnalysisResults && (
-                    <div className={styles.radioGroup}>
-                      <label className={styles.radioLabel}>
-                        <input
-                          type="radio"
-                          name="comparisonView"
-                          checked={!showDifference}
-                          onChange={() => setShowDifference(false)}
-                          className={styles.radio}
-                        />
-                        Overlay
-                      </label>
-                      <label className={styles.radioLabel}>
-                        <input
-                          type="radio"
-                          name="comparisonView"
-                          checked={showDifference}
-                          onChange={() => setShowDifference(true)}
-                          className={styles.radio}
-                        />
-                        Difference
-                      </label>
-                    </div>
-                  )}
                 </div>
 
                 {selectedProperty === 'matrix' ? (
                   <>
-                    {/* Matrix Heatmaps */}
-                    <div className={styles.sectionTitle}>Stiffness & Compliance Matrices</div>
+                    {/* Stiffness Matrix Table */}
+                    <div className={styles.sectionTitle}>Stiffness Matrix (C) - GPa</div>
                     <div className={styles.surfaceChartContainer}>
-                      {analysisResults && (
-                        <DualMatrixChart
-                          stiffnessMatrix={analysisResults.stiffnessMatrix}
-                          complianceMatrix={analysisResults.complianceMatrix}
-                          referenceStiffness={comparisonMode && referenceAnalysisResults ? referenceAnalysisResults.stiffnessMatrix : undefined}
-                          referenceCompliance={comparisonMode && referenceAnalysisResults ? referenceAnalysisResults.complianceMatrix : undefined}
-                          comparisonMode={comparisonMode}
-                          showDifference={showDifference}
-                          testTensorName={getTestTensorName()}
-                          referenceTensorName={getReferenceTensorName()}
-                        />
-                      )}
+                      <div className={styles.matrixComponentsTable}>
+                        <table className={styles.propertiesTable}>
+                          <thead>
+                            <tr>
+                              <th>Tensor</th>
+                              {[
+                                'C11', 'C12', 'C13', 'C14', 'C15', 'C16',
+                                'C22', 'C23', 'C24', 'C25', 'C26',
+                                'C33', 'C34', 'C35', 'C36',
+                                'C44', 'C45', 'C46',
+                                'C55', 'C56',
+                                'C66'
+                              ].map(label => (
+                                <th key={label} style={{ fontSize: '0.8rem' }}>{label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getSelectedTensors().map(tensor => {
+                              const results = tensorAnalysisResults[tensor.id];
+                              const colorIndex = getTensorColorIndex(tensor.id);
+                              const color = getComputedTensorColor(colorIndex);
+
+                              if (!results) return null;
+
+                              const stiffnessIndices = [
+                                [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+                                [1, 1], [1, 2], [1, 3], [1, 4], [1, 5],
+                                [2, 2], [2, 3], [2, 4], [2, 5],
+                                [3, 3], [3, 4], [3, 5],
+                                [4, 4], [4, 5],
+                                [5, 5]
+                              ];
+
+                              return (
+                                <tr key={tensor.id}>
+                                  <td style={{
+                                    fontWeight: '500',
+                                    borderLeft: `3px solid ${color}`,
+                                    paddingLeft: '8px'
+                                  }}>
+                                    {tensor.name || 'Unnamed'}
+                                  </td>
+                                  {stiffnessIndices.map(([i, j], idx) => (
+                                    <td key={`C${idx}`} style={{ fontSize: '0.8rem' }}>
+                                      {results.stiffnessMatrix?.[i]?.[j]?.toFixed(1) || 'N/A'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Compliance Matrix Table */}
+                    <div className={styles.sectionTitle}>Compliance Matrix (S) - GPa⁻¹</div>
+                    <div className={styles.surfaceChartContainer}>
+                      <div className={styles.matrixComponentsTable}>
+                        <table className={styles.propertiesTable}>
+                          <thead>
+                            <tr>
+                              <th>Tensor</th>
+                              {[
+                                'S11', 'S12', 'S13', 'S14', 'S15', 'S16',
+                                'S22', 'S23', 'S24', 'S25', 'S26',
+                                'S33', 'S34', 'S35', 'S36',
+                                'S44', 'S45', 'S46',
+                                'S55', 'S56',
+                                'S66'
+                              ].map(label => (
+                                <th key={label} style={{ fontSize: '0.8rem' }}>{label}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getSelectedTensors().map(tensor => {
+                              const results = tensorAnalysisResults[tensor.id];
+                              const colorIndex = getTensorColorIndex(tensor.id);
+                              const color = getComputedTensorColor(colorIndex);
+
+                              if (!results) return null;
+
+                              const complianceIndices = [
+                                [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+                                [1, 1], [1, 2], [1, 3], [1, 4], [1, 5],
+                                [2, 2], [2, 3], [2, 4], [2, 5],
+                                [3, 3], [3, 4], [3, 5],
+                                [4, 4], [4, 5],
+                                [5, 5]
+                              ];
+
+                              return (
+                                <tr key={tensor.id}>
+                                  <td style={{
+                                    fontWeight: '500',
+                                    borderLeft: `3px solid ${color}`,
+                                    paddingLeft: '8px'
+                                  }}>
+                                    {tensor.name || 'Unnamed'}
+                                  </td>
+                                  {complianceIndices.map(([i, j], idx) => (
+                                    <td key={`S${idx}`} style={{ fontSize: '0.8rem' }}>
+                                      {results.complianceMatrix?.[i]?.[j]?.toFixed(6) || 'N/A'}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </>
                 ) : show3D && selectedProperty !== 'matrix' ? (
                   <>
-                    {analysisResults.isPositiveDefinite ? (
+                    {selectedTensorsList.every(tensor => {
+                      const results = tensorAnalysisResults[tensor.id];
+                      return results?.isPositiveDefinite !== false;
+                    }) ? (
                       <>
                         {/* 3D Surface chart */}
                         <div className={styles.sectionTitle}>3D Property Surface</div>
                         <div className={styles.surfaceChartContainer}>
-                          {surfaceData && (
+                          {multiData.surfaceData.length > 0 && (
                             <SurfaceChart
-                              data={surfaceData}
+                              multiSurfaceData={multiData.surfaceData}
                               property={selectedProperty}
                               useScatter={use3DScatter}
-                              referenceData={comparisonMode ? referenceSurfaceData : undefined}
-                              comparisonMode={comparisonMode}
-                              showDifference={showDifference}
-                              testTensorName={getTestTensorName()}
-                              referenceTensorName={getReferenceTensorName()}
                             />
                           )}
                         </div>
@@ -1657,18 +1394,11 @@ export const ElasticTensor: React.FC = () => {
                       {['xy', 'xz', 'yz'].map(plane => (
                         <div key={plane} className={styles.chartContainer}>
                           <div className={styles.chartLabel}>{plane.toUpperCase()} Plane</div>
-                          {directionalData[plane] && (
-                            <PolarChart
-                              data={directionalData[plane]}
-                              property={selectedProperty}
-                              plane={plane}
-                              referenceData={comparisonMode ? referenceDirectionalData[plane] : undefined}
-                              comparisonMode={comparisonMode}
-                              testTensorName={getTestTensorName()}
-                              referenceTensorName={getReferenceTensorName()}
-                              showDifference={showDifference}
-                            />
-                          )}
+                          <PolarChart
+                            property={selectedProperty}
+                            plane={plane}
+                            multiTensorData={multiData.directionalData[plane]}
+                          />
                         </div>
                       ))}
                     </div>
@@ -1679,23 +1409,17 @@ export const ElasticTensor: React.FC = () => {
                       {['xy', 'xz', 'yz'].map(plane => (
                         <div key={plane} className={styles.chartContainer}>
                           <div className={styles.chartLabel}>{plane.toUpperCase()} Plane</div>
-                          {directionalData[plane] && (
-                            <DirectionalChart
-                              data={directionalData[plane]}
-                              property={selectedProperty}
-                              referenceData={comparisonMode ? referenceDirectionalData[plane] : undefined}
-                              comparisonMode={comparisonMode}
-                              showDifference={showDifference}
-                              testTensorName={getTestTensorName()}
-                              referenceTensorName={getReferenceTensorName()}
-                            />
-                          )}
+                          <DirectionalChart
+                            property={selectedProperty}
+                            multiTensorData={multiData.directionalData[plane]}
+                          />
                         </div>
                       ))}
                     </div>
                   </>
                 ) : null}
               </div>
+              )}
             </>
           )}
         </div>
@@ -1706,8 +1430,6 @@ export const ElasticTensor: React.FC = () => {
         isOpen={showAddTensorModal}
         onClose={() => setShowAddTensorModal(false)}
         onAddTensors={handleAddTensors}
-        savedTensors={savedTensors}
-        onLoadSaved={handleLoadSaved}
       />
     </div>
   );

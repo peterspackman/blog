@@ -1,9 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import * as echarts from 'echarts';
-import { DirectionalData, getPropertyTitle, getPropertyUnit, calculateDirectionalDifferences, getComputedTensorColors } from './CommonFunctions';
+import { DirectionalData, getPropertyTitle, getPropertyUnit, calculateDirectionalDifferences, getComputedTensorColors, getComputedTensorColor } from './CommonFunctions';
+
+interface MultiTensorDataset {
+  data: DirectionalData[];
+  tensorId: string;
+  name: string;
+  colorIndex: number;
+}
 
 const PolarChart: React.FC<{
-  data: DirectionalData[];
+  data?: DirectionalData[];
   property: string;
   plane: string;
   referenceData?: DirectionalData[];
@@ -11,66 +18,68 @@ const PolarChart: React.FC<{
   showDifference?: boolean;
   testTensorName?: string;
   referenceTensorName?: string;
-}> = ({ data, property, plane, referenceData, comparisonMode = false, showDifference = false, testTensorName = 'Test Tensor', referenceTensorName = 'Reference Tensor' }) => {
+  multiTensorData?: MultiTensorDataset[];
+}> = ({ data, property, plane, referenceData, comparisonMode = false, showDifference = false, testTensorName = 'Test Tensor', referenceTensorName = 'Reference Tensor', multiTensorData }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!chartRef.current || data.length === 0) return;
+    if (!chartRef.current) return;
+    
+    // Use multi-tensor data if available, otherwise fall back to legacy data
+    const datasetsToUse = multiTensorData && multiTensorData.length > 0 
+      ? multiTensorData 
+      : (data && data.length > 0 ? [{ 
+          data, 
+          tensorId: 'legacy', 
+          name: testTensorName, 
+          colorIndex: 0 
+        }] : []);
+    
+    if (datasetsToUse.length === 0) return;
     
     const colors = getComputedTensorColors();
 
-
     const chart = echarts.init(chartRef.current);
 
-    // Convert directional data to actual polar coordinates
-    // Use pre-calculated coordinates if available (from WASM method), otherwise calculate
-    const polarCoords = data.map(d => {
-      // If WASM method provided x, y coordinates, use them
-      if (d.x !== undefined && d.y !== undefined) {
-        return [d.x, d.y];
-      }
-
-      // Otherwise, calculate from angle and value
-      const angleRad = d.angleRad;
-      const radius = d.value;
-
-      // Convert to Cartesian coordinates for plotting
-      let x, y;
-      if (plane === 'xy') {
-        x = radius * Math.cos(angleRad);
-        y = radius * Math.sin(angleRad);
-      } else if (plane === 'xz') {
-        x = radius * Math.cos(angleRad);
-        y = radius * Math.sin(angleRad); // Using same mapping for visualization
-      } else { // yz plane
-        x = radius * Math.cos(angleRad);
-        y = radius * Math.sin(angleRad);
-      }
-
-      return [x, y];
-    });
-
-    // Find the range for proper scaling - include reference data if available
-    let allValues = polarCoords.flat();
-
-    if (comparisonMode && referenceData && referenceData.length > 0) {
-      const refCoords = referenceData.map(d => {
+    // Process all datasets and find overall ranges
+    const processedDatasets = datasetsToUse.map(dataset => {
+      const polarCoords = dataset.data.map(d => {
+        // If WASM method provided x, y coordinates, use them
         if (d.x !== undefined && d.y !== undefined) {
           return [d.x, d.y];
         }
+
+        // Otherwise, calculate from angle and value
         const angleRad = d.angleRad;
         const radius = d.value;
-        return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-      });
-      allValues = [...allValues, ...refCoords.flat()];
-    }
 
+        // Convert to Cartesian coordinates for plotting
+        let x, y;
+        if (plane === 'xy') {
+          x = radius * Math.cos(angleRad);
+          y = radius * Math.sin(angleRad);
+        } else if (plane === 'xz') {
+          x = radius * Math.cos(angleRad);
+          y = radius * Math.sin(angleRad); // Using same mapping for visualization
+        } else { // yz plane
+          x = radius * Math.cos(angleRad);
+          y = radius * Math.sin(angleRad);
+        }
+
+        return [x, y];
+      });
+      
+      return { ...dataset, polarCoords };
+    });
+
+    // Find the range for proper scaling across all datasets
+    const allValues = processedDatasets.flatMap(dataset => dataset.polarCoords.flat());
     const maxVal = Math.max(...allValues.map(v => Math.abs(v)));
 
-    // Get value range for color mapping
-    const values = data.map(d => d.value);
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
+    // Get value range for color mapping across all datasets
+    const allDataValues = processedDatasets.flatMap(dataset => dataset.data.map(d => d.value));
+    const minValue = Math.min(...allDataValues);
+    const maxValue = Math.max(...allDataValues);
 
     // Get axis labels based on plane
     const getAxisLabels = (plane: string) => {
@@ -149,249 +158,81 @@ const PolarChart: React.FC<{
         const hasMinMax = property === 'shear' || property === 'poisson';
         const series = [];
 
-        if (comparisonMode && referenceData) {
-          if (showDifference) {
-            // Difference mode: show test - reference
-            const differenceData = calculateDirectionalDifferences(data, referenceData);
-            const diffCoords = differenceData.map(d => {
+        // Create a series for each tensor dataset
+        processedDatasets.forEach((dataset, index) => {
+          const color = getComputedTensorColor(dataset.colorIndex);
+          
+          if (hasMinMax) {
+            // Properties with min/max (shear, poisson) - show both min and max values
+            const maxCoords = dataset.data.map(d => {
               const angleRad = d.angleRad;
-              // For difference plots, we show the actual difference value as radius
-              // This means negative differences will show as smaller radii or inverted direction
-              const radius = d.value; // Keep the actual difference value
-              const x = radius * Math.cos(angleRad);
-              const y = radius * Math.sin(angleRad);
-
-              return [x, y];
+              const radius = d.value; // This is max value for these properties
+              return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
+            });
+            
+            const minCoords = dataset.data.map(d => {
+              const angleRad = d.angleRad;
+              const radius = d.valueMin || d.value; // Use min value if available
+              return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
             });
 
+            // Max value series
             series.push({
-              name: `Difference (${testTensorName} - ${referenceTensorName})`,
-              type: 'line',
-              data: diffCoords,
-              smooth: false,
-              lineStyle: { width: 3, color: colors.differenceColor, type: 'solid' }, // Thicker purple line for differences
-              areaStyle: { opacity: 0.4, color: colors.differenceColor },
-              symbol: 'circle',
-              symbolSize: 4,
-              itemStyle: { color: colors.differenceColor },
-              animation: false,
-              connectNulls: true,
-              emphasis: {
-                lineStyle: { width: 4 },
-                itemStyle: { borderWidth: 2, borderColor: '#ffffff' }
-              }
-            });
-          } else {
-            // Comparison mode: show test tensor vs reference tensor with min/max support
-            if (hasMinMax) {
-              // Test tensor max and min
-              const testMaxCoords = data.map(d => {
-                const angleRad = d.angleRad;
-                const radius = d.value;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              const testMinCoords = data.map(d => {
-                const angleRad = d.angleRad;
-                const radius = d.valueMin || 0;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              // Reference tensor max and min
-              const refMaxCoords = referenceData.map(d => {
-                const angleRad = d.angleRad;
-                const radius = d.value;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              const refMinCoords = referenceData.map(d => {
-                const angleRad = d.angleRad;
-                const radius = d.valueMin || 0;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              series.push(
-                {
-                  name: `${testTensorName} Max`,
-                  type: 'line',
-                  data: testMaxCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: colors.testColor },
-                  areaStyle: { opacity: 0.2, color: colors.testColor },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                },
-                {
-                  name: `${testTensorName} Min`,
-                  type: 'line',
-                  data: testMinCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: '#ff9944' },
-                  areaStyle: { opacity: 0.2, color: '#ff9944' },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                },
-                {
-                  name: `${referenceTensorName} Max`,
-                  type: 'line',
-                  data: refMaxCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: colors.referenceColor, type: 'dashed' },
-                  areaStyle: { opacity: 0.1, color: colors.referenceColor },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                },
-                {
-                  name: `${referenceTensorName} Min`,
-                  type: 'line',
-                  data: refMinCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: '#4499cc', type: 'dashed' },
-                  areaStyle: { opacity: 0.1, color: '#4499cc' },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                }
-              );
-            } else {
-              // Regular comparison for properties without min/max
-              const testCoords = data.map(d => {
-                if (d.x !== undefined && d.y !== undefined) {
-                  return [d.x, d.y];
-                }
-                const angleRad = d.angleRad;
-                const radius = d.value;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              const refCoords = referenceData.map(d => {
-                if (d.x !== undefined && d.y !== undefined) {
-                  return [d.x, d.y];
-                }
-                const angleRad = d.angleRad;
-                const radius = d.value;
-                return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-              });
-
-              series.push(
-                {
-                  name: testTensorName,
-                  type: 'line',
-                  data: testCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: colors.testColor },
-                  areaStyle: { opacity: 0.2, color: colors.testColor },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                },
-                {
-                  name: referenceTensorName,
-                  type: 'line',
-                  data: refCoords,
-                  smooth: false,
-                  lineStyle: { width: 2, color: colors.referenceColor, type: 'dashed' },
-                  areaStyle: { opacity: 0.1, color: colors.referenceColor },
-                  symbol: 'none',
-                  animation: false,
-                  connectNulls: true
-                }
-              );
-            }
-          }
-        } else if (hasMinMax) {
-          // Normal mode: show min/max for shear and Poisson
-          const maxCoords = data.map(d => {
-            if (d.x !== undefined && d.y !== undefined) {
-              return [d.x, d.y];
-            }
-            const angleRad = d.angleRad;
-            const radius = d.value;
-            return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-          });
-
-          const minCoords = data.map(d => {
-            const angleRad = d.angleRad;
-            const radius = d.valueMin || 0;
-            return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-          });
-
-          series.push(
-            {
-              name: 'Maximum',
+              name: `${dataset.name} (Max)`,
               type: 'line',
               data: maxCoords,
               smooth: false,
-              lineStyle: { width: 2, color: colors.testColor },
-              areaStyle: { opacity: 0.3, color: colors.testColor },
-              symbol: 'none',
+              lineStyle: { width: 2, color: color, type: 'solid' },
+              areaStyle: { opacity: 0.3, color: color },
+              symbol: 'circle',
+              symbolSize: 3,
+              itemStyle: { color: color },
               animation: false,
               connectNulls: true
-            },
-            {
-              name: 'Minimum',
-              type: 'line',
-              data: minCoords,
-              smooth: false,
-              lineStyle: { width: 2, color: colors.referenceColor },
-              areaStyle: { opacity: 0.3, color: colors.referenceColor },
-              symbol: 'none',
-              animation: false,
-              connectNulls: true
+            });
+
+            // Min value series (if different from max)
+            if (dataset.data.some(d => d.valueMin !== undefined && d.valueMin !== d.value)) {
+              series.push({
+                name: `${dataset.name} (Min)`,
+                type: 'line',
+                data: minCoords,
+                smooth: false,
+                lineStyle: { width: 2, color: color, type: 'dashed' },
+                symbol: 'circle',
+                symbolSize: 2,
+                itemStyle: { color: color },
+                animation: false,
+                connectNulls: true
+              });
             }
-          );
-        } else {
-          // Normal mode: single curve
-          series.push({
-            type: 'line',
-            data: polarCoords,
-            smooth: false,
-            lineStyle: { width: 2, color: colors.referenceColor },
-            areaStyle: { opacity: 0.3, color: colors.referenceColor },
-            symbol: 'none',
-            animation: false,
-            connectNulls: true
-          });
-        }
+          } else {
+            // Single value properties (youngs, linear_compressibility)
+            series.push({
+              name: dataset.name,
+              type: 'line',
+              data: dataset.polarCoords,
+              smooth: false,
+              lineStyle: { width: 2, color: color, type: 'solid' },
+              areaStyle: { opacity: 0.3, color: color },
+              symbol: 'circle',
+              symbolSize: 3,
+              itemStyle: { color: color },
+              animation: false,
+              connectNulls: true
+            });
+          }
+        });
 
         return series;
       })(),
       legend: {
-        show: (property === 'shear' || property === 'poisson') || (comparisonMode && referenceData),
+        show: datasetsToUse.length > 1,
         top: 30,
         textStyle: {
           color: 'var(--ifm-color-emphasis-800)',
           fontSize: 12
-        },
-        data: (() => {
-          if (comparisonMode && referenceData) {
-            if (showDifference) {
-              return [{ name: `Difference (${testTensorName} - ${referenceTensorName})`, itemStyle: { color: colors.differenceColor } }];
-            } else if (property === 'shear' || property === 'poisson') {
-              return [
-                { name: `${testTensorName} Max`, itemStyle: { color: colors.testColor } },
-                { name: `${testTensorName} Min`, itemStyle: { color: '#ff9944' } },
-                { name: `${referenceTensorName} Max`, itemStyle: { color: colors.referenceColor } },
-                { name: `${referenceTensorName} Min`, itemStyle: { color: '#4499cc' } }
-              ];
-            } else {
-              return [
-                { name: testTensorName, itemStyle: { color: colors.testColor } },
-                { name: referenceTensorName, itemStyle: { color: colors.referenceColor } }
-              ];
-            }
-          } else if (property === 'shear' || property === 'poisson') {
-            return [
-              { name: 'Maximum', itemStyle: { color: colors.testColor } },
-              { name: 'Minimum', itemStyle: { color: colors.referenceColor } }
-            ];
-          } else {
-            return [];
-          }
-        })()
+        }
       },
       tooltip: {
         trigger: 'item',
@@ -419,7 +260,7 @@ const PolarChart: React.FC<{
       window.removeEventListener('resize', handleResize);
       chart.dispose();
     };
-  }, [data, property, plane, referenceData, comparisonMode, showDifference, testTensorName, referenceTensorName]);
+  }, [data, property, plane, referenceData, comparisonMode, showDifference, testTensorName, referenceTensorName, multiTensorData]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', aspectRatio: '1/1' }} />;
 };
