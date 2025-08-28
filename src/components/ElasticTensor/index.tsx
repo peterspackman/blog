@@ -20,18 +20,27 @@ import { PolarChart } from './PolarChart';
 import { SurfaceChart } from './SurfaceChart';
 import { DualMatrixChart } from './DualMatrixChart';
 import { applyRotationToTensor, COMMON_AXES, RotationParams } from './TensorRotation';
+import { AddTensorModal } from './AddTensorModal';
 
 
 export const ElasticTensor: React.FC = () => {
   const [worker, setWorker] = useState<Worker | null>(null);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
   // Array-based tensor state management
-  const [selectedTensors, setSelectedTensors] = useState<Array<{id: string, name: string, input: string, data: number[][] | null}>>([
-    { id: 'tensor-0', name: '', input: '', data: null }
-  ]);
-  const [tensorAnalysisResults, setTensorAnalysisResults] = useState<{ [id: string]: any }>({});
+  interface TensorInfo {
+    id: string;
+    name: string;
+    input: string;
+    data: number[][] | null;
+    isSelected: boolean;
+  }
   
-  // Legacy state for compatibility (maps to first two tensors)
+  const [selectedTensors, setSelectedTensors] = useState<TensorInfo[]>([]);
+  const [tensorAnalysisResults, setTensorAnalysisResults] = useState<{ [id: string]: any }>({});
+  const [primaryTensorId, setPrimaryTensorId] = useState<string>('');
+  const [comparisonTensorId, setComparisonTensorId] = useState<string | null>(null);
+  
+  // UI state
   const [selectedProperty, setSelectedProperty] = useState<string>('youngs');
   const [selectedPlane, setSelectedPlane] = useState<string>('xy');
   const [show3D, setShow3D] = useState<boolean>(false);
@@ -39,14 +48,44 @@ export const ElasticTensor: React.FC = () => {
   const [comparisonMode, setComparisonMode] = useState<boolean>(false);
   const [showDifference, setShowDifference] = useState<boolean>(false);
   
-  // Computed values for backward compatibility
-  const tensorInput = selectedTensors[0]?.input || '';
-  const tensorData = selectedTensors[0]?.data || null;
-  const referenceTensorInput = selectedTensors[1]?.input || '';
-  const referenceTensorData = selectedTensors[1]?.data || null;
+  // Helper functions for tensor management
+  const addTensor = () => {
+    const newId = `tensor-${Date.now()}`;
+    setSelectedTensors(prev => [
+      ...prev,
+      { id: newId, name: '', input: '', data: null, isSelected: false }
+    ]);
+    return newId;
+  };
   
-  const analysisResults = tensorAnalysisResults['tensor-0'] || null;
-  const referenceAnalysisResults = tensorAnalysisResults['tensor-1'] || null;
+  const removeTensor = (id: string) => {
+    setSelectedTensors(prev => prev.filter(t => t.id !== id));
+    if (primaryTensorId === id) {
+      const remaining = selectedTensors.filter(t => t.id !== id);
+      setPrimaryTensorId(remaining[0]?.id || '');
+    }
+    if (comparisonTensorId === id) {
+      setComparisonTensorId(null);
+    }
+  };
+  
+  const updateTensor = (id: string, updates: Partial<TensorInfo>) => {
+    setSelectedTensors(prev => prev.map(t => 
+      t.id === id ? { ...t, ...updates } : t
+    ));
+  };
+  
+  // Computed values for backward compatibility
+  const primaryTensor = selectedTensors.find(t => t.id === primaryTensorId);
+  const comparisonTensor = comparisonTensorId ? selectedTensors.find(t => t.id === comparisonTensorId) : null;
+  
+  const tensorInput = primaryTensor?.input || '';
+  const tensorData = primaryTensor?.data || null;
+  const referenceTensorInput = comparisonTensor?.input || '';
+  const referenceTensorData = comparisonTensor?.data || null;
+  
+  const analysisResults = primaryTensor ? tensorAnalysisResults[primaryTensor.id] : null;
+  const referenceAnalysisResults = comparisonTensor ? tensorAnalysisResults[comparisonTensor.id] : null;
   
   // Extract data for the current property and create the expected structure for charts
   const directionalData: { [key: string]: any } = {};
@@ -63,48 +102,153 @@ export const ElasticTensor: React.FC = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string>('');
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
-  // Names are now part of selectedTensors array
-  const tensorName = selectedTensors[0]?.name || '';
-  const referenceTensorName = selectedTensors[1]?.name || '';
+  // Names from current tensors
+  const tensorName = primaryTensor?.name || '';
+  const referenceTensorName = comparisonTensor?.name || '';
   
   const setTensorName = (name: string) => {
-    setSelectedTensors(prev => {
-      const updated = [...prev];
-      if (!updated[0]) updated[0] = { id: 'tensor-0', name: '', input: '', data: null };
-      updated[0].name = name;
-      return updated;
-    });
+    if (primaryTensor) {
+      updateTensor(primaryTensor.id, { name });
+    }
   };
   
   const setReferenceTensorName = (name: string) => {
-    setSelectedTensors(prev => {
-      const updated = [...prev];
-      if (!updated[1]) updated[1] = { id: 'tensor-1', name: '', input: '', data: null };
-      updated[1].name = name;
-      return updated;
-    });
+    if (comparisonTensor) {
+      updateTensor(comparisonTensor.id, { name });
+    }
   };
   
   const setTensorInput = (input: string) => {
-    setSelectedTensors(prev => {
-      const updated = [...prev];
-      if (!updated[0]) updated[0] = { id: 'tensor-0', name: '', input: '', data: null };
-      updated[0].input = input;
-      return updated;
-    });
+    if (primaryTensor) {
+      updateTensor(primaryTensor.id, { input });
+    }
   };
   
   const setReferenceTensorInput = (input: string) => {
-    setSelectedTensors(prev => {
-      const updated = [...prev];
-      if (!updated[1]) updated[1] = { id: 'tensor-1', name: '', input: '', data: null };
-      updated[1].input = input;
-      return updated;
-    });
+    if (comparisonTensor) {
+      updateTensor(comparisonTensor.id, { input });
+    }
+  };
+  
+  // Update comparison mode to set/unset comparison tensor
+  const handleComparisonModeChange = (enabled: boolean) => {
+    setComparisonMode(enabled);
+    if (enabled && !comparisonTensorId) {
+      // Set the second tensor as comparison if available
+      const secondTensor = selectedTensors.find(t => t.id !== primaryTensorId);
+      if (secondTensor) {
+        setComparisonTensorId(secondTensor.id);
+      }
+      // If no second tensor available, user will need to select one from dropdown
+    } else if (!enabled) {
+      setComparisonTensorId(null);
+    }
+  };
+
+  // Handle adding tensors from modal
+  const handleAddTensors = (tensors: Array<{ name: string; input: string; source: 'paste' | 'file' }>) => {
+    const newTensors = tensors.map(tensor => ({
+      id: `tensor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: tensor.name,
+      input: tensor.input,
+      data: null as number[][] | null,
+      isSelected: false
+    }));
+
+    setSelectedTensors(prev => [...prev, ...newTensors]);
+    
+    // If we don't have a primary tensor set, set the first new one
+    if (!primaryTensorId && newTensors.length > 0) {
+      setPrimaryTensorId(newTensors[0].id);
+    }
+    
+    addLog(`Added ${tensors.length} tensor(s)`, 'info');
+  };
+
+  // Handle loading saved tensor from modal
+  const handleLoadSaved = (name: string) => {
+    const tensor = savedTensors.find(t => t.name === name);
+    if (tensor) {
+      handleAddTensors([{
+        name,
+        input: tensor.data,
+        source: 'paste'
+      }]);
+    }
   };
   const [savedTensors, setSavedTensors] = useState<Array<{ name: string; data: string; timestamp: Date }>>([]);
+  const [showAddTensorModal, setShowAddTensorModal] = useState<boolean>(false);
   const [showLoadDropdown, setShowLoadDropdown] = useState<boolean>(false);
   const [showReferenceLoadDropdown, setShowReferenceLoadDropdown] = useState<boolean>(false);
+
+  // Initialize tensors from localStorage and add examples if needed
+  useEffect(() => {
+    const loadInitialTensors = () => {
+      try {
+        const saved = localStorage.getItem('elasticTensors');
+        const savedTensorList = saved ? JSON.parse(saved).map((tensor: any) => ({
+          ...tensor,
+          timestamp: new Date(tensor.timestamp)
+        })) : [];
+        setSavedTensors(savedTensorList);
+
+        // Load saved tensors as selected tensors
+        const initialTensors: TensorInfo[] = savedTensorList.map((tensor: any, index: number) => ({
+          id: `saved-${index}-${Date.now()}`,
+          name: tensor.name,
+          input: tensor.data,
+          data: null,
+          isSelected: false
+        }));
+
+        // If no saved tensors, add example tensors
+        if (initialTensors.length === 0) {
+          const siliconData = `166  64  64   0   0   0
+ 64 166  64   0   0   0
+ 64  64 166   0   0   0
+  0   0   0  80   0   0
+  0   0   0   0  80   0
+  0   0   0   0   0  80`;
+
+          const quartzData = `48.137 11.411 12.783  0.000 -3.654  0.000
+11.411 34.968 14.749  0.000 -0.094  0.000
+12.783 14.749 26.015  0.000 -4.528  0.000
+ 0.000  0.000  0.000 14.545  0.000  0.006
+-3.654 -0.094 -4.528  0.000 10.771  0.000
+ 0.000  0.000  0.000  0.006  0.000 11.947`;
+
+          initialTensors.push(
+            {
+              id: 'example-silicon',
+              name: 'Silicon (Example)',
+              input: siliconData,
+              data: null,
+              isSelected: false
+            },
+            {
+              id: 'example-quartz',
+              name: 'Quartz (Example)',
+              input: quartzData,
+              data: null,
+              isSelected: false
+            }
+          );
+        }
+
+        setSelectedTensors(initialTensors);
+        
+        // Set primary tensor to the first one
+        if (initialTensors.length > 0) {
+          setPrimaryTensorId(initialTensors[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to load initial tensors:', error);
+        // addLog not available yet, so just log to console
+      }
+    };
+
+    loadInitialTensors();
+  }, []); // Empty dependency array - run once on mount
   
   // Rotation state
   const [enableRotation, setEnableRotation] = useState<boolean>(false);
@@ -186,16 +330,15 @@ export const ElasticTensor: React.FC = () => {
         break;
 
       case 'analysisResult':
-        // Legacy support for old message type
+        // Legacy support for old message type - map to primary tensor
         if (data.success) {
-          // Map to new structure - assume tensor-0 for legacy calls
-          const tensorId = 'tensor-0';
-          setTensorAnalysisResults(prev => ({
-            ...prev,
-            [tensorId]: data.data
-          }));
-          
-          // Legacy handling - no longer needs special processing
+          const tensorId = primaryTensorId;
+          if (tensorId) {
+            setTensorAnalysisResults(prev => ({
+              ...prev,
+              [tensorId]: data.data
+            }));
+          }
           setIsCalculating(false);
         } else {
           setError('Analysis failed: ' + data.error);
@@ -206,20 +349,22 @@ export const ElasticTensor: React.FC = () => {
       case 'directionalDataResult':
         // Legacy support - update the stored results
         if (data.success) {
-          const tensorId = data.isReference ? 'tensor-1' : 'tensor-0';
-          setTensorAnalysisResults(prev => ({
-            ...prev,
-            [tensorId]: {
-              ...prev[tensorId],
-              directionalData: {
-                ...prev[tensorId]?.directionalData,
-                [data.plane]: {
-                  ...prev[tensorId]?.directionalData?.[data.plane],
-                  [selectedProperty]: data.data
+          const tensorId = data.isReference ? comparisonTensorId : primaryTensorId;
+          if (tensorId) {
+            setTensorAnalysisResults(prev => ({
+              ...prev,
+              [tensorId]: {
+                ...prev[tensorId],
+                directionalData: {
+                  ...prev[tensorId]?.directionalData,
+                  [data.plane]: {
+                    ...prev[tensorId]?.directionalData?.[data.plane],
+                    [selectedProperty]: data.data
+                  }
                 }
               }
-            }
-          }));
+            }));
+          }
         } else {
           setError('Directional data generation failed: ' + data.error);
         }
@@ -228,17 +373,19 @@ export const ElasticTensor: React.FC = () => {
       case '3DSurfaceResult':
         // Legacy support - update the stored results
         if (data.success) {
-          const tensorId = data.isReference ? 'tensor-1' : 'tensor-0';
-          setTensorAnalysisResults(prev => ({
-            ...prev,
-            [tensorId]: {
-              ...prev[tensorId],
-              surfaceData: {
-                ...prev[tensorId]?.surfaceData,
-                [data.data.property]: data.data
+          const tensorId = data.isReference ? comparisonTensorId : primaryTensorId;
+          if (tensorId) {
+            setTensorAnalysisResults(prev => ({
+              ...prev,
+              [tensorId]: {
+                ...prev[tensorId],
+                surfaceData: {
+                  ...prev[tensorId]?.surfaceData,
+                  [data.data.property]: data.data
+                }
               }
-            }
-          }));
+            }));
+          }
         } else {
           setError('3D surface generation failed: ' + data.error);
         }
@@ -455,46 +602,46 @@ export const ElasticTensor: React.FC = () => {
       setError('');
       setLogs([]);
       
-      // Prepare tensors for analysis
+      // Prepare tensors for analysis - collect all tensors with valid input
       const tensorsToAnalyze = [];
       
-      // First tensor (with rotation if enabled)
-      if (tensorInput.trim()) {
-        const matrix1 = parseTensorInput(tensorInput);
-        setOriginalTensorData(matrix1);
-        const finalMatrix = applyTensorRotation(matrix1);
+      // Primary tensor (with rotation if enabled)
+      if (primaryTensor && primaryTensor.input.trim()) {
+        const matrix = parseTensorInput(primaryTensor.input);
+        setOriginalTensorData(matrix);
+        const finalMatrix = applyTensorRotation(matrix);
         
-        // Update selected tensors state
-        setSelectedTensors(prev => {
-          const updated = [...prev];
-          if (!updated[0]) updated[0] = { id: 'tensor-0', name: tensorName, input: tensorInput, data: null };
-          updated[0].data = finalMatrix;
-          return updated;
-        });
+        // Update tensor data
+        updateTensor(primaryTensor.id, { data: finalMatrix });
         
         tensorsToAnalyze.push({
-          id: 'tensor-0',
+          id: primaryTensor.id,
           data: finalMatrix
         });
       }
       
-      // Reference tensor (no rotation)
-      if (comparisonMode && referenceTensorInput.trim()) {
-        const referenceMatrix = parseTensorInput(referenceTensorInput);
+      // Comparison tensor (no rotation applied to reference)
+      if (comparisonMode && comparisonTensor && comparisonTensor.input.trim()) {
+        const referenceMatrix = parseTensorInput(comparisonTensor.input);
         
-        // Update selected tensors state
-        setSelectedTensors(prev => {
-          const updated = [...prev];
-          if (!updated[1]) updated[1] = { id: 'tensor-1', name: referenceTensorName, input: referenceTensorInput, data: null };
-          updated[1].data = referenceMatrix;
-          return updated;
-        });
+        // Update tensor data
+        updateTensor(comparisonTensor.id, { data: referenceMatrix });
         
         tensorsToAnalyze.push({
-          id: 'tensor-1',
+          id: comparisonTensor.id,
           data: referenceMatrix
         });
       }
+      
+      // Future extension: analyze any other selected tensors
+      // const otherSelectedTensors = selectedTensors.filter(t => 
+      //   t.isSelected && t.id !== primaryTensorId && t.id !== comparisonTensorId && t.input.trim()
+      // );
+      // for (const tensor of otherSelectedTensors) {
+      //   const matrix = parseTensorInput(tensor.input);
+      //   updateTensor(tensor.id, { data: matrix });
+      //   tensorsToAnalyze.push({ id: tensor.id, data: matrix });
+      // }
       
       if (tensorsToAnalyze.length === 0) {
         setError('No valid tensor data to analyze');
@@ -591,11 +738,11 @@ export const ElasticTensor: React.FC = () => {
   return (
     <div className={styles.container}>
       <div className={styles.mainGrid}>
-        {/* Left Column - Input */}
+        {/* Left Column - Tensor Management */}
         <div className={styles.inputColumn}>
           <div className={styles.inputSection}>
             <div className={styles.header}>
-              <h3>{comparisonMode ? 'Primary Tensor Input' : 'Elastic Tensor Input'}</h3>
+              <h3>Tensor Management</h3>
               <div className={styles.workerStatus}>
                 <span className={`${styles.statusIndicator} ${isWorkerReady ? styles.ready : styles.loading}`}>
                   {isWorkerReady ? '●' : '○'}
@@ -604,243 +751,136 @@ export const ElasticTensor: React.FC = () => {
               </div>
             </div>
 
-            <div className={styles.modeToggle}>
-              <label className={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={comparisonMode}
-                  onChange={(e) => setComparisonMode(e.target.checked)}
-                  className={styles.checkbox}
-                />
-                Comparison Mode
-              </label>
-            </div>
+            {/* Add Tensor Button */}
+            <button
+              onClick={() => setShowAddTensorModal(true)}
+              className={styles.addTensorButton}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Tensors
+            </button>
 
-            <input
-              type="text"
-              value={tensorName}
-              onChange={(e) => setTensorName(e.target.value)}
-              placeholder="Tensor name (e.g., 'Silicon_modified')"
-              className={styles.tensorNameInput}
-            />
+            {/* Tensor Selection for Analysis */}
+            {selectedTensors.length > 0 && (
+              <div className={styles.tensorSelectionSection}>
+                <h4>Analysis Selection</h4>
+                <div className={styles.tensorSelector}>
+                  <label>Primary:</label>
+                  <select
+                    value={primaryTensorId}
+                    onChange={(e) => setPrimaryTensorId(e.target.value)}
+                  >
+                    {selectedTensors.map(tensor => (
+                      <option key={tensor.id} value={tensor.id}>
+                        {tensor.name || `Unnamed (${tensor.id.slice(-6)})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className={styles.modeToggle}>
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={comparisonMode}
+                      onChange={(e) => handleComparisonModeChange(e.target.checked)}
+                      className={styles.checkbox}
+                    />
+                    Comparison Mode
+                  </label>
+                </div>
 
-            <div className={styles.tensorActions}>
-              <div style={{ position: 'relative', flex: 1 }} className="loadDropdownContainer">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowLoadDropdown(!showLoadDropdown);
-                  }}
-                  className={styles.loadButton}
-                  style={{ width: '100%' }}
-                >
-                  Load Tensor ({savedTensors.length + 2}) ▼
-                </button>
-                {showLoadDropdown && (
-                  <div className={styles.loadDropdown}>
-                    {/* Example tensors section */}
-                    <div style={{ borderBottom: '1px solid var(--ifm-color-emphasis-300)', paddingBottom: '0.25rem', marginBottom: '0.25rem' }}>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--ifm-color-emphasis-600)', padding: '0.15rem 0.5rem', fontWeight: '600' }}>Example Tensors</div>
-                      <div
-                        className={styles.loadDropdownItem}
-                        onClick={() => {
-                          loadExampleTensor('silicon');
-                          setShowLoadDropdown(false);
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div className={styles.tensorInfo}>
-                          <div>Silicon</div>
-                          <div className={styles.tensorTimestamp}>Cubic crystal example</div>
-                        </div>
-                      </div>
-                      <div
-                        className={styles.loadDropdownItem}
-                        onClick={() => {
-                          loadExampleTensor('quartz');
-                          setShowLoadDropdown(false);
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div className={styles.tensorInfo}>
-                          <div>Quartz</div>
-                          <div className={styles.tensorTimestamp}>Trigonal crystal example</div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Saved tensors section */}
-                    {savedTensors.length > 0 && (
-                      <>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--ifm-color-emphasis-600)', padding: '0.15rem 0.5rem', fontWeight: '600' }}>Saved Tensors</div>
-                        {savedTensors.map((tensor) => (
-                          <div
-                            key={tensor.name}
-                            className={styles.loadDropdownItem}
-                            onClick={() => {
-                              loadTensor(tensor.name, false);
-                              setShowLoadDropdown(false);
-                            }}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className={styles.tensorInfo}>
-                              <div>{tensor.name}</div>
-                              <div className={styles.tensorTimestamp}>
-                                {tensor.timestamp.toLocaleDateString()} {tensor.timestamp.toLocaleTimeString()}
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteTensor(tensor.name);
-                              }}
-                              className={styles.deleteButton}
-                              title="Delete tensor"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                      </>
-                    )}
+                {comparisonMode && (
+                  <div className={styles.tensorSelector}>
+                    <label>Compare to:</label>
+                    <select
+                      value={comparisonTensorId || ''}
+                      onChange={(e) => setComparisonTensorId(e.target.value || null)}
+                    >
+                      <option value="">Select comparison tensor...</option>
+                      {selectedTensors.filter(t => t.id !== primaryTensorId).map(tensor => (
+                        <option key={tensor.id} value={tensor.id}>
+                          {tensor.name || `Unnamed (${tensor.id.slice(-6)})`}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
-              <button
-                onClick={() => saveTensor(tensorName, tensorInput)}
-                disabled={!tensorName.trim() || !tensorInput.trim()}
-                className={styles.saveButton}
-                style={{ flex: 1 }}
-              >
-                Save Tensor
-              </button>
-            </div>
-
-            <textarea
-              value={tensorInput}
-              onChange={(e) => setTensorInput(e.target.value)}
-              placeholder="6x6 elastic stiffness matrix (GPa)..."
-              rows={6}
-              className={styles.tensorInput}
-            />
-
-            {comparisonMode && (
-              <>
-                <div className={styles.header} style={{ marginTop: '1rem' }}>
-                  <h3>Comparison Tensor Input</h3>
-                </div>
-
-                <input
-                  type="text"
-                  value={referenceTensorName}
-                  onChange={(e) => setReferenceTensorName(e.target.value)}
-                  placeholder="Reference tensor name"
-                  className={styles.tensorNameInput}
-                />
-
-                <div className={styles.tensorActions}>
-                  <div style={{ position: 'relative', flex: 1 }} className="loadDropdownContainer">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowReferenceLoadDropdown(!showReferenceLoadDropdown);
-                      }}
-                      className={styles.loadButton}
-                      style={{ width: '100%' }}
-                    >
-                      Load Tensor ({savedTensors.length + 2}) ▼
-                    </button>
-                    {showReferenceLoadDropdown && (
-                      <div className={styles.loadDropdown}>
-                        {/* Example tensors section */}
-                        <div style={{ borderBottom: '1px solid var(--ifm-color-emphasis-300)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--ifm-color-emphasis-600)', padding: '0.25rem 0.5rem' }}>Example Tensors</div>
-                          <div
-                            className={styles.loadDropdownItem}
-                            onClick={() => {
-                              loadExampleReferenceTensor('silicon');
-                              setShowReferenceLoadDropdown(false);
-                            }}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className={styles.tensorInfo}>
-                              <div>Silicon</div>
-                              <div className={styles.tensorTimestamp}>Cubic crystal example</div>
-                            </div>
-                          </div>
-                          <div
-                            className={styles.loadDropdownItem}
-                            onClick={() => {
-                              loadExampleReferenceTensor('quartz');
-                              setShowReferenceLoadDropdown(false);
-                            }}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <div className={styles.tensorInfo}>
-                              <div>Quartz</div>
-                              <div className={styles.tensorTimestamp}>Trigonal crystal example</div>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Saved tensors section */}
-                        {savedTensors.length > 0 && (
-                          <>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--ifm-color-emphasis-600)', padding: '0.15rem 0.5rem', fontWeight: '600' }}>Saved Tensors</div>
-                            {savedTensors.map((tensor) => (
-                              <div
-                                key={tensor.name}
-                                className={styles.loadDropdownItem}
-                                onClick={() => {
-                                  loadTensor(tensor.name, true);
-                                  setShowReferenceLoadDropdown(false);
-                                }}
-                                style={{ cursor: 'pointer' }}
-                              >
-                                <div className={styles.tensorInfo}>
-                                  <div>{tensor.name}</div>
-                                  <div className={styles.tensorTimestamp}>
-                                    {tensor.timestamp.toLocaleDateString()} {tensor.timestamp.toLocaleTimeString()}
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteTensor(tensor.name);
-                                  }}
-                                  className={styles.deleteButton}
-                                  title="Delete tensor"
-                                >
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ))}
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => saveTensor(referenceTensorName, referenceTensorInput)}
-                    disabled={!referenceTensorName.trim() || !referenceTensorInput.trim()}
-                    className={styles.saveButton}
-                    style={{ flex: 1 }}
-                  >
-                    Save Tensor
-                  </button>
-                </div>
-
-                <textarea
-                  value={referenceTensorInput}
-                  onChange={(e) => setReferenceTensorInput(e.target.value)}
-                  placeholder="6x6 reference elastic stiffness matrix for comparison (GPa)..."
-                  rows={6}
-                  className={styles.tensorInput}
-                />
-              </>
             )}
+
+            {/* Tensor List */}
+            {selectedTensors.length > 0 && (
+              <div>
+                <h4>Tensors ({selectedTensors.length})</h4>
+                <div className={styles.tensorList}>
+                  {selectedTensors.map(tensor => (
+                    <div 
+                      key={tensor.id} 
+                      className={`${styles.tensorItem} ${
+                        (tensor.id === primaryTensorId || tensor.id === comparisonTensorId) ? styles.selected : ''
+                      }`}
+                    >
+                      <div className={styles.tensorInfo}>
+                        <div className={`${styles.tensorName} ${!tensor.name ? styles.empty : ''}`}>
+                          {tensor.name || `Unnamed Tensor`}
+                          {tensor.id === primaryTensorId && <span style={{ color: 'var(--ifm-color-primary)' }}> (Primary)</span>}
+                          {tensor.id === comparisonTensorId && <span style={{ color: 'var(--ifm-color-secondary)' }}> (Comparison)</span>}
+                        </div>
+                        <div className={styles.tensorStats}>
+                          {tensor.input ? `${tensor.input.split('\n').length} lines` : 'No data'} • 
+                          {tensor.data ? ' Processed' : ' Not processed'}
+                        </div>
+                      </div>
+                      <div className={styles.tensorActions}>
+                        <button
+                          onClick={() => {
+                            const newName = prompt('Enter tensor name:', tensor.name);
+                            if (newName !== null) {
+                              updateTensor(tensor.id, { name: newName });
+                            }
+                          }}
+                          className={styles.tensorActionButton}
+                          title="Rename tensor"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => saveTensor(tensor.name || `tensor-${Date.now()}`, tensor.input)}
+                          disabled={!tensor.input}
+                          className={styles.tensorActionButton}
+                          title="Save to localStorage"
+                        >
+                          💾
+                        </button>
+                        <button
+                          onClick={() => removeTensor(tensor.id)}
+                          className={`${styles.tensorActionButton} ${styles.danger}`}
+                          title="Remove tensor"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedTensors.length === 0 && (
+              <div style={{ 
+                textAlign: 'center', 
+                padding: '40px 20px', 
+                color: 'var(--ifm-color-emphasis-600)',
+                fontStyle: 'italic'
+              }}>
+                No tensors added yet. Click "Add Tensors" to get started.
+              </div>
+            )}
+
 
             {/* Rotation Controls */}
             <div className={styles.rotationSection}>
@@ -1660,6 +1700,15 @@ export const ElasticTensor: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Add Tensor Modal */}
+      <AddTensorModal
+        isOpen={showAddTensorModal}
+        onClose={() => setShowAddTensorModal(false)}
+        onAddTensors={handleAddTensors}
+        savedTensors={savedTensors}
+        onLoadSaved={handleLoadSaved}
+      />
     </div>
   );
 };

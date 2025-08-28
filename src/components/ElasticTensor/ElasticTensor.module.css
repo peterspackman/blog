@@ -1053,3 +1053,473 @@
     width: 100%;
   }
 }
+
+/* Modal Styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--ifm-background-surface-color);
+  border: 2px solid var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow: hidden;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-surface-color);
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-900);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--ifm-color-emphasis-600);
+  transition: all 0.2s;
+}
+
+.closeButton:hover {
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-900);
+}
+
+.modalContent {
+  padding: 20px;
+  max-height: calc(85vh - 140px);
+  overflow-y: auto;
+  background: var(--ifm-background-surface-color);
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-surface-color);
+}
+
+/* Drop Zone */
+.dropZone {
+  border: 2px dashed var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  background: var(--ifm-color-emphasis-100);
+  transition: all 0.3s;
+  margin-bottom: 16px;
+}
+
+.dropZone.dragActive {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+}
+
+.dropZoneContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.dropZoneContent svg {
+  opacity: 0.5;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.dropZoneContent p {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 1rem;
+}
+
+.selectFilesButton {
+  background: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color 0.2s;
+}
+
+.selectFilesButton:hover {
+  background: var(--ifm-color-primary-dark);
+}
+
+/* Manual Entry */
+.manualEntry {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-color);
+}
+
+.manualEntry h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.addButton {
+  background: var(--ifm-color-success);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: background-color 0.2s;
+}
+
+.addButton:hover:not(:disabled) {
+  background: var(--ifm-color-success-dark);
+}
+
+.addButton:disabled {
+  background: var(--ifm-color-emphasis-400);
+  cursor: not-allowed;
+}
+
+/* Example Section */
+.exampleSection {
+  margin-bottom: 16px;
+}
+
+.exampleSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.exampleButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.exampleButton {
+  background: var(--ifm-color-emphasis-200);
+  border: 1px solid var(--ifm-color-emphasis-400);
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.exampleButton:hover {
+  background: var(--ifm-color-emphasis-300);
+}
+
+/* Saved Tensors */
+.savedSection {
+  margin-bottom: 16px;
+}
+
+.savedSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.savedList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.savedTensorButton {
+  background: var(--ifm-background-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  padding: 10px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.savedTensorButton:hover {
+  background: var(--ifm-color-emphasis-100);
+  border-color: var(--ifm-color-primary);
+}
+
+.savedDate {
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* Pending Tensors */
+.pendingSection {
+  margin-bottom: 12px;
+}
+
+.pendingSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 0.95rem;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.pendingList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.pendingItem {
+  background: var(--ifm-color-primary-lightest);
+  border: 1px solid var(--ifm-color-primary-light);
+  padding: 10px 12px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pendingInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pendingSource {
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+}
+
+.removePending {
+  background: var(--ifm-color-danger);
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.removePending:hover {
+  background: var(--ifm-color-danger-dark);
+}
+
+/* Modal Footer Buttons */
+.cancelButton {
+  background: var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-emphasis-800);
+  border: 1px solid var(--ifm-color-emphasis-400);
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton:hover {
+  background: var(--ifm-color-emphasis-400);
+}
+
+.addAllButton {
+  background: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.addAllButton:hover:not(:disabled) {
+  background: var(--ifm-color-primary-dark);
+}
+
+.addAllButton:disabled {
+  background: var(--ifm-color-emphasis-400);
+  cursor: not-allowed;
+}
+
+/* Tensor List Styles */
+.tensorList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tensorItem {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s;
+}
+
+.tensorItem:hover {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+}
+
+.tensorItem.selected {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+}
+
+.tensorCheckbox {
+  width: 18px;
+  height: 18px;
+}
+
+.tensorInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tensorName {
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-900);
+}
+
+.tensorName.empty {
+  color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+}
+
+.tensorStats {
+  font-size: 0.8rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.tensorActions {
+  display: flex;
+  gap: 6px;
+}
+
+.tensorActionButton {
+  background: none;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+}
+
+.tensorActionButton:hover {
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-600);
+}
+
+.tensorActionButton.primary {
+  background: var(--ifm-color-primary);
+  color: white;
+  border-color: var(--ifm-color-primary);
+}
+
+.tensorActionButton.danger {
+  background: var(--ifm-color-danger);
+  color: white;
+  border-color: var(--ifm-color-danger);
+}
+
+.tensorActionButton.danger:hover {
+  background: var(--ifm-color-danger-dark);
+}
+
+.addTensorButton {
+  background: var(--ifm-color-success);
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.addTensorButton:hover {
+  background: var(--ifm-color-success-dark);
+}
+
+.tensorSelectionSection {
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.tensorSelectionSection h4 {
+  margin: 0 0 12px 0;
+  color: var(--ifm-color-emphasis-900);
+}
+
+.tensorSelector {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tensorSelector label {
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-800);
+  min-width: 80px;
+}
+
+.tensorSelector select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 4px;
+  background: var(--ifm-background-color);
+}
