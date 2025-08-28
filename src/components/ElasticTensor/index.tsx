@@ -25,31 +25,83 @@ import { applyRotationToTensor, COMMON_AXES, RotationParams } from './TensorRota
 export const ElasticTensor: React.FC = () => {
   const [worker, setWorker] = useState<Worker | null>(null);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
-  const [tensorInput, setTensorInput] = useState<string>('');
-  const [tensorData, setTensorData] = useState<number[][] | null>(null);
-  const [analysisResults, setAnalysisResults] = useState<AnalysisResult | null>(null);
+  // Array-based tensor state management
+  const [selectedTensors, setSelectedTensors] = useState<Array<{id: string, name: string, input: string, data: number[][] | null}>>([
+    { id: 'tensor-0', name: '', input: '', data: null }
+  ]);
+  const [tensorAnalysisResults, setTensorAnalysisResults] = useState<{ [id: string]: any }>({});
+  
+  // Legacy state for compatibility (maps to first two tensors)
   const [selectedProperty, setSelectedProperty] = useState<string>('youngs');
   const [selectedPlane, setSelectedPlane] = useState<string>('xy');
-  const [directionalData, setDirectionalData] = useState<{ [key: string]: DirectionalData[] }>({});
-  const [surfaceData, setSurfaceData] = useState<SurfaceData | null>(null);
   const [show3D, setShow3D] = useState<boolean>(false);
   const [use3DScatter, setUse3DScatter] = useState<boolean>(true);
   const [comparisonMode, setComparisonMode] = useState<boolean>(false);
-  const [referenceTensorInput, setReferenceTensorInput] = useState<string>('');
-  const [referenceTensorData, setReferenceTensorData] = useState<number[][] | null>(null);
-  const referenceTensorRef = useRef<number[][] | null>(null);
-  const [referenceAnalysisResults, setReferenceAnalysisResults] = useState<AnalysisResult | null>(null);
-  const [referenceDirectionalData, setReferenceDirectionalData] = useState<{ [key: string]: DirectionalData[] }>({});
-  const [referenceSurfaceData, setReferenceSurfaceData] = useState<SurfaceData | null>(null);
-  const [analysisCount, setAnalysisCount] = useState<number>(0);
-  const [isProcessingReference, setIsProcessingReference] = useState<boolean>(false);
-  const processingRefRef = useRef<boolean>(false);
   const [showDifference, setShowDifference] = useState<boolean>(false);
+  
+  // Computed values for backward compatibility
+  const tensorInput = selectedTensors[0]?.input || '';
+  const tensorData = selectedTensors[0]?.data || null;
+  const referenceTensorInput = selectedTensors[1]?.input || '';
+  const referenceTensorData = selectedTensors[1]?.data || null;
+  
+  const analysisResults = tensorAnalysisResults['tensor-0'] || null;
+  const referenceAnalysisResults = tensorAnalysisResults['tensor-1'] || null;
+  
+  // Extract data for the current property and create the expected structure for charts
+  const directionalData: { [key: string]: any } = {};
+  const referenceDirectionalData: { [key: string]: any } = {};
+  
+  // Populate directional data for all planes with current property
+  ['xy', 'xz', 'yz'].forEach(plane => {
+    directionalData[plane] = analysisResults?.directionalData?.[plane]?.[selectedProperty] || [];
+    referenceDirectionalData[plane] = referenceAnalysisResults?.directionalData?.[plane]?.[selectedProperty] || [];
+  });
+  
+  const surfaceData = analysisResults?.surfaceData?.[selectedProperty] || null;
+  const referenceSurfaceData = referenceAnalysisResults?.surfaceData?.[selectedProperty] || null;
   const [isCalculating, setIsCalculating] = useState(false);
   const [error, setError] = useState<string>('');
   const [logs, setLogs] = useState<Array<{ message: string; level: string; timestamp: Date }>>([]);
-  const [tensorName, setTensorName] = useState<string>('');
-  const [referenceTensorName, setReferenceTensorName] = useState<string>('');
+  // Names are now part of selectedTensors array
+  const tensorName = selectedTensors[0]?.name || '';
+  const referenceTensorName = selectedTensors[1]?.name || '';
+  
+  const setTensorName = (name: string) => {
+    setSelectedTensors(prev => {
+      const updated = [...prev];
+      if (!updated[0]) updated[0] = { id: 'tensor-0', name: '', input: '', data: null };
+      updated[0].name = name;
+      return updated;
+    });
+  };
+  
+  const setReferenceTensorName = (name: string) => {
+    setSelectedTensors(prev => {
+      const updated = [...prev];
+      if (!updated[1]) updated[1] = { id: 'tensor-1', name: '', input: '', data: null };
+      updated[1].name = name;
+      return updated;
+    });
+  };
+  
+  const setTensorInput = (input: string) => {
+    setSelectedTensors(prev => {
+      const updated = [...prev];
+      if (!updated[0]) updated[0] = { id: 'tensor-0', name: '', input: '', data: null };
+      updated[0].input = input;
+      return updated;
+    });
+  };
+  
+  const setReferenceTensorInput = (input: string) => {
+    setSelectedTensors(prev => {
+      const updated = [...prev];
+      if (!updated[1]) updated[1] = { id: 'tensor-1', name: '', input: '', data: null };
+      updated[1].input = input;
+      return updated;
+    });
+  };
   const [savedTensors, setSavedTensors] = useState<Array<{ name: string; data: string; timestamp: Date }>>([]);
   const [showLoadDropdown, setShowLoadDropdown] = useState<boolean>(false);
   const [showReferenceLoadDropdown, setShowReferenceLoadDropdown] = useState<boolean>(false);
@@ -117,28 +169,34 @@ export const ElasticTensor: React.FC = () => {
         addLog(data.message, mapLogLevel(data.level));
         break;
 
-      case 'analysisResult':
+      case 'analyzeAllResult':
         if (data.success) {
-          if (processingRefRef.current) {
-            // This is the reference tensor result
-            setReferenceAnalysisResults(data.data);
-            setIsProcessingReference(false);
-            processingRefRef.current = false;
-
-            // Now that we have both tensors analyzed, generate directional data for both
-            setTimeout(() => generateDirectionalDataForBoth(), 100);
-            setIsCalculating(false);
-          } else {
-            // This is the test tensor result
-            setAnalysisResults(data.data);
-
-            // If not in comparison mode, generate data immediately
-            if (!comparisonMode) {
-              setTimeout(() => generateDirectionalDataForBoth(), 100);
-              setIsCalculating(false);
-            }
-            // If in comparison mode, wait for reference analysis to complete
+          // Process all tensor results at once
+          const results: { [id: string]: any } = {};
+          for (const result of data.data) {
+            results[result.id] = result;
           }
+          setTensorAnalysisResults(results);
+          setIsCalculating(false);
+          addLog(`Analysis complete for ${data.data.length} tensor(s)`, 'info');
+        } else {
+          setError('Analysis failed: ' + data.error);
+          setIsCalculating(false);
+        }
+        break;
+
+      case 'analysisResult':
+        // Legacy support for old message type
+        if (data.success) {
+          // Map to new structure - assume tensor-0 for legacy calls
+          const tensorId = 'tensor-0';
+          setTensorAnalysisResults(prev => ({
+            ...prev,
+            [tensorId]: data.data
+          }));
+          
+          // Legacy handling - no longer needs special processing
+          setIsCalculating(false);
         } else {
           setError('Analysis failed: ' + data.error);
           setIsCalculating(false);
@@ -146,30 +204,41 @@ export const ElasticTensor: React.FC = () => {
         break;
 
       case 'directionalDataResult':
+        // Legacy support - update the stored results
         if (data.success) {
-          if (data.isReference) {
-            setReferenceDirectionalData(prev => ({
-              ...prev,
-              [data.plane]: data.data
-            }));
-          } else {
-            setDirectionalData(prev => ({
-              ...prev,
-              [data.plane]: data.data
-            }));
-          }
+          const tensorId = data.isReference ? 'tensor-1' : 'tensor-0';
+          setTensorAnalysisResults(prev => ({
+            ...prev,
+            [tensorId]: {
+              ...prev[tensorId],
+              directionalData: {
+                ...prev[tensorId]?.directionalData,
+                [data.plane]: {
+                  ...prev[tensorId]?.directionalData?.[data.plane],
+                  [selectedProperty]: data.data
+                }
+              }
+            }
+          }));
         } else {
           setError('Directional data generation failed: ' + data.error);
         }
         break;
 
       case '3DSurfaceResult':
+        // Legacy support - update the stored results
         if (data.success) {
-          if (data.isReference) {
-            setReferenceSurfaceData(data.data);
-          } else {
-            setSurfaceData(data.data);
-          }
+          const tensorId = data.isReference ? 'tensor-1' : 'tensor-0';
+          setTensorAnalysisResults(prev => ({
+            ...prev,
+            [tensorId]: {
+              ...prev[tensorId],
+              surfaceData: {
+                ...prev[tensorId]?.surfaceData,
+                [data.data.property]: data.data
+              }
+            }
+          }));
         } else {
           setError('3D surface generation failed: ' + data.error);
         }
@@ -277,58 +346,10 @@ export const ElasticTensor: React.FC = () => {
     return `Difference (${testName} - ${refName})`;
   };
 
+  // This function is no longer needed with the new unified analysis
   const generateDirectionalDataForBoth = () => {
-    if (!worker || !isWorkerReady) return;
-
-    // Generate for test tensor
-    if (tensorData) {
-      ['xy', 'xz', 'yz'].forEach(plane => {
-        worker.postMessage({
-          type: 'generateDirectionalData',
-          data: {
-            tensorData,
-            property: selectedProperty,
-            plane: plane,
-            numPoints: 180,
-            isReference: false
-          }
-        });
-      });
-
-      worker.postMessage({
-        type: 'generate3DSurfaceData',
-        data: {
-          tensorData,
-          property: selectedProperty,
-          isReference: false
-        }
-      });
-    }
-
-    // Generate for reference tensor if in comparison mode
-    if (comparisonMode && referenceTensorRef.current) {
-      ['xy', 'xz', 'yz'].forEach(plane => {
-        worker.postMessage({
-          type: 'generateDirectionalData',
-          data: {
-            tensorData: referenceTensorRef.current,
-            property: selectedProperty,
-            plane: plane,
-            numPoints: 180,
-            isReference: true
-          }
-        });
-      });
-
-      worker.postMessage({
-        type: 'generate3DSurfaceData',
-        data: {
-          tensorData: referenceTensorRef.current,
-          property: selectedProperty,
-          isReference: true
-        }
-      });
-    }
+    // Legacy function kept for compatibility - does nothing
+    console.log('generateDirectionalDataForBoth called but not needed with new unified analysis');
   };
 
   const parseTensorInput = (input: string): number[][] => {
@@ -433,60 +454,67 @@ export const ElasticTensor: React.FC = () => {
     try {
       setError('');
       setLogs([]);
-      const matrix1 = parseTensorInput(tensorInput);
       
-      // Store original tensor data for rotation
-      setOriginalTensorData(matrix1);
+      // Prepare tensors for analysis
+      const tensorsToAnalyze = [];
       
-      // Apply rotation if enabled
-      const finalMatrix = applyTensorRotation(matrix1);
-      setTensorData(finalMatrix);
-      setIsCalculating(true);
-
-      if (comparisonMode && referenceTensorInput.trim()) {
-        // Parse reference tensor for comparison (NOT rotated)
-        const referenceMatrix = parseTensorInput(referenceTensorInput);
-        setReferenceTensorData(referenceMatrix);
-        referenceTensorRef.current = referenceMatrix;
-
-        // First analyze the test tensor (with rotation applied)
-        worker?.postMessage({
-          type: 'analyzeTensor',
-          data: {
-            tensorData: finalMatrix
-          }
+      // First tensor (with rotation if enabled)
+      if (tensorInput.trim()) {
+        const matrix1 = parseTensorInput(tensorInput);
+        setOriginalTensorData(matrix1);
+        const finalMatrix = applyTensorRotation(matrix1);
+        
+        // Update selected tensors state
+        setSelectedTensors(prev => {
+          const updated = [...prev];
+          if (!updated[0]) updated[0] = { id: 'tensor-0', name: tensorName, input: tensorInput, data: null };
+          updated[0].data = finalMatrix;
+          return updated;
         });
-
-        // Then analyze the reference tensor after a delay (NO rotation applied)
-        setTimeout(() => {
-          setIsProcessingReference(true);
-          processingRefRef.current = true;
-          worker?.postMessage({
-            type: 'analyzeTensor',
-            data: {
-              tensorData: referenceMatrix // Original reference tensor, no rotation
-            }
-          });
-        }, 100);
-      } else {
-        // Single tensor analysis
-        setReferenceTensorData(null);
-        setReferenceAnalysisResults(null);
-        referenceTensorRef.current = null;
-
-        worker?.postMessage({
-          type: 'analyzeTensor',
-          data: {
-            tensorData: finalMatrix
-          }
+        
+        tensorsToAnalyze.push({
+          id: 'tensor-0',
+          data: finalMatrix
         });
       }
+      
+      // Reference tensor (no rotation)
+      if (comparisonMode && referenceTensorInput.trim()) {
+        const referenceMatrix = parseTensorInput(referenceTensorInput);
+        
+        // Update selected tensors state
+        setSelectedTensors(prev => {
+          const updated = [...prev];
+          if (!updated[1]) updated[1] = { id: 'tensor-1', name: referenceTensorName, input: referenceTensorInput, data: null };
+          updated[1].data = referenceMatrix;
+          return updated;
+        });
+        
+        tensorsToAnalyze.push({
+          id: 'tensor-1',
+          data: referenceMatrix
+        });
+      }
+      
+      if (tensorsToAnalyze.length === 0) {
+        setError('No valid tensor data to analyze');
+        return;
+      }
+      
+      setIsCalculating(true);
+      
+      // Use the new comprehensive analysis
+      worker?.postMessage({
+        type: 'analyzeAll',
+        data: {
+          tensors: tensorsToAnalyze,
+          properties: ['youngs', 'linear_compressibility', 'shear', 'poisson']
+        }
+      });
+      
     } catch (err) {
       setError((err as Error).message);
-      setTensorData(null);
-      setAnalysisResults(null);
-      setReferenceTensorData(null);
-      setReferenceAnalysisResults(null);
+      setTensorAnalysisResults({});
     }
   };
 
@@ -510,19 +538,11 @@ export const ElasticTensor: React.FC = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  // Update directional data when property changes
+  // Re-analyze when property changes to get new data
   useEffect(() => {
-    if (tensorData && isWorkerReady) {
-      // Clear existing data and regenerate for all planes
-      setDirectionalData({});
-      setReferenceDirectionalData({});
-      setSurfaceData(null);
-      setReferenceSurfaceData(null);
-
-      // Generate for both tensors
-      generateDirectionalDataForBoth();
-    }
-  }, [selectedProperty, tensorData, isWorkerReady, comparisonMode]);
+    // With the new unified analysis, all properties are computed at once
+    // so we don't need to regenerate on property change
+  }, [selectedProperty]);
 
   const loadExampleTensor = (example: string) => {
     if (example === 'silicon') {
@@ -1019,7 +1039,7 @@ export const ElasticTensor: React.FC = () => {
                     {comparisonMode && referenceAnalysisResults && ' ✓'}
                     {comparisonMode && referenceAnalysisResults && (
                       <span style={{ fontSize: '0.7em', marginLeft: '1rem', color: 'var(--ifm-color-emphasis-600)' }}>
-                        Ref Data: {Object.keys(referenceDirectionalData).join(', ') || 'None'}
+                        Ref Data: {referenceAnalysisResults ? 'Available' : 'None'}
                       </span>
                     )}
                     <button
@@ -1512,7 +1532,7 @@ export const ElasticTensor: React.FC = () => {
                     </div>
                   )}
 
-                  {comparisonMode && referenceDirectionalData && Object.keys(referenceDirectionalData).length > 0 && (
+                  {comparisonMode && referenceAnalysisResults && (
                     <div className={styles.radioGroup}>
                       <label className={styles.radioLabel}>
                         <input

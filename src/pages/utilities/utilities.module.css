@@ -161,7 +161,33 @@
 .inputSection.dragOver {
   border-color: var(--ifm-color-primary);
   background: var(--ifm-color-primary-lightest);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  box-shadow: 0 0 0 3px var(--ifm-color-primary-lightest);
+  transform: scale(1.01);
+}
+
+.inputSection.dragOver::before {
+  content: '📄 Drop XYZ file here';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ifm-color-primary);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.375rem;
+  font-weight: 600;
+  font-size: 1rem;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.inputSection.dragOver > * {
+  opacity: 0.2;
+}
+
+.inputSection {
+  position: relative;
 }
 
 .inputSection h3 {
@@ -197,13 +223,50 @@
   margin-bottom: 1rem;
   padding: 0.75rem;
   background: var(--ifm-color-emphasis-50);
-  border: 1px dashed var(--ifm-color-emphasis-300);
+  border: 2px dashed var(--ifm-color-emphasis-300);
   border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  position: relative;
+  min-height: 60px;
+}
+
+.fileControls.dragOver {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+  box-shadow: 0 0 0 3px var(--ifm-color-primary-lightest);
+  transform: scale(1.02);
+}
+
+.fileControls.dragOver::before {
+  content: '📁 Drop file here';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ifm-color-primary);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  pointer-events: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.fileControls.dragOver > * {
+  opacity: 0.3;
 }
 
 .dragHint {
   font-size: 0.875rem;
   color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+}
+
+.fileControls.dragOver .dragHint {
+  color: var(--ifm-color-primary);
+  font-weight: 600;
 }
 
 .inputControls {
@@ -274,6 +337,76 @@
 .placeholderContent p {
   margin: 0 0 1rem 0;
   font-size: 1rem;
+}
+
+/* Tab navigation styles */
+.tabNavigation {
+  display: flex;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  margin-bottom: 2rem;
+}
+
+.tabButton {
+  background: none;
+  border: none;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tabButton:hover {
+  background-color: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-emphasis-900);
+}
+
+.tabButton.activeTab {
+  color: var(--ifm-color-primary);
+  border-bottom-color: var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+/* File input styles */
+.fileInputGroup {
+  margin-bottom: 1.5rem;
+}
+
+.fileLabel {
+  display: block;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.fileDescription {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.8rem;
+  margin: 0 0 0.75rem 0;
+}
+
+.fileName {
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-700);
+  background: var(--ifm-color-emphasis-100);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.formatInfo {
+  padding: 1rem;
+  background: var(--ifm-color-emphasis-50);
+  border-radius: 0.375rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.formatInfo p {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+  color: var(--ifm-color-emphasis-700);
 }
 
 /* Mobile responsive */

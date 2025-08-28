@@ -112,6 +112,23 @@ class CustomUnitCellRepresentation {
   }
 }
 
+// File type detection utilities
+const getFileExtension = (filename: string): string => {
+  return filename.toLowerCase().split('.').pop() || '';
+};
+
+const isStructureFormat = (extension: string): boolean => {
+  return ['pdb', 'ent', 'pqr', 'mmcif', 'cif', 'mcif', 'gro', 'sdf', 'mol2', 'mmtf'].includes(extension);
+};
+
+const isTrajectoryFormat = (extension: string): boolean => {
+  return ['dcd', 'nctraj', 'trr', 'xtc'].includes(extension);
+};
+
+const isMultiModelStructure = (extension: string): boolean => {
+  return ['pdb', 'ent', 'pqr', 'mmcif', 'cif', 'mcif', 'gro', 'sdf', 'mol2', 'mmtf'].includes(extension);
+};
+
 // Utility class for converting XYZ trajectory data to PDB format
 class PDBConverter {
   /**
@@ -269,8 +286,12 @@ class PDBConverter {
 }
 
 interface TrajectoryViewerProps {
-  trajectoryData?: string;  // Multi-frame XYZ data
-  xyzFrames?: string[];     // Or already parsed frames
+  trajectoryData?: string;     // Multi-frame XYZ data
+  xyzFrames?: string[];        // Or already parsed frames
+  structureFile?: File;        // Structure file (PDB, GRO, etc.)
+  trajectoryFile?: File;       // Trajectory file (DCD, TRR, XTC, etc.)
+  structureUrl?: string;       // Or structure URL
+  trajectoryUrl?: string;      // Or trajectory URL
   moleculeName?: string;
   autoPlay?: boolean;
   initialSpeed?: number;
@@ -279,6 +300,10 @@ interface TrajectoryViewerProps {
 const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({ 
   trajectoryData,
   xyzFrames,
+  structureFile,
+  trajectoryFile,
+  structureUrl,
+  trajectoryUrl,
   moleculeName = 'Trajectory',
   autoPlay = false,
   initialSpeed = 100
@@ -522,7 +547,172 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     return { frames, comments, hasLattice: latticeDetected };
   };
 
-  // Convert XYZ frames to multi-model PDB format
+  // Load structure/trajectory files using NGL's native support
+  const loadNativeTrajectory = async (structFile: File | string, trajFile?: File | string) => {
+    if (!nglStageRef.current) return;
+    
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // Clear existing components
+      nglStageRef.current.removeAllComponents();
+      trajectoryRef.current = null;
+      playerRef.current = null;
+      
+      // Load structure file
+      let structure: any;
+      if (typeof structFile === 'string') {
+        // URL
+        structure = await nglStageRef.current.loadFile(structFile, { 
+          name: moleculeName
+        });
+      } else {
+        // File object
+        const ext = getFileExtension(structFile.name);
+        structure = await nglStageRef.current.loadFile(structFile, { 
+          ext: ext,
+          name: moleculeName
+        });
+      }
+      
+      componentRef.current = structure;
+      
+      // Apply initial representation
+      updateRepresentation();
+      
+      // Load trajectory file if provided
+      if (trajFile) {
+        let frames: any;
+        if (typeof trajFile === 'string') {
+          // URL
+          frames = await NGL.autoLoad(trajFile);
+        } else {
+          // File object - create blob URL
+          const blobUrl = URL.createObjectURL(trajFile);
+          try {
+            frames = await NGL.autoLoad(blobUrl, {
+              ext: getFileExtension(trajFile.name)
+            });
+          } finally {
+            URL.revokeObjectURL(blobUrl);
+          }
+        }
+        
+        // Add trajectory to structure
+        const trajComp = structure.addTrajectory(frames);
+        trajectoryRef.current = trajComp;
+        
+        // Set up trajectory player
+        if (trajComp.trajectory && trajComp.trajectory.player) {
+          const player = trajComp.trajectory.player;
+          playerRef.current = player;
+          
+          // Configure player settings
+          const timeoutMs = Math.round(1000 / playbackFPS);
+          if (player.parameters) {
+            player.parameters.timeout = timeoutMs;
+            player.parameters.mode = 'loop';
+            player.parameters.step = 1;
+            player.parameters.direction = 'forward';
+          }
+          
+          // Listen for player events
+          if (player.signals) {
+            if (player.signals.startedRunning) {
+              player.signals.startedRunning.add(() => {
+                setIsPlaying(true);
+              });
+            }
+            if (player.signals.haltedRunning) {
+              player.signals.haltedRunning.add(() => {
+                setIsPlaying(false);
+              });
+            }
+          }
+        }
+        
+        // Listen for frame changes
+        if (trajComp.trajectory && trajComp.trajectory.signals && trajComp.trajectory.signals.frameChanged) {
+          trajComp.trajectory.signals.frameChanged.add((frameIndex: number) => {
+            setCurrentFrame(frameIndex);
+          });
+        }
+        
+        // Set total frames from trajectory
+        if (frames && frames.frameCount !== undefined) {
+          setTotalFrames(frames.frameCount);
+        } else if (trajComp.trajectory && trajComp.trajectory.frameCount !== undefined) {
+          setTotalFrames(trajComp.trajectory.frameCount);
+        }
+      } else if (isMultiModelStructure(typeof structFile === 'string' ? 
+                   getFileExtension(structFile) : 
+                   getFileExtension(structFile.name))) {
+        // Load as trajectory (multi-model structure)
+        const trajComp = structure.addTrajectory();
+        trajectoryRef.current = trajComp;
+        
+        // Set up trajectory player for multi-model structure
+        if (trajComp.trajectory && trajComp.trajectory.player) {
+          const player = trajComp.trajectory.player;
+          playerRef.current = player;
+          
+          // Configure player settings
+          const timeoutMs = Math.round(1000 / playbackFPS);
+          if (player.parameters) {
+            player.parameters.timeout = timeoutMs;
+            player.parameters.mode = 'loop';
+            player.parameters.step = 1;
+            player.parameters.direction = 'forward';
+          }
+          
+          // Listen for player events
+          if (player.signals) {
+            if (player.signals.startedRunning) {
+              player.signals.startedRunning.add(() => {
+                setIsPlaying(true);
+              });
+            }
+            if (player.signals.haltedRunning) {
+              player.signals.haltedRunning.add(() => {
+                setIsPlaying(false);
+              });
+            }
+          }
+        }
+        
+        // Listen for frame changes
+        if (trajComp.trajectory && trajComp.trajectory.signals && trajComp.trajectory.signals.frameChanged) {
+          trajComp.trajectory.signals.frameChanged.add((frameIndex: number) => {
+            setCurrentFrame(frameIndex);
+          });
+        }
+        
+        // Set total frames from structure models
+        if (structure.structure && structure.structure.modelStore && structure.structure.modelStore.count !== undefined) {
+          setTotalFrames(structure.structure.modelStore.count);
+        }
+      }
+      
+      // Auto view
+      nglStageRef.current.autoView();
+      
+      // Auto play if requested
+      if (autoPlay && playerRef.current && totalFrames > 1) {
+        setTimeout(() => {
+          if (playerRef.current && typeof playerRef.current.play === 'function') {
+            playerRef.current.play();
+          }
+        }, 500);
+      }
+      
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Error loading trajectory:', err);
+      setError(`Failed to load trajectory: ${err.message}`);
+      setIsLoading(false);
+    }
+  };
 
   // Load trajectory
   const loadTrajectory = async (frames: string[], comments: string[] = [], latticeDetected: boolean = false) => {
@@ -791,7 +981,18 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       setIsPlaying(false);
     };
 
-    if (trajectoryData) {
+    // Priority 1: Native structure/trajectory files
+    if ((structureFile || structureUrl) && (trajectoryFile || trajectoryUrl || isMultiModelStructure(
+      structureFile ? getFileExtension(structureFile.name) : 
+      structureUrl ? getFileExtension(structureUrl) : ''
+    ))) {
+      cleanup();
+      const structSource = structureFile || structureUrl!;
+      const trajSource = trajectoryFile || trajectoryUrl;
+      setTimeout(() => loadNativeTrajectory(structSource, trajSource), 50);
+    }
+    // Priority 2: XYZ trajectory data (legacy support)
+    else if (trajectoryData) {
       const parsed = parseXYZFrames(trajectoryData);
       if (parsed.frames.length > 0) {
         cleanup();
@@ -800,7 +1001,9 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
         // Small delay to ensure cleanup is complete
         setTimeout(() => loadTrajectory(processedFrames, parsed.comments, parsed.hasLattice), 50);
       }
-    } else if (xyzFrames && xyzFrames.length > 0) {
+    } 
+    // Priority 3: Pre-parsed XYZ frames
+    else if (xyzFrames && xyzFrames.length > 0) {
       cleanup();
       // For xyzFrames, we need to parse comments from the frames themselves
       // Convert frames back to text and parse
@@ -813,7 +1016,7 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
 
     // Return cleanup function for component unmount
     return cleanup;
-  }, [trajectoryData, xyzFrames, supercellX, supercellY, supercellZ]);
+  }, [trajectoryData, xyzFrames, structureFile, trajectoryFile, structureUrl, trajectoryUrl, supercellX, supercellY, supercellZ]);
 
   // Update representation when settings change
   useEffect(() => {
