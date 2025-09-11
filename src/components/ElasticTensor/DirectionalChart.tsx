@@ -18,8 +18,11 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
   showDifference?: boolean;
   testTensorName?: string;
   referenceTensorName?: string;
+  showShading?: boolean;
+  showLegend?: boolean;
+  showGridLines?: boolean;
 }>((props, ref) => {
-  const { data, multiTensorData, property, referenceData, comparisonMode = false, showDifference = false, testTensorName = 'Test Tensor', referenceTensorName = 'Reference Tensor' } = props;
+  const { data, multiTensorData, property, referenceData, comparisonMode = false, showDifference = false, testTensorName = 'Test Tensor', referenceTensorName = 'Reference Tensor', showShading = true, showLegend = true, showGridLines = true } = props;
   const chartRef = useRef<HTMLDivElement>(null);
 
   const saveChart = () => {
@@ -69,7 +72,7 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
             data: dataset.data.map(d => [d.angle, d.value]),
             smooth: true,
             lineStyle: { width: 2, color: color },
-            areaStyle: { color: color, opacity: 0.2 },
+            ...(showShading ? { areaStyle: { color: color, opacity: 0.2 } } : {}),
             itemStyle: { color: color },
             symbol: 'none',
             animation: false
@@ -82,7 +85,7 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
             data: dataset.data.map(d => [d.angle, d.valueMin || 0]),
             smooth: true,
             lineStyle: { width: 2, color: color, type: 'dashed' },
-            areaStyle: { color: color, opacity: 0.1 },
+            ...(showShading ? { areaStyle: { color: color, opacity: 0.1 } } : {}),
             itemStyle: { color: color },
             symbol: 'none',
             animation: false
@@ -95,7 +98,7 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
             data: dataset.data.map(d => [d.angle, d.value]),
             smooth: true,
             lineStyle: { width: 2, color: color },
-            areaStyle: { color: color, opacity: 0.2 },
+            ...(showShading ? { areaStyle: { color: color, opacity: 0.2 } } : {}),
             itemStyle: { color: color },
             symbol: 'none',
             animation: false
@@ -116,15 +119,16 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
               show: true,
               title: 'Save as PNG',
               backgroundColor: '#ffffff',
-              pixelRatio: 2
+              pixelRatio: 2,
+              excludeComponents: ['toolbox']
             }
           }
         },
         grid: {
-          left: 80,
-          right: 40,
-          top: 70,
-          bottom: 70,
+          left: 90,
+          right: 50,
+          top: showLegend && multiTensorData.length > 1 ? 80 : 60,
+          bottom: 80,
           borderWidth: 0
         },
         tooltip: {
@@ -138,7 +142,7 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
           }
         },
         legend: {
-          show: true,
+          show: showLegend && multiTensorData.length > 1,
           top: 10,
           textStyle: {
             color: 'var(--ifm-color-emphasis-800)',
@@ -155,6 +159,9 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
           axisLabel: {
             formatter: '{value}°',
             margin: 15
+          },
+          splitLine: {
+            show: showGridLines
           }
         },
         yAxis: {
@@ -166,6 +173,9 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
           min: Math.min(0, Math.min(...allValues)),
           axisLabel: {
             margin: 15
+          },
+          splitLine: {
+            show: showGridLines
           }
         },
         series: series
@@ -181,7 +191,7 @@ const DirectionalChart = React.forwardRef<HTMLDivElement, {
         chart.dispose();
       };
     }
-  }, [data, multiTensorData, property, referenceData, comparisonMode, showDifference, testTensorName, referenceTensorName]);
+  }, [data, multiTensorData, property, referenceData, comparisonMode, showDifference, testTensorName, referenceTensorName, showShading, showLegend, showGridLines]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', aspectRatio: '1/1' }} />;
 });

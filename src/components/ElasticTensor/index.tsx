@@ -45,6 +45,9 @@ export const ElasticTensor: React.FC = () => {
   const [show3D, setShow3D] = useState<boolean>(false);
   const [use3DScatter, setUse3DScatter] = useState<boolean>(true);
   const [showDifference, setShowDifference] = useState<boolean>(false);
+  const [showShading, setShowShading] = useState<boolean>(true);
+  const [showLegend, setShowLegend] = useState<boolean>(true);
+  const [showGridLines, setShowGridLines] = useState<boolean>(true);
 
   // Helper functions for tensor management
   const addTensor = () => {
@@ -104,6 +107,63 @@ export const ElasticTensor: React.FC = () => {
         console.error('Failed to clear storage:', error);
       }
     }
+  };
+
+  const copyPropertiesTable = () => {
+    const selectedTensors = getSelectedTensors();
+    let text = 'Tensor\tAveraging scheme\tBulk modulus (GPa)\tYoung\'s modulus (GPa)\tShear modulus (GPa)\tPoisson\'s ratio\tλ₁\tλ₂\tλ₃\tλ₄\tλ₅\tλ₆\n';
+    
+    selectedTensors.forEach(tensor => {
+      const results = tensorAnalysisResults[tensor.id];
+      if (results) {
+        ['voigt', 'reuss', 'hill'].forEach((scheme, schemeIndex) => {
+          text += `${tensor.name || 'Unnamed'}\t${scheme.charAt(0).toUpperCase() + scheme.slice(1)}\t`;
+          text += `${results.properties.bulkModulus[scheme].toFixed(3)}\t`;
+          text += `${results.properties.youngsModulus[scheme].toFixed(3)}\t`;
+          text += `${results.properties.shearModulus[scheme].toFixed(3)}\t`;
+          text += `${results.properties.poissonRatio[scheme].toFixed(5)}`;
+          
+          if (schemeIndex === 0) {
+            // Add eigenvalues only for the first scheme
+            (results.eigenvalues || Array(6).fill(null)).slice(0, 6).forEach(eigenval => {
+              text += `\t${eigenval !== null && eigenval !== undefined ? eigenval.toFixed(2) : 'N/A'}`;
+            });
+          } else {
+            // Add empty cells for eigenvalues in other schemes
+            text += '\t\t\t\t\t\t';
+          }
+          text += '\n';
+        });
+      }
+    });
+    
+    navigator.clipboard.writeText(text.trim()).then(() => {
+      addLog('Properties table copied to clipboard', 'info');
+    }).catch(err => {
+      console.error('Failed to copy table:', err);
+    });
+  };
+
+  const copyVariationsTable = () => {
+    const selectedTensors = getSelectedTensors();
+    let text = 'Tensor\tE_min\tE_max\tE_aniso\tβ_min\tβ_max\tβ_aniso\tG_min\tG_max\tG_aniso\tν_min\tν_max\tν_aniso\n';
+    
+    selectedTensors.forEach(tensor => {
+      const results = tensorAnalysisResults[tensor.id];
+      if (results && results.extrema) {
+        text += `${tensor.name || 'Unnamed'}\t`;
+        text += `${results.extrema.youngsModulus.min.toFixed(3)}\t${results.extrema.youngsModulus.max.toFixed(3)}\t${results.extrema.youngsModulus.anisotropy.toFixed(2)}\t`;
+        text += `${results.extrema.linearCompressibility.min.toFixed(3)}\t${results.extrema.linearCompressibility.max.toFixed(3)}\t${results.extrema.linearCompressibility.anisotropy.toFixed(2)}\t`;
+        text += `${results.extrema.shearModulus.min.toFixed(3)}\t${results.extrema.shearModulus.max.toFixed(3)}\t${results.extrema.shearModulus.anisotropy.toFixed(2)}\t`;
+        text += `${results.extrema.poissonRatio.min.toFixed(5)}\t${results.extrema.poissonRatio.max.toFixed(5)}\t${isFinite(results.extrema.poissonRatio.anisotropy) ? results.extrema.poissonRatio.anisotropy.toFixed(2) : '∞'}\n`;
+      }
+    });
+    
+    navigator.clipboard.writeText(text.trim()).then(() => {
+      addLog('Variations table copied to clipboard', 'info');
+    }).catch(err => {
+      console.error('Failed to copy table:', err);
+    });
   };
 
   const getTensorColorIndex = (tensorId: string) => {
@@ -1020,7 +1080,7 @@ export const ElasticTensor: React.FC = () => {
                   <h3>
                     Properties
                     <button
-                      onClick={() => {}} disabled={true}
+                      onClick={copyPropertiesTable}
                       className={styles.copyButton}
                       title="Copy table to clipboard"
                     >
@@ -1092,7 +1152,7 @@ export const ElasticTensor: React.FC = () => {
                   <h3>
                     Variations of the elastic moduli
                     <button
-                      onClick={() => {}} disabled={true}
+                      onClick={copyVariationsTable}
                       className={styles.copyButton}
                       title="Copy table to clipboard"
                     >
@@ -1191,6 +1251,35 @@ export const ElasticTensor: React.FC = () => {
                     Show 3D View
                   </label>
 
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={showShading}
+                      onChange={(e) => setShowShading(e.target.checked)}
+                      className={styles.checkbox}
+                    />
+                    Show Area Shading
+                  </label>
+
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={showLegend}
+                      onChange={(e) => setShowLegend(e.target.checked)}
+                      className={styles.checkbox}
+                    />
+                    Show Legend
+                  </label>
+
+                  <label className={styles.checkboxLabel}>
+                    <input
+                      type="checkbox"
+                      checked={showGridLines}
+                      onChange={(e) => setShowGridLines(e.target.checked)}
+                      className={styles.checkbox}
+                    />
+                    Show Grid Lines
+                  </label>
 
                   {show3D && (
                     <div className={styles.radioGroup}>
@@ -1354,6 +1443,7 @@ export const ElasticTensor: React.FC = () => {
                               multiSurfaceData={multiData.surfaceData}
                               property={selectedProperty}
                               useScatter={use3DScatter}
+                              showLegend={showLegend}
                             />
                           )}
                         </div>
@@ -1381,6 +1471,9 @@ export const ElasticTensor: React.FC = () => {
                             property={selectedProperty}
                             plane={plane}
                             multiTensorData={multiData.directionalData[plane]}
+                            showShading={showShading}
+                            showLegend={showLegend}
+                            showGridLines={showGridLines}
                           />
                         </div>
                       ))}
@@ -1395,6 +1488,9 @@ export const ElasticTensor: React.FC = () => {
                           <DirectionalChart
                             property={selectedProperty}
                             multiTensorData={multiData.directionalData[plane]}
+                            showShading={showShading}
+                            showLegend={showLegend}
+                            showGridLines={showGridLines}
                           />
                         </div>
                       ))}

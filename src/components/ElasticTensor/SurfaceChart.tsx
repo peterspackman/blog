@@ -14,7 +14,8 @@ const SurfaceChart: React.FC<{
   multiSurfaceData?: MultiSurfaceDataset[];
   property: string;
   useScatter?: boolean;
-}> = ({ multiSurfaceData, property, useScatter = true }) => {
+  showLegend?: boolean;
+}> = ({ multiSurfaceData, property, useScatter = true, showLegend = true }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,7 +49,8 @@ const SurfaceChart: React.FC<{
             show: true,
             title: 'Save as PNG',
             backgroundColor: '#ffffff',
-            pixelRatio: 2
+            pixelRatio: 2,
+            excludeComponents: ['toolbox']
           }
         }
       },
@@ -59,7 +61,7 @@ const SurfaceChart: React.FC<{
           return `${getPropertyTitle(property)}: ${value.toFixed(3)} ${getPropertyUnit(property)}`;
         }
       },
-      visualMap: datasetsToUse.map((dataset, index) => ({
+      visualMap: multiSurfaceData.map((dataset, index) => ({
         show: false,
         seriesIndex: index,
         dimension: 3,
@@ -96,7 +98,7 @@ const SurfaceChart: React.FC<{
         }
       },
       legend: {
-        show: multiSurfaceData.length > 1,
+        show: showLegend && multiSurfaceData.length > 1,
         data: multiSurfaceData.map(dataset => ({
           name: dataset.name,
           itemStyle: {
@@ -201,7 +203,7 @@ const SurfaceChart: React.FC<{
       window.removeEventListener('resize', handleResize);
       chart.dispose();
     };
-  }, [multiSurfaceData, property, useScatter]);
+  }, [multiSurfaceData, property, useScatter, showLegend]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', minHeight: '400px' }} />;
 };

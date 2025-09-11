@@ -13,7 +13,10 @@ const PolarChart: React.FC<{
   property: string;
   plane: string;
   multiTensorData?: MultiTensorDataset[];
-}> = ({ property, plane, multiTensorData }) => {
+  showShading?: boolean;
+  showLegend?: boolean;
+  showGridLines?: boolean;
+}> = ({ property, plane, multiTensorData, showShading = true, showLegend = true, showGridLines = true }) => {
   const chartRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,7 +95,8 @@ const PolarChart: React.FC<{
             show: true,
             title: 'Save as PNG',
             backgroundColor: '#ffffff',
-            pixelRatio: 2
+            pixelRatio: 2,
+            excludeComponents: ['toolbox']
           }
         }
       },
@@ -106,10 +110,10 @@ const PolarChart: React.FC<{
         }
       },
       grid: {
-        left: 80,
-        right: 40,
-        top: 70,
-        bottom: 70,
+        left: 90,
+        right: 50,
+        top: showLegend && multiTensorData.length > 1 ? 80 : 60,
+        bottom: 80,
         borderWidth: 0
       },
       xAxis: {
@@ -123,6 +127,9 @@ const PolarChart: React.FC<{
           fontSize: 10,
           formatter: (value: number) => value.toFixed(0),
           margin: 15
+        },
+        splitLine: {
+          show: showGridLines
         }
       },
       yAxis: {
@@ -136,6 +143,9 @@ const PolarChart: React.FC<{
           fontSize: 10,
           formatter: (value: number) => value.toFixed(0),
           margin: 15
+        },
+        splitLine: {
+          show: showGridLines
         }
       },
       series: (() => {
@@ -167,7 +177,7 @@ const PolarChart: React.FC<{
               data: maxCoords,
               smooth: false,
               lineStyle: { width: 2, color: color, type: 'solid' },
-              areaStyle: { opacity: 0.3, color: color },
+              ...(showShading ? { areaStyle: { opacity: 0.3, color: color } } : {}),
               symbol: 'circle',
               symbolSize: 3,
               itemStyle: { color: color },
@@ -198,7 +208,7 @@ const PolarChart: React.FC<{
               data: dataset.polarCoords,
               smooth: false,
               lineStyle: { width: 2, color: color, type: 'solid' },
-              areaStyle: { opacity: 0.3, color: color },
+              ...(showShading ? { areaStyle: { opacity: 0.3, color: color } } : {}),
               symbol: 'circle',
               symbolSize: 3,
               itemStyle: { color: color },
@@ -211,7 +221,7 @@ const PolarChart: React.FC<{
         return series;
       })(),
       legend: {
-        show: multiTensorData.length > 1,
+        show: showLegend && multiTensorData.length > 1,
         top: 30,
         textStyle: {
           color: 'var(--ifm-color-emphasis-800)',
@@ -244,7 +254,7 @@ const PolarChart: React.FC<{
       window.removeEventListener('resize', handleResize);
       chart.dispose();
     };
-  }, [property, plane, multiTensorData]);
+  }, [property, plane, multiTensorData, showShading, showLegend, showGridLines]);
 
   return <div ref={chartRef} style={{ width: '100%', height: '100%', aspectRatio: '1/1' }} />;
 };
