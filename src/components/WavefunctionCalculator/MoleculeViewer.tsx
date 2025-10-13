@@ -9,18 +9,22 @@ interface MoleculeViewerProps {
   wavefunctionResults?: any;
   cubeResults?: Map<string, string>;
   cubeGridInfo?: any;
-  onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number) => void;
+  cubeSettings?: any;
+  onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number, spin?: 'alpha' | 'beta') => void;
+  onOpenCubeSettings?: () => void;
 }
 
 type RepresentationType = 'ball+stick' | 'line' | 'spacefill' | 'surface' | 'cartoon' | 'licorice';
 
-const MoleculeViewer: React.FC<MoleculeViewerProps> = ({ 
-  xyzData, 
-  moleculeName = 'Molecule', 
-  wavefunctionResults, 
+const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
+  xyzData,
+  moleculeName = 'Molecule',
+  wavefunctionResults,
   cubeResults,
   cubeGridInfo,
-  onRequestCubeComputation
+  cubeSettings,
+  onRequestCubeComputation,
+  onOpenCubeSettings
 }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
@@ -49,7 +53,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     }
     return new Map();
   });
-  const [gridSteps, setGridSteps] = useState<number>(40);
+  const [gridSteps, setGridSteps] = useState<number>(cubeSettings?.gridSteps || 50);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isMOSettingsExpanded, setIsMOSettingsExpanded] = useState<boolean>(true);
@@ -63,6 +67,13 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [colorScale, setColorScale] = useState<string>('rwb');
   const [colorRange, setColorRange] = useState<[number, number]>([0, 0.05]);
   const [isColorRangeExpanded, setIsColorRangeExpanded] = useState<boolean>(false);
+
+  // Sync gridSteps with cubeSettings when it changes
+  useEffect(() => {
+    if (cubeSettings?.gridSteps) {
+      setGridSteps(cubeSettings.gridSteps);
+    }
+  }, [cubeSettings?.gridSteps]);
 
   // Get theme-aware background color
   const getBackgroundColor = () => {
@@ -335,16 +346,57 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     }
 
     const orbitals = [];
-    for (let i = 0; i < wavefunctionResults.orbitalEnergies.length; i++) {
-      const energy = wavefunctionResults.orbitalEnergies[i];
-      const occupation = wavefunctionResults.orbitalOccupations[i] || 0;
-      orbitals.push({
-        index: i,
-        energy: energy * 27.2114, // Convert to eV
-        occupation,
-        isOccupied: occupation > 0
-      });
+
+    // Check if this is an unrestricted calculation
+    const isUnrestricted = typeof wavefunctionResults.orbitalEnergies === 'object' &&
+                           'isUnrestricted' in wavefunctionResults.orbitalEnergies;
+
+    if (isUnrestricted) {
+      const energies = wavefunctionResults.orbitalEnergies;
+      const occupations = wavefunctionResults.orbitalOccupations;
+
+      // Add alpha orbitals
+      for (let i = 0; i < energies.alpha.length; i++) {
+        const energy = energies.alpha[i];
+        const occupation = occupations.alpha[i] || 0;
+        orbitals.push({
+          index: i,
+          energy: energy * 27.2114, // Convert to eV
+          occupation,
+          isOccupied: occupation > 0,
+          spin: 'alpha' as const
+        });
+      }
+
+      // Add beta orbitals
+      for (let i = 0; i < energies.beta.length; i++) {
+        const energy = energies.beta[i];
+        const occupation = occupations.beta[i] || 0;
+        orbitals.push({
+          index: i,
+          energy: energy * 27.2114, // Convert to eV
+          occupation,
+          isOccupied: occupation > 0,
+          spin: 'beta' as const
+        });
+      }
+    } else {
+      // Restricted calculation
+      const energies = wavefunctionResults.orbitalEnergies as number[];
+      const occupations = wavefunctionResults.orbitalOccupations as number[];
+
+      for (let i = 0; i < energies.length; i++) {
+        const energy = energies[i];
+        const occupation = occupations[i] || 0;
+        orbitals.push({
+          index: i,
+          energy: energy * 27.2114, // Convert to eV
+          occupation,
+          isOccupied: occupation > 0
+        });
+      }
     }
+
     return orbitals;
   }, [wavefunctionResults]);
 
@@ -357,15 +409,19 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   useEffect(() => {
     if (availableOrbitals.length > 0 && onRequestCubeComputation && selectedOrbitals.size > 0) {
       const missingOrbitals = [];
-      
+
       for (const orbitalIndex of selectedOrbitals) {
-        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
+        const orbital = availableOrbitals[orbitalIndex];
+        const spin = orbital.spin;
+        const cubeKey = spin
+          ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
+          : `molecular_orbital_${orbital.index}_${gridSteps}`;
         const existingCube = cubeResults?.get(cubeKey);
         if (!existingCube) {
           missingOrbitals.push(orbitalIndex);
         }
       }
-      
+
       if (missingOrbitals.length > 0) {
         // Clear existing timeout
         if (updateTimeoutRef.current) {
@@ -423,12 +479,17 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     try {
       // Validate orbital indices before requesting computation
       const maxOrbitalIndex = availableOrbitals.length - 1;
-      
+
       for (const orbitalIndex of orbitalIndices) {
         if (orbitalIndex < 0 || orbitalIndex > maxOrbitalIndex) {
           throw new Error(`Invalid orbital index ${orbitalIndex}. Valid range: 0-${maxOrbitalIndex}`);
         }
-        onRequestCubeComputation('molecular_orbital', orbitalIndex, gridSteps);
+
+        // Get the orbital to determine spin
+        const orbital = availableOrbitals[orbitalIndex];
+        const spin = orbital.spin; // undefined for restricted, 'alpha' or 'beta' for unrestricted
+
+        onRequestCubeComputation('molecular_orbital', orbital.index, gridSteps, spin);
       }
     } catch (error) {
       console.error('Error requesting MO computation:', error);
@@ -466,7 +527,11 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
     // Check if all selected orbitals have cube data
     const allCubesAvailable = Array.from(selectedOrbitals).every(orbitalIndex => {
-      const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
+      const orbital = availableOrbitals[orbitalIndex];
+      const spin = orbital?.spin;
+      const cubeKey = spin
+        ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
+        : `molecular_orbital_${orbital.index}_${gridSteps}`;
       return cubeResults.get(cubeKey);
     });
 
@@ -562,9 +627,13 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
       // Load and visualize each selected orbital
       for (const [index, orbitalIndex] of Array.from(selectedOrbitals).entries()) {
-        const cubeKey = `molecular_orbital_${orbitalIndex}_${gridSteps}`;
+        const orbital = availableOrbitals[orbitalIndex];
+        const spin = orbital?.spin;
+        const cubeKey = spin
+          ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
+          : `molecular_orbital_${orbital.index}_${gridSteps}`;
         const cubeData = cubeResults?.get(cubeKey);
-        
+
         if (cubeData) {
           // Create blob from cube data and load it
           const blob = new Blob([cubeData], { type: 'text/plain' });
@@ -1080,10 +1149,10 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
 
                   <div className={styles.controlGroup}>
                     <label className={styles.controlLabel}>Grid Steps</label>
-                    <input 
-                      type="number" 
-                      min="20" 
-                      max="60" 
+                    <input
+                      type="number"
+                      min="20"
+                      max="60"
                       step="5"
                       value={gridSteps}
                       onChange={(e) => setGridSteps(parseInt(e.target.value) || 40)}
@@ -1092,9 +1161,9 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                     />
                     {cubeGridInfo && (
                       <label className={styles.checkboxLabel}>
-                        <input 
-                          type="checkbox" 
-                          checked={showGridBounds} 
+                        <input
+                          type="checkbox"
+                          checked={showGridBounds}
                           onChange={(e) => setShowGridBounds(e.target.checked)}
                           className={styles.checkbox}
                         />
@@ -1102,6 +1171,18 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                       </label>
                     )}
                   </div>
+
+                  {onOpenCubeSettings && (
+                    <div className={styles.controlGroup}>
+                      <button
+                        className={styles.cubeSettingsButton}
+                        onClick={onOpenCubeSettings}
+                        title="Advanced cube generation settings"
+                      >
+                        ⚙ Cube Settings...
+                      </button>
+                    </div>
+                  )}
 
                   {isComputingMO && (
                     <div className={styles.controlGroup}>
@@ -1115,32 +1196,118 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
 
 
             {/* Orbital List */}
-            <div className={styles.orbitalList}>
-              {displayedOrbitals.map((orbital, idx) => {
-                // Find HOMO/LUMO in the full orbital set
-                const homoIndex = availableOrbitals.findIndex((orb, i) => 
-                  orb.isOccupied && (!availableOrbitals[i + 1] || !availableOrbitals[i + 1].isOccupied)
+            {(() => {
+              // Check if this is an unrestricted calculation
+              const isUnrestricted = availableOrbitals.length > 0 && availableOrbitals[0].spin !== undefined;
+
+              if (isUnrestricted) {
+                // Separate alpha and beta orbitals
+                const alphaOrbitals = availableOrbitals.filter(orb => orb.spin === 'alpha');
+                const betaOrbitals = availableOrbitals.filter(orb => orb.spin === 'beta');
+                const maxLength = Math.max(alphaOrbitals.length, betaOrbitals.length);
+
+                // Find HOMO/LUMO for alpha and beta separately
+                const alphaHOMOIdx = availableOrbitals.findIndex(orb =>
+                  orb.spin === 'alpha' && orb.isOccupied && !availableOrbitals.find((o, i) => i > availableOrbitals.indexOf(orb) && o.spin === 'alpha' && o.isOccupied)
                 );
-                const lumoIndex = homoIndex >= 0 ? homoIndex + 1 : -1;
-                const isHOMO = orbital.index === homoIndex;
-                const isLUMO = orbital.index === lumoIndex;
-                const isSelected = selectedOrbitals.has(orbital.index);
-                const orbitalColor = orbitalColors.get(orbital.index);
-                
+                const alphaLUMOIdx = alphaHOMOIdx >= 0 ? availableOrbitals.findIndex((orb, i) => orb.spin === 'alpha' && i > alphaHOMOIdx && !orb.isOccupied) : -1;
+
+                const betaHOMOIdx = availableOrbitals.findIndex(orb =>
+                  orb.spin === 'beta' && orb.isOccupied && !availableOrbitals.find((o, i) => i > availableOrbitals.indexOf(orb) && o.spin === 'beta' && o.isOccupied)
+                );
+                const betaLUMOIdx = betaHOMOIdx >= 0 ? availableOrbitals.findIndex((orb, i) => orb.spin === 'beta' && i > betaHOMOIdx && !orb.isOccupied) : -1;
+
                 return (
-                  <OrbitalItem
-                    key={orbital.index}
-                    orbital={orbital}
-                    isHOMO={isHOMO}
-                    isLUMO={isLUMO}
-                    isSelected={isSelected}
-                    colorIndicator={orbitalColor}
-                    onColorChange={(color) => handleOrbitalColorChange(orbital.index, color)}
-                    onClick={() => toggleOrbitalSelection(orbital.index)}
-                  />
+                  <div className={styles.twoColumnOrbitalContainer}>
+                    <div>
+                      {/* Alpha column */}
+                      <div className={styles.orbitalColumn}>
+                        <div className={styles.columnHeader} title="Alpha spin (spin up)">↑</div>
+                        <div>
+                          {alphaOrbitals.map((orbital) => {
+                            const idx = availableOrbitals.indexOf(orbital);
+                            const isHOMO = idx === alphaHOMOIdx;
+                            const isLUMO = idx === alphaLUMOIdx;
+                            const isSelected = selectedOrbitals.has(idx);
+                            const orbitalColor = orbitalColors.get(idx);
+
+                            return (
+                              <OrbitalItem
+                                key={`alpha-${orbital.index}`}
+                                orbital={orbital}
+                                isHOMO={isHOMO}
+                                isLUMO={isLUMO}
+                                isSelected={isSelected}
+                                colorIndicator={orbitalColor}
+                                onColorChange={(color) => handleOrbitalColorChange(idx, color)}
+                                onClick={() => toggleOrbitalSelection(idx)}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Beta column */}
+                      <div className={styles.orbitalColumn}>
+                        <div className={styles.columnHeader} title="Beta spin (spin down)">↓</div>
+                        <div>
+                          {betaOrbitals.map((orbital) => {
+                            const idx = availableOrbitals.indexOf(orbital);
+                            const isHOMO = idx === betaHOMOIdx;
+                            const isLUMO = idx === betaLUMOIdx;
+                            const isSelected = selectedOrbitals.has(idx);
+                            const orbitalColor = orbitalColors.get(idx);
+
+                            return (
+                              <OrbitalItem
+                                key={`beta-${orbital.index}`}
+                                orbital={orbital}
+                                isHOMO={isHOMO}
+                                isLUMO={isLUMO}
+                                isSelected={isSelected}
+                                colorIndicator={orbitalColor}
+                                onColorChange={(color) => handleOrbitalColorChange(idx, color)}
+                                onClick={() => toggleOrbitalSelection(idx)}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 );
-              })}
-            </div>
+              } else {
+                // Restricted calculation - single column
+                return (
+                  <div className={styles.orbitalList}>
+                    {displayedOrbitals.map((orbital, idx) => {
+                      // Find HOMO/LUMO in the full orbital set
+                      const homoIndex = availableOrbitals.findIndex((orb, i) =>
+                        orb.isOccupied && (!availableOrbitals[i + 1] || !availableOrbitals[i + 1].isOccupied)
+                      );
+                      const lumoIndex = homoIndex >= 0 ? homoIndex + 1 : -1;
+                      const isHOMO = idx === homoIndex;
+                      const isLUMO = idx === lumoIndex;
+                      const isSelected = selectedOrbitals.has(idx);
+                      const orbitalColor = orbitalColors.get(idx);
+
+                      return (
+                        <OrbitalItem
+                          key={orbital.index}
+                          orbital={orbital}
+                          isHOMO={isHOMO}
+                          isLUMO={isLUMO}
+                          isSelected={isSelected}
+                          colorIndicator={orbitalColor}
+                          onColorChange={(color) => handleOrbitalColorChange(idx, color)}
+                          onClick={() => toggleOrbitalSelection(idx)}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              }
+            })()}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import styles from './WavefunctionCalculator.module.css';
 import FileUploader from './FileUploader';
 import CalculationSettings from './CalculationSettings';
+import CubeSettings, { CubeGeometrySettings } from './CubeSettings';
 import ResultsDisplay from './ResultsDisplay';
 import LogOutput from './LogOutput';
 import MatrixDisplay from './MatrixDisplay';
@@ -19,9 +20,15 @@ interface CalculationResult {
     homo?: number;
     lumo?: number;
     gap?: number;
+    alphaHOMO?: number;
+    alphaLUMO?: number;
+    betaHOMO?: number;
+    betaLUMO?: number;
+    isUnrestricted?: boolean;
   };
   wavefunctionData?: {
     fchk?: string;
+    owfJson?: string;
     numBasisFunctions: number;
     numAtoms: number;
   };
@@ -33,8 +40,16 @@ interface CalculationResult {
     density?: MatrixData;
     coefficients?: MatrixData;
   };
-  orbitalEnergies?: number[];
-  orbitalOccupations?: number[];
+  orbitalEnergies?: number[] | {
+    alpha: number[];
+    beta: number[];
+    isUnrestricted: true;
+  };
+  orbitalOccupations?: number[] | {
+    alpha: number[];
+    beta: number[];
+    isUnrestricted: true;
+  };
   optimization?: {
     trajectory: {
       energies: number[];
@@ -65,6 +80,19 @@ interface MatrixData {
   data: number[][];
 }
 
+interface SCFSettings {
+  method: string;
+  basisSet: string;
+  charge: number;
+  multiplicity: number;
+  optimize: boolean;
+  computeFrequencies: boolean;
+  maxIterations: number;
+  energyTolerance: number;
+  threads: number;
+  logLevel: number;
+}
+
 const WavefunctionCalculator: React.FC = () => {
   const [worker, setWorker] = useState<Worker | null>(null);
   const [isWorkerReady, setIsWorkerReady] = useState(false);
@@ -79,30 +107,58 @@ const WavefunctionCalculator: React.FC = () => {
   const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
   const [cubeGridInfo, setCubeGridInfo] = useState<any>(null);
   const [isXYZValid, setIsXYZValid] = useState<boolean>(true);
+  const [wavefunctionData, setWavefunctionData] = useState<Uint8Array | null>(null);
   
   // Collapsible sections state
   const [isInputExpanded, setIsInputExpanded] = useState(true);
   const [isSettingsExpanded, setIsSettingsExpanded] = useState(true);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
 
   // Calculation settings
-  const [method, setMethod] = useState('hf');
-  const [basisSet, setBasisSet] = useState('3-21g');
-  const [maxIterations, setMaxIterations] = useState(100);
-  const [energyTolerance, setEnergyTolerance] = useState(1e-8);
-  const [logLevel, setLogLevel] = useState(2);
-  const [optimize, setOptimize] = useState(false);
-  const [computeFrequencies, setComputeFrequencies] = useState(false);
-  const [charge, setCharge] = useState(0);
-  const [threads, setThreads] = useState(4);
-  
-  // Handle optimization toggle - turn off frequencies when optimization is disabled
-  const handleOptimizeChange = (enabled: boolean) => {
-    setOptimize(enabled);
-    if (!enabled) {
-      setComputeFrequencies(false);
-    }
+  const [settings, setSettings] = useState<SCFSettings>({
+    method: 'hf',
+    basisSet: '3-21g',
+    charge: 0,
+    multiplicity: 1,
+    optimize: false,
+    computeFrequencies: false,
+    maxIterations: 100,
+    energyTolerance: 1e-8,
+    threads: 1,
+    logLevel: 2
+  });
+
+  // Helper to update settings
+  const updateSettings = (updates: Partial<SCFSettings>) => {
+    setSettings(prev => {
+      const newSettings = { ...prev, ...updates };
+      // Auto-disable frequencies if optimization is turned off
+      if ('optimize' in updates && !updates.optimize) {
+        newSettings.computeFrequencies = false;
+      }
+      return newSettings;
+    });
   };
   
+  // Cube settings
+  const [cubeSettings, setCubeSettings] = useState<CubeGeometrySettings>({
+    gridSteps: 50,
+    useAdaptive: true,
+    bufferDistance: 2.0,
+    threshold: 1e-5,
+    customOrigin: false,
+    origin: [0, 0, 0],
+    customDirections: false,
+    directionA: [0, 0, 0],
+    directionB: [0, 0, 0],
+    directionC: [0, 0, 0]
+  });
+  const [showCubeSettings, setShowCubeSettings] = useState(false);
+
+  const updateCubeSettings = (updates: Partial<CubeGeometrySettings>) => {
+    setCubeSettings(prev => ({ ...prev, ...updates }));
+  };
+
   // Trajectory viewing state
   const [trajectoryMode, setTrajectoryMode] = useState<'optimization' | 'normal_mode'>('optimization');
   const [selectedNormalMode, setSelectedNormalMode] = useState<number | null>(null);
@@ -123,7 +179,7 @@ const WavefunctionCalculator: React.FC = () => {
   const initializeWorker = async () => {
     try {
       const newWorker = new Worker(
-        new URL('./wavefunction-worker.js', import.meta.url),
+        new URL('./ready-worker.js', import.meta.url),
         { type: 'module' }
       );
 
@@ -136,21 +192,11 @@ const WavefunctionCalculator: React.FC = () => {
 
       setWorker(newWorker);
 
-      // Initialize OCC in worker
+      // Signal ready state
       newWorker.postMessage({
         type: 'init',
         data: {}
       });
-      
-      // Send warmup request after initialization
-      setTimeout(() => {
-        if (newWorker) {
-          newWorker.postMessage({
-            type: 'warmup',
-            data: {}
-          });
-        }
-      }, 100);
     } catch (error) {
       console.error('Failed to initialize worker:', error);
       setError('Failed to initialize Web Worker: ' + error.message);
@@ -297,18 +343,25 @@ const WavefunctionCalculator: React.FC = () => {
 
   const handleCubeResult = (data: any) => {
     if (data.success) {
-      const key = data.cubeType === 'molecular_orbital' 
-        ? `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}` 
-        : data.cubeType;
-      
+      let key: string;
+      if (data.cubeType === 'molecular_orbital') {
+        // Include spin in key for unrestricted calculations
+        key = data.spin
+          ? `${data.cubeType}_${data.orbitalIndex}_${data.spin}_${data.gridSteps || 40}`
+          : `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}`;
+      } else {
+        key = data.cubeType;
+      }
+
       setCubeResults(prev => new Map(prev.set(key, data.cubeData)));
-      
+
       // Store grid info if available
       if (data.gridInfo) {
         setCubeGridInfo(data.gridInfo);
       }
-      
-      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex})` : ''} [${data.gridSteps || 40} steps]`, 'info');
+
+      const spinLabel = data.spin ? ` (${data.spin})` : '';
+      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex}${spinLabel})` : ''} [${data.gridSteps || 40} steps]`, 'info');
     } else {
       setError(`Cube computation failed: ${data.error}`);
       addLog(`Cube computation failed: ${data.error}`, 'error');
@@ -320,14 +373,9 @@ const WavefunctionCalculator: React.FC = () => {
       setError('Please load a molecule first.');
       return;
     }
-    
+
     if (!isXYZValid) {
       // Don't show modal for validation errors, they're already shown inline
-      return;
-    }
-
-    if (!worker || !isWorkerReady) {
-      setError('Web Worker not ready.');
       return;
     }
 
@@ -338,30 +386,520 @@ const WavefunctionCalculator: React.FC = () => {
     setIsCalculating(true);
     setPrecomputedTrajectories(new Map()); // Clear trajectory cache
 
-    // Set log level
-    worker.postMessage({
-      type: 'setLogLevel',
-      data: { level: logLevel }
-    });
+    addLog('Starting calculation via CLI...', 'info');
 
-    // Send calculation request
-    const params = {
-      xyzData: currentXYZData,
-      method,
-      basisSet,
-      maxIterations,
-      energyTolerance,
-      optimize,
-      computeFrequencies,
-      charge,
-      threads
+    // Create CLI worker for this calculation
+    const cliWorker = new Worker('/occ-cli-worker.js');
+
+    let outputBuffer = '';
+    let hasExited = false;
+
+    cliWorker.onmessage = (e) => {
+      const { type, text, code, files, stdout } = e.data;
+
+      switch (type) {
+        case 'ready':
+          addLog('CLI worker ready, executing command...', 'info');
+          break;
+
+        case 'output':
+          outputBuffer += text + '\n';
+          addLog(text, 'info');
+          break;
+
+        case 'error':
+          outputBuffer += text + '\n';
+          addLog(text, 'error');
+          break;
+
+        case 'exit':
+          if (hasExited) return; // Prevent duplicate processing
+          hasExited = true;
+
+          if (code !== 0) {
+            setError(`Calculation failed with exit code ${code}`);
+            setIsCalculating(false);
+            cliWorker.terminate();
+            return;
+          }
+
+          addLog('Calculation completed, parsing results...', 'info');
+
+          try {
+            // Parse energy from stdout
+            const energyMatch = stdout.match(/total\s+([-\d.]+)/);
+            if (!energyMatch) {
+              throw new Error('Could not parse energy from output');
+            }
+
+            const energy = parseFloat(energyMatch[1]);
+
+            // Parse convergence info
+            const convergedMatch = stdout.match(/converged after ([\d.]+) seconds/);
+            const converged = convergedMatch !== null;
+            const convergenceTime = convergedMatch ? parseFloat(convergedMatch[1]) * 1000 : 0;
+
+            // Find the .owf.json file
+            const owfPath = Object.keys(files).find(path => path.endsWith('.owf.json'));
+            if (!owfPath) {
+              throw new Error('No .owf.json file found in output');
+            }
+
+            const owfData = files[owfPath];
+            addLog(`Found wavefunction file: ${owfPath} (${owfData.length} bytes)`, 'info');
+
+            // Store the wavefunction file for cube generation
+            setWavefunctionData(owfData);
+
+            // Parse the wavefunction JSON to extract orbital energies and other data
+            const owfText = new TextDecoder().decode(owfData);
+            addLog('Parsing wavefunction JSON...', 'info');
+
+            let owfJson;
+            try {
+              owfJson = JSON.parse(owfText);
+              addLog(`Parsed owf.json keys: ${Object.keys(owfJson).join(', ')}`, 'info');
+            } catch (parseError) {
+              addLog(`Failed to parse owf.json: ${parseError.message}`, 'error');
+              throw parseError;
+            }
+
+            // Create results object
+            const calculationResults: CalculationResult = {
+              energy: energy,
+              energyInEV: energy * 27.2114,
+              elapsedMs: convergenceTime,
+              converged: converged
+            };
+
+            // Extract orbital energies and occupations from owf.json
+            // Note: The key is "molecular orbitals" not "mo"
+            const mo = owfJson['molecular orbitals'];
+            addLog(`Molecular orbitals object: ${mo ? 'found' : 'missing'}`, 'info');
+            if (mo) {
+              addLog(`MO keys: ${Object.keys(mo).join(', ')}`, 'info');
+            }
+
+            // Check if this is an unrestricted calculation
+            const isUnrestricted = mo && mo['spinorbital kind'] === 'unrestricted';
+            addLog(`Calculation type: ${isUnrestricted ? 'unrestricted' : 'restricted'}`, 'info');
+
+            // For unrestricted, orbitals are stacked (top half = alpha, bottom half = beta)
+            if (isUnrestricted) {
+              const orbitalEnergies = mo['orbital energies'];
+
+              if (orbitalEnergies && Array.isArray(orbitalEnergies)) {
+                const totalOrbitals = orbitalEnergies.length;
+                const halfPoint = totalOrbitals / 2;
+
+                // Split into alpha (first half) and beta (second half)
+                // Convert to primitive numbers since they come as Number objects
+                const alphaEnergies = orbitalEnergies.slice(0, halfPoint).map(e => Number(e));
+                const betaEnergies = orbitalEnergies.slice(halfPoint).map(e => Number(e));
+
+                calculationResults.orbitalEnergies = {
+                  alpha: alphaEnergies,
+                  beta: betaEnergies,
+                  isUnrestricted: true
+                };
+                addLog(`Found ${alphaEnergies.length} alpha and ${betaEnergies.length} beta orbital energies (stacked format)`, 'info');
+              } else {
+                addLog('No orbital energies found for unrestricted calculation', 'warn');
+              }
+            } else {
+              // Restricted calculation
+              const orbitalEnergies = mo ? mo['orbital energies'] : null;
+              if (orbitalEnergies) {
+                calculationResults.orbitalEnergies = orbitalEnergies;
+                addLog(`Found ${orbitalEnergies.length} orbital energies`, 'info');
+              } else {
+                addLog(`No energies found in MO object`, 'warn');
+              }
+            }
+
+            // Set up orbital occupations and HOMO/LUMO
+            if (mo) {
+              const nAlpha = mo['alpha electrons'] || 0;
+              const nBeta = mo['beta electrons'] || 0;
+
+              if (isUnrestricted && calculationResults.orbitalEnergies?.isUnrestricted) {
+                // Unrestricted: separate alpha and beta occupations
+                const alphaEnergies = calculationResults.orbitalEnergies.alpha;
+                const betaEnergies = calculationResults.orbitalEnergies.beta;
+
+                calculationResults.orbitalOccupations = {
+                  alpha: alphaEnergies.map((_, i) => i < nAlpha ? 1.0 : 0.0),
+                  beta: betaEnergies.map((_, i) => i < nBeta ? 1.0 : 0.0),
+                  isUnrestricted: true
+                };
+
+                addLog(`Set alpha/beta occupations: ${nAlpha} alpha, ${nBeta} beta electrons`, 'info');
+
+                // HOMO/LUMO for unrestricted
+                const alphaHOMO = nAlpha > 0 && nAlpha <= alphaEnergies.length ? alphaEnergies[nAlpha - 1] : null;
+                const alphaLUMO = nAlpha < alphaEnergies.length ? alphaEnergies[nAlpha] : null;
+                const betaHOMO = nBeta > 0 && nBeta <= betaEnergies.length ? betaEnergies[nBeta - 1] : null;
+                const betaLUMO = nBeta < betaEnergies.length ? betaEnergies[nBeta] : null;
+
+                calculationResults.properties = {
+                  alphaHOMO: (alphaHOMO !== null && alphaHOMO !== undefined) ? alphaHOMO * 27.2114 : undefined,
+                  alphaLUMO: (alphaLUMO !== null && alphaLUMO !== undefined) ? alphaLUMO * 27.2114 : undefined,
+                  betaHOMO: (betaHOMO !== null && betaHOMO !== undefined) ? betaHOMO * 27.2114 : undefined,
+                  betaLUMO: (betaLUMO !== null && betaLUMO !== undefined) ? betaLUMO * 27.2114 : undefined,
+                  isUnrestricted: true
+                };
+
+                if (alphaHOMO !== null && alphaHOMO !== undefined) addLog(`Alpha HOMO: ${alphaHOMO.toFixed(6)} Ha (${(alphaHOMO * 27.2114).toFixed(4)} eV)`, 'info');
+                if (alphaLUMO !== null && alphaLUMO !== undefined) addLog(`Alpha LUMO: ${alphaLUMO.toFixed(6)} Ha (${(alphaLUMO * 27.2114).toFixed(4)} eV)`, 'info');
+                if (betaHOMO !== null && betaHOMO !== undefined) addLog(`Beta HOMO: ${betaHOMO.toFixed(6)} Ha (${(betaHOMO * 27.2114).toFixed(4)} eV)`, 'info');
+                if (betaLUMO !== null && betaLUMO !== undefined) addLog(`Beta LUMO: ${betaLUMO.toFixed(6)} Ha (${(betaLUMO * 27.2114).toFixed(4)} eV)`, 'info');
+
+              } else if (calculationResults.orbitalEnergies && Array.isArray(calculationResults.orbitalEnergies)) {
+                // Restricted: combined occupations
+                const orbitalEnergies = calculationResults.orbitalEnergies;
+                const occupationArray = [];
+                for (let i = 0; i < orbitalEnergies.length; i++) {
+                  if (i < Math.min(nAlpha, nBeta)) {
+                    occupationArray.push(2.0); // Doubly occupied
+                  } else if (i < Math.max(nAlpha, nBeta)) {
+                    occupationArray.push(1.0); // Singly occupied
+                  } else {
+                    occupationArray.push(0.0); // Virtual
+                  }
+                }
+                calculationResults.orbitalOccupations = occupationArray;
+                addLog(`Set orbital occupations based on ${nAlpha} alpha and ${nBeta} beta electrons`, 'info');
+
+                // HOMO/LUMO for restricted
+                if (orbitalEnergies.length > 0) {
+                  const homoIndex = Math.max(nAlpha, nBeta) - 1;
+                  const lumoIndex = homoIndex + 1;
+
+                  if (homoIndex >= 0 && homoIndex < orbitalEnergies.length) {
+                    const homo = parseFloat(orbitalEnergies[homoIndex]);
+                    const lumo = lumoIndex < orbitalEnergies.length ? parseFloat(orbitalEnergies[lumoIndex]) : null;
+
+                    if (!isNaN(homo)) {
+                      calculationResults.properties = {
+                        homo: homo * 27.2114,
+                        lumo: (lumo && !isNaN(lumo)) ? lumo * 27.2114 : undefined,
+                        gap: (lumo && !isNaN(lumo)) ? (lumo - homo) * 27.2114 : undefined
+                      };
+
+                      addLog(`HOMO: ${homo.toFixed(6)} Ha (${(homo * 27.2114).toFixed(4)} eV)`, 'info');
+                      if (lumo && !isNaN(lumo)) {
+                        addLog(`LUMO: ${lumo.toFixed(6)} Ha (${(lumo * 27.2114).toFixed(4)} eV)`, 'info');
+                        addLog(`Gap: ${((lumo - homo) * 27.2114).toFixed(4)} eV`, 'info');
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Store wavefunction metadata and full JSON for download
+            if (owfJson.atoms && mo) {
+              const basisFunctions = owfJson['basis functions'] || [];
+              calculationResults.wavefunctionData = {
+                numBasisFunctions: basisFunctions.length || 0,
+                numAtoms: owfJson.atoms.length || 0,
+                nAlpha: mo['alpha electrons'] || 0,
+                nBeta: mo['beta electrons'] || 0,
+                owfJson: owfText  // Store the full JSON for download
+              };
+              addLog('Stored wavefunction metadata', 'info');
+            } else {
+              addLog(`Warning: Missing atoms or mo in owf.json. Has atoms: ${!!owfJson.atoms}, Has mo: ${!!mo}`, 'warn');
+            }
+
+            // Extract matrices from OWF JSON if available
+            try {
+              calculationResults.matrices = {};
+
+              // Helper function to wrap 2D array in matrix format
+              const arrayToMatrix = (matrixData: number[][]) => {
+                const rows = matrixData.length;
+                const cols = matrixData[0]?.length || 0;
+                return { rows, cols, data: matrixData };
+              };
+
+              // Calculate number of basis functions from orbital energies length
+              const nbf = mo['orbital energies']?.length || 0;
+              addLog(`Number of basis functions: ${nbf}`, 'info');
+
+              // Extract kinetic energy matrix (top-level in owfJson)
+              if (owfJson['kinetic energy matrix']) {
+                const kineticMatrix = owfJson['kinetic energy matrix'];
+                if (Array.isArray(kineticMatrix) && kineticMatrix.length > 0 && Array.isArray(kineticMatrix[0])) {
+                  calculationResults.matrices.kinetic = arrayToMatrix(kineticMatrix);
+                  addLog(`Extracted kinetic energy matrix (${kineticMatrix.length}×${kineticMatrix[0].length})`, 'info');
+                }
+              }
+
+              // Extract nuclear attraction matrix (top-level in owfJson)
+              if (owfJson['nuclear attraction matrix']) {
+                const nuclearMatrix = owfJson['nuclear attraction matrix'];
+                if (Array.isArray(nuclearMatrix) && nuclearMatrix.length > 0 && Array.isArray(nuclearMatrix[0])) {
+                  calculationResults.matrices.nuclear = arrayToMatrix(nuclearMatrix);
+                  addLog(`Extracted nuclear attraction matrix (${nuclearMatrix.length}×${nuclearMatrix[0].length})`, 'info');
+                }
+              }
+
+              // Extract overlap matrix (check multiple possible locations)
+              let overlapMatrix = null;
+              if (owfJson['overlap matrix']) {
+                overlapMatrix = owfJson['overlap matrix'];
+              } else if (owfJson['orbital basis']?.['overlap matrix']) {
+                overlapMatrix = owfJson['orbital basis']['overlap matrix'];
+              } else if (mo['overlap matrix']) {
+                overlapMatrix = mo['overlap matrix'];
+              }
+
+              if (overlapMatrix && Array.isArray(overlapMatrix) && overlapMatrix.length > 0 && Array.isArray(overlapMatrix[0])) {
+                calculationResults.matrices.overlap = arrayToMatrix(overlapMatrix);
+                addLog(`Extracted overlap matrix (${overlapMatrix.length}×${overlapMatrix[0].length})`, 'info');
+              } else {
+                addLog('Overlap matrix not found in OWF JSON', 'warn');
+              }
+
+              // Extract density matrix (in molecular orbitals)
+              if (mo['density matrix']) {
+                const densityMatrix = mo['density matrix'];
+                if (Array.isArray(densityMatrix) && densityMatrix.length > 0 && Array.isArray(densityMatrix[0])) {
+                  calculationResults.matrices.density = arrayToMatrix(densityMatrix);
+                  addLog(`Extracted density matrix (${densityMatrix.length}×${densityMatrix[0].length})`, 'info');
+                }
+              }
+
+              // Extract MO coefficients (in molecular orbitals as "orbital coefficients")
+              if (mo['orbital coefficients']) {
+                const coeffMatrix = mo['orbital coefficients'];
+                if (Array.isArray(coeffMatrix) && coeffMatrix.length > 0 && Array.isArray(coeffMatrix[0])) {
+                  calculationResults.matrices.coefficients = arrayToMatrix(coeffMatrix);
+                  addLog(`Extracted MO coefficients matrix (${coeffMatrix.length}×${coeffMatrix[0].length})`, 'info');
+                }
+              }
+
+              const numMatrices = Object.keys(calculationResults.matrices).length;
+              if (numMatrices > 0) {
+                addLog(`Extracted ${numMatrices} matrices from wavefunction data`, 'info');
+              } else {
+                addLog('No matrices found in wavefunction data', 'warn');
+              }
+            } catch (matrixError) {
+              addLog(`Warning: Failed to extract matrices: ${matrixError.message}`, 'warn');
+            }
+
+            // Find and store the FCHK file if present
+            const fchkPath = Object.keys(files).find(path => path.endsWith('.owf.fchk') || path.endsWith('.fchk'));
+            if (fchkPath) {
+              const fchkData = files[fchkPath];
+              const fchkText = new TextDecoder().decode(fchkData);
+              addLog(`Found FCHK file: ${fchkPath} (${fchkData.length} bytes)`, 'info');
+
+              // Add FCHK to wavefunction data
+              if (calculationResults.wavefunctionData) {
+                calculationResults.wavefunctionData.fchk = fchkText;
+              }
+            } else {
+              addLog('Warning: No FCHK file found in output', 'warn');
+            }
+
+            // Parse optimization trajectory if present
+            const trjPath = Object.keys(files).find(path => path.endsWith('_trj.xyz'));
+            const optPath = Object.keys(files).find(path => path.endsWith('_opt.xyz'));
+
+            if (trjPath && optPath) {
+              addLog(`Found optimization files: ${trjPath}, ${optPath}`, 'info');
+
+              try {
+                const trjData = new TextDecoder().decode(files[trjPath]);
+                const optData = new TextDecoder().decode(files[optPath]);
+
+                // Parse trajectory XYZ file (contains all steps)
+                const trjFrames = trjData.trim().split(/\n(?=\d+\n)/); // Split on lines that start with a number
+                const geometries: string[] = [];
+                const energies: number[] = [];
+                const gradientNorms: number[] = [];
+
+                for (const frame of trjFrames) {
+                  if (!frame.trim()) continue;
+
+                  geometries.push(frame.trim());
+
+                  // Try to extract energy from comment line
+                  const lines = frame.trim().split('\n');
+                  if (lines.length >= 2) {
+                    const commentLine = lines[1];
+                    // Look for energy in comment (format may vary)
+                    const energyMatch = commentLine.match(/energy[=:\s]+([-\d.]+)/i);
+                    if (energyMatch) {
+                      energies.push(parseFloat(energyMatch[1]));
+                    }
+                    // Look for gradient norm
+                    const gradMatch = commentLine.match(/grad(?:ient)?[=:\s]+([-\d.]+)/i);
+                    if (gradMatch) {
+                      gradientNorms.push(parseFloat(gradMatch[1]));
+                    }
+                  }
+                }
+
+                calculationResults.optimization = {
+                  trajectory: {
+                    energies: energies.length > 0 ? energies : [energy], // Fallback to final energy
+                    gradientNorms: gradientNorms,
+                    geometries: geometries,
+                    converged: converged,
+                    steps: geometries.length,
+                    finalEnergy: energy,
+                    finalMolecule: null
+                  },
+                  finalXYZ: optData,
+                  steps: geometries.length,
+                  energies: energies.length > 0 ? energies : [energy],
+                  gradientNorms: gradientNorms
+                };
+
+                addLog(`Parsed optimization trajectory: ${geometries.length} steps`, 'info');
+              } catch (parseError) {
+                addLog(`Warning: Failed to parse optimization files: ${parseError.message}`, 'warn');
+              }
+            }
+
+            // Parse frequency data if present
+            const freqPath = Object.keys(files).find(path => path.endsWith('_freq.json'));
+
+            if (freqPath) {
+              addLog(`Found frequency file: ${freqPath}`, 'info');
+
+              try {
+                const freqData = new TextDecoder().decode(files[freqPath]);
+                const freqJson = JSON.parse(freqData);
+
+                addLog(`Frequency JSON keys: ${Object.keys(freqJson).join(', ')}`, 'info');
+
+                // Extract frequency data - frequencies are stored as [[f1], [f2], ...]
+                const frequenciesRaw = freqJson.frequencies_cm || freqJson.sorted_frequencies_cm || [];
+                const normalModesRaw = freqJson.normal_modes || [];
+                const nAtoms = freqJson.n_atoms || owfJson.atoms?.length || 0;
+                const nModes = freqJson.n_modes || frequenciesRaw.length;
+
+                // Flatten frequencies from [[f1], [f2], ...] to [f1, f2, ...]
+                const frequencies = frequenciesRaw.map((f: number | number[]) =>
+                  Array.isArray(f) ? f[0] : f
+                );
+
+                // Normal modes matrix: Each column is one mode, serialized as array of rows
+                // normalModesRaw is [ [row0...], [row1...], ... ]
+                // where each row has nModes elements, and row i contains displacement i for all modes
+                // We need to transpose: extract columns to get individual modes
+                const normalModes: number[][] = [];
+                if (Array.isArray(normalModesRaw) && normalModesRaw.length > 0 && nModes > 0) {
+                  // Verify it's a 2D array (array of arrays)
+                  if (Array.isArray(normalModesRaw[0])) {
+                    const nRows = normalModesRaw.length; // Should be 3*nAtoms
+                    const nCols = normalModesRaw[0].length; // Should be nModes
+
+                    addLog(`Normal modes matrix: ${nRows} rows × ${nCols} cols`, 'info');
+
+                    // Extract each column (mode)
+                    for (let modeIdx = 0; modeIdx < nCols; modeIdx++) {
+                      const mode: number[] = [];
+                      for (let rowIdx = 0; rowIdx < nRows; rowIdx++) {
+                        mode.push(normalModesRaw[rowIdx][modeIdx]);
+                      }
+                      normalModes.push(mode);
+                    }
+                  } else {
+                    addLog('Warning: normal_modes is not a 2D array', 'warn');
+                  }
+                }
+
+                if (frequencies.length > 0) {
+                  calculationResults.frequencies = {
+                    frequencies: frequencies,
+                    nModes: nModes,
+                    nAtoms: nAtoms,
+                    summary: `${frequencies.length} vibrational modes`,
+                    normalModes: normalModes
+                  };
+
+                  addLog(`Parsed ${frequencies.length} vibrational frequencies`, 'info');
+
+                  // Log first few frequencies
+                  const freqPreview = frequencies.slice(0, 5).map((f: number) =>
+                    f < 0 ? `${Math.abs(f).toFixed(1)}i` : f.toFixed(1)
+                  ).join(', ');
+                  addLog(`First frequencies: ${freqPreview} cm⁻¹`, 'info');
+
+                  if (normalModes.length > 0) {
+                    addLog(`Parsed ${normalModes.length} normal modes (${normalModes[0].length} elements each)`, 'info');
+                  } else {
+                    addLog('Warning: No normal mode data found', 'warn');
+                  }
+                } else {
+                  addLog('Warning: No frequencies found in frequency JSON', 'warn');
+                }
+              } catch (parseError) {
+                addLog(`Warning: Failed to parse frequency file: ${parseError.message}`, 'warn');
+              }
+            }
+
+            setResults(calculationResults);
+            setActiveTab('results');
+            addLog(`Energy: ${energy.toFixed(8)} Ha (${(energy * 27.2114).toFixed(4)} eV)`, 'info');
+            addLog('Calculation completed successfully!', 'info')
+
+          } catch (error) {
+            setError(`Failed to parse results: ${error.message}`);
+            addLog(`Error: ${error.message}`, 'error');
+          }
+
+          setIsCalculating(false);
+          cliWorker.terminate();
+          break;
+      }
     };
 
-    addLog('Starting calculation...', 'info');
-    worker.postMessage({
-      type: 'calculate',
-      data: params
-    });
+    cliWorker.onerror = (error) => {
+      setError(`CLI worker error: ${error.message}`);
+      setIsCalculating(false);
+      cliWorker.terminate();
+    };
+
+    // Build command arguments
+    const workerData: any = {
+      xyzData: currentXYZData,
+      method: settings.method,
+      basis: settings.basisSet,
+      charge: settings.charge,
+      multiplicity: settings.multiplicity,
+      threads: settings.threads
+    };
+
+    // Add optimization flags if needed
+    if (settings.optimize) {
+      workerData.optMaxIterations = 50;
+      addLog('Optimization enabled (max 50 steps)', 'info');
+    }
+
+    // Add frequency flag if needed
+    if (settings.computeFrequencies && settings.optimize) {
+      workerData.computeFrequencies = true;
+      addLog('Frequency calculation enabled', 'info');
+    }
+
+    let cmdPreview = `occ scf input.xyz ${settings.method} ${settings.basisSet}`;
+    if (settings.charge !== 0) cmdPreview += ` --charge ${settings.charge}`;
+    if (settings.multiplicity !== 1) cmdPreview += ` --multiplicity ${settings.multiplicity}`;
+    if (settings.optimize) cmdPreview += ` --opt-max-iterations 50`;
+    if (settings.computeFrequencies && settings.optimize) cmdPreview += ` --frequencies`;
+    cmdPreview += ` --threads=${settings.threads}`;
+    cmdPreview += ` -o json -o fchk`;
+
+    addLog(`Running: ${cmdPreview}`, 'info');
+
+    cliWorker.postMessage(workerData);
   };
 
   const cancelCalculation = () => {
@@ -373,27 +911,135 @@ const WavefunctionCalculator: React.FC = () => {
     }
   };
 
-  const requestCubeComputation = (cubeType: string, orbitalIndex?: number, gridSteps?: number) => {
-    if (!worker || !isWorkerReady) {
-      setError('Web Worker not ready for cube computation.');
-      return;
-    }
-
-    if (!results || !results.wavefunctionData) {
+  const requestCubeComputation = (cubeType: string, orbitalIndex?: number, gridStepsOverride?: number, spin?: 'alpha' | 'beta') => {
+    if (!wavefunctionData) {
       setError('No wavefunction data available for cube computation.');
       return;
     }
 
-    addLog(`Requesting ${cubeType} cube computation...`, 'info');
-    
-    worker.postMessage({
-      type: 'computeCube',
-      data: {
-        cubeType,
-        orbitalIndex,
-        gridSteps: gridSteps || 40
+    addLog(`Requesting ${cubeType} cube via CLI...`, 'info');
+
+    // Create CLI worker for cube generation
+    const cliWorker = new Worker('/occ-cli-worker.js');
+
+    let hasExited = false;
+
+    cliWorker.onmessage = (e) => {
+      const { type, text, code, cubeData, gridInfo, property, orbital, spin } = e.data;
+
+      switch (type) {
+        case 'output':
+          addLog(`[CUBE] ${text}`, 'info');
+          break;
+
+        case 'error':
+          addLog(`[CUBE ERROR] ${text}`, 'error');
+          break;
+
+        case 'exit':
+          if (hasExited) return;
+          hasExited = true;
+
+          if (code !== 0 || !cubeData) {
+            setError(`Cube generation failed with exit code ${code}`);
+            addLog('Cube generation failed', 'error');
+            cliWorker.terminate();
+            return;
+          }
+
+          // Store the cube result
+          const actualGridSteps = gridStepsOverride || cubeSettings.gridSteps;
+          let key: string;
+          if (orbitalIndex !== undefined) {
+            key = spin
+              ? `molecular_orbital_${orbitalIndex}_${spin}_${actualGridSteps}`
+              : `molecular_orbital_${orbitalIndex}_${actualGridSteps}`;
+          } else {
+            key = cubeType;
+          }
+
+          setCubeResults(prev => new Map(prev.set(key, cubeData)));
+
+          // Store grid info if available
+          if (gridInfo) {
+            setCubeGridInfo(gridInfo);
+            addLog(`Grid info: ${gridInfo.nx}×${gridInfo.ny}×${gridInfo.nz} points`, 'info');
+          }
+
+          const spinLabel = spin ? ` (${spin})` : '';
+          addLog(`Cube computation completed: ${property}${orbital !== undefined ? ` (orbital ${orbital}${spinLabel})` : ''}`, 'info');
+
+          cliWorker.terminate();
+          break;
       }
-    });
+    };
+
+    cliWorker.onerror = (error) => {
+      setError(`Cube worker error: ${error.message}`);
+      cliWorker.terminate();
+    };
+
+    // Map cubeType to property name
+    let property = 'density';
+    let orbital = null;
+    let spinChannel = spin || null; // 'alpha', 'beta', or null for default
+
+    if (cubeType === 'molecular_orbital' && orbitalIndex !== undefined) {
+      property = 'density';
+      // CLI uses 1-based indexing, so add 1 to our 0-based index
+      orbital = (orbitalIndex + 1).toString();
+    } else if (cubeType === 'electron_density') {
+      property = 'density';
+    } else if (cubeType === 'electric_potential') {
+      property = 'esp';
+    }
+
+    // Build worker data with cube settings
+    const gridSteps = gridStepsOverride || cubeSettings.gridSteps;
+    const workerData: any = {
+      command: 'cube',
+      owfData: wavefunctionData,
+      property: property,
+      orbital: orbital,
+      spin: spinChannel,
+      gridSteps: gridSteps
+    };
+
+    // Add adaptive bounds if enabled
+    if (cubeSettings.useAdaptive) {
+      workerData.adaptive = true;
+      workerData.bufferDistance = cubeSettings.bufferDistance;
+      workerData.threshold = cubeSettings.threshold;
+    }
+
+    // Add custom origin if specified
+    if (cubeSettings.customOrigin) {
+      workerData.origin = cubeSettings.origin;
+    }
+
+    // Add custom directions if specified
+    if (cubeSettings.customDirections) {
+      workerData.directionA = cubeSettings.directionA;
+      workerData.directionB = cubeSettings.directionB;
+      workerData.directionC = cubeSettings.directionC;
+    }
+
+    // Build command preview for logging
+    let cmdPreview = `occ cube input.owf.json ${property}`;
+    if (spinChannel) cmdPreview += ` ${spinChannel}`;
+    if (orbital) cmdPreview += ` --orbital ${orbital}`;
+    cmdPreview += ` -n ${gridSteps}`;
+    if (cubeSettings.useAdaptive) cmdPreview += ` --adaptive --buffer ${cubeSettings.bufferDistance} --threshold ${cubeSettings.threshold}`;
+    if (cubeSettings.customOrigin) cmdPreview += ` --origin ${cubeSettings.origin.join(' ')}`;
+    if (cubeSettings.customDirections) {
+      cmdPreview += ` --da ${cubeSettings.directionA.join(' ')}`;
+      cmdPreview += ` --db ${cubeSettings.directionB.join(' ')}`;
+      cmdPreview += ` --dc ${cubeSettings.directionC.join(' ')}`;
+    }
+
+    addLog(`Running: ${cmdPreview}`, 'info');
+
+    cliWorker.postMessage(workerData);
   };
 
   // Convert optimization trajectory to XYZ format for TrajectoryViewer
@@ -558,24 +1204,10 @@ const WavefunctionCalculator: React.FC = () => {
               {isSettingsExpanded && (
                 <div className={styles.sectionContent}>
                   <CalculationSettings
-                    method={method}
-                    setMethod={setMethod}
-                    basisSet={basisSet}
-                    setBasisSet={setBasisSet}
-                    maxIterations={maxIterations}
-                    setMaxIterations={setMaxIterations}
-                    energyTolerance={energyTolerance}
-                    setEnergyTolerance={setEnergyTolerance}
-                    logLevel={logLevel}
-                    setLogLevel={setLogLevel}
-                    optimize={optimize}
-                    setOptimize={handleOptimizeChange}
-                    computeFrequencies={computeFrequencies}
-                    setComputeFrequencies={setComputeFrequencies}
-                    charge={charge}
-                    setCharge={setCharge}
-                    threads={threads}
-                    setThreads={setThreads}
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    showAdvancedSettings={showAdvancedSettings}
+                    setShowAdvancedSettings={setShowAdvancedSettings}
                   />
                 </div>
               )}
@@ -648,13 +1280,15 @@ const WavefunctionCalculator: React.FC = () => {
             {activeTab === 'structure' && (
               <div className={styles.structureTab}>
                 {currentXYZData ? (
-                  <MoleculeViewer 
-                    xyzData={getStructureXYZ()} 
+                  <MoleculeViewer
+                    xyzData={getStructureXYZ()}
                     moleculeName={`${moleculeInfo?.name || 'Molecule'}${results?.optimization ? ' (Optimized)' : ''}`}
                     wavefunctionResults={results}
                     cubeResults={cubeResults}
                     cubeGridInfo={cubeGridInfo}
+                    cubeSettings={cubeSettings}
                     onRequestCubeComputation={requestCubeComputation}
+                    onOpenCubeSettings={() => setShowCubeSettings(true)}
                   />
                 ) : (
                   <div className={styles.noStructure}>
@@ -666,32 +1300,92 @@ const WavefunctionCalculator: React.FC = () => {
             )}
             {activeTab === 'properties' && results && (
               <div className={styles.propertiesTab}>
-                {results.orbitalEnergies && results.orbitalEnergies.length > 0 && (
+                {results.orbitalEnergies && (
                   <div className={styles.orbitalsCard}>
                     <h4>Orbital Energies</h4>
-                    <div className={styles.orbitalGrid}>
-                      {results.orbitalEnergies.slice(0, 20).map((energy, i) => {
-                        const occupation = results.orbitalOccupations?.[i] ?? 0;
-                        const isOccupied = occupation > 0;
-                        const orbital = {
-                          index: i,
-                          energy: energy * 27.2114, // Convert to eV for the component
-                          occupation,
-                          isOccupied
-                        };
-                        
-                        return (
-                          <OrbitalItem
-                            key={i}
-                            orbital={orbital}
-                          />
-                        );
-                      })}
-                    </div>
-                    {results.orbitalEnergies.length > 20 && (
-                      <div className={styles.moreOrbitals}>
-                        ... and {results.orbitalEnergies.length - 20} more orbitals
-                      </div>
+
+                    {results.orbitalEnergies.isUnrestricted ? (
+                      // Unrestricted: Show alpha and beta separately
+                      <>
+                        <h5 style={{ marginTop: '1rem', color: '#3b82f6' }}>Alpha Orbitals (↑)</h5>
+                        <div className={styles.orbitalGrid}>
+                          {results.orbitalEnergies.alpha.slice(0, 10).map((energy, i) => {
+                            const occupation = results.orbitalOccupations?.alpha?.[i] ?? 0;
+                            const orbital = {
+                              index: i,
+                              energy: energy * 27.2114,
+                              occupation,
+                              isOccupied: occupation > 0,
+                              spin: 'alpha'
+                            };
+
+                            return (
+                              <OrbitalItem
+                                key={`alpha-${i}`}
+                                orbital={orbital}
+                              />
+                            );
+                          })}
+                        </div>
+                        {results.orbitalEnergies.alpha.length > 10 && (
+                          <div className={styles.moreOrbitals}>
+                            ... and {results.orbitalEnergies.alpha.length - 10} more alpha orbitals
+                          </div>
+                        )}
+
+                        <h5 style={{ marginTop: '1.5rem', color: '#f97316' }}>Beta Orbitals (↓)</h5>
+                        <div className={styles.orbitalGrid}>
+                          {results.orbitalEnergies.beta.slice(0, 10).map((energy, i) => {
+                            const occupation = results.orbitalOccupations?.beta?.[i] ?? 0;
+                            const orbital = {
+                              index: i,
+                              energy: energy * 27.2114,
+                              occupation,
+                              isOccupied: occupation > 0,
+                              spin: 'beta'
+                            };
+
+                            return (
+                              <OrbitalItem
+                                key={`beta-${i}`}
+                                orbital={orbital}
+                              />
+                            );
+                          })}
+                        </div>
+                        {results.orbitalEnergies.beta.length > 10 && (
+                          <div className={styles.moreOrbitals}>
+                            ... and {results.orbitalEnergies.beta.length - 10} more beta orbitals
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      // Restricted: Show combined orbitals
+                      <>
+                        <div className={styles.orbitalGrid}>
+                          {results.orbitalEnergies.slice(0, 20).map((energy, i) => {
+                            const occupation = results.orbitalOccupations?.[i] ?? 0;
+                            const orbital = {
+                              index: i,
+                              energy: energy * 27.2114,
+                              occupation,
+                              isOccupied: occupation > 0
+                            };
+
+                            return (
+                              <OrbitalItem
+                                key={i}
+                                orbital={orbital}
+                              />
+                            );
+                          })}
+                        </div>
+                        {results.orbitalEnergies.length > 20 && (
+                          <div className={styles.moreOrbitals}>
+                            ... and {results.orbitalEnergies.length - 20} more orbitals
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -856,6 +1550,13 @@ const WavefunctionCalculator: React.FC = () => {
           </div>
         </div>
       )}
+
+      <CubeSettings
+        settings={cubeSettings}
+        updateSettings={updateCubeSettings}
+        show={showCubeSettings}
+        onClose={() => setShowCubeSettings(false)}
+      />
     </div>
   );
 };

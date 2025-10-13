@@ -13,6 +13,7 @@ interface CalculationResult {
   };
   wavefunctionData?: {
     fchk?: string;
+    owfJson?: string;
     numBasisFunctions: number;
     numAtoms: number;
   };
@@ -55,7 +56,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
     return `${seconds}s ${milliseconds}ms`;
   };
 
-  const downloadWavefunction = (format: 'fchk' | 'json') => {
+  const downloadWavefunction = (format: 'owf' | 'fchk' | 'summary') => {
     if (!results.wavefunctionData) return;
 
     let content: string;
@@ -63,6 +64,15 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
     let mimeType: string;
 
     switch (format) {
+      case 'owf':
+        if (!results.wavefunctionData.owfJson) {
+          alert('Wavefunction data not available.');
+          return;
+        }
+        content = results.wavefunctionData.owfJson;
+        filename = 'wavefunction.owf.json';
+        mimeType = 'application/json';
+        break;
       case 'fchk':
         if (!results.wavefunctionData.fchk) {
           alert('FCHK data not available.');
@@ -72,16 +82,17 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
         filename = 'wavefunction.fchk';
         mimeType = 'text/plain';
         break;
-      case 'json':
+      case 'summary':
         content = JSON.stringify({
           energy: results.energy,
           energyInEV: results.energyInEV,
           properties: results.properties,
           numBasisFunctions: results.wavefunctionData.numBasisFunctions,
           numAtoms: results.wavefunctionData.numAtoms,
-          calculationTime: results.elapsedMs
+          calculationTime: results.elapsedMs,
+          orbitalEnergies: results.orbitalEnergies?.slice(0, 20) // First 20 orbitals
         }, null, 2);
-        filename = 'wavefunction.json';
+        filename = 'calculation_summary.json';
         mimeType = 'application/json';
         break;
     }
@@ -113,6 +124,23 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
 
   return (
     <div className={styles.container}>
+      {/* Debug info */}
+      <details style={{ marginBottom: '1rem', fontSize: '0.8rem', opacity: 0.7 }}>
+        <summary style={{ cursor: 'pointer' }}>Debug Info</summary>
+        <pre style={{ fontSize: '0.7rem', overflow: 'auto', maxHeight: '200px' }}>
+          {JSON.stringify({
+            hasWavefunctionData: !!results.wavefunctionData,
+            hasOwfJson: !!results.wavefunctionData?.owfJson,
+            owfJsonLength: results.wavefunctionData?.owfJson?.length,
+            hasFchk: !!results.wavefunctionData?.fchk,
+            hasProperties: !!results.properties,
+            hasOrbitalEnergies: !!results.orbitalEnergies,
+            orbitalEnergiesCount: results.orbitalEnergies?.length,
+            hasOrbitalOccupations: !!results.orbitalOccupations
+          }, null, 2)}
+        </pre>
+      </details>
+
       <div className={styles.summaryGrid}>
         <div className={styles.energyCard}>
           <h4>Total Energy</h4>
@@ -163,19 +191,28 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
         <div className={styles.exportSection}>
           <h4>Export Wavefunction</h4>
           <div className={styles.exportButtons}>
-            <button 
-              className={styles.exportButton}
-              onClick={() => downloadWavefunction('json')}
+            <button
+              className={results.wavefunctionData.owfJson ? styles.exportButton : `${styles.exportButton} ${styles.exportButtonDisabled}`}
+              onClick={() => results.wavefunctionData.owfJson ? downloadWavefunction('owf') : null}
+              disabled={!results.wavefunctionData.owfJson}
+              title="Download full wavefunction in OCC format"
             >
-              ↓ JSON
+              ↓ OWF.JSON
             </button>
-            <button 
+            <button
+              className={styles.exportButton}
+              onClick={() => downloadWavefunction('summary')}
+              title="Download calculation summary (energy, orbitals, properties)"
+            >
+              ↓ Summary
+            </button>
+            <button
               className={results.wavefunctionData.fchk ? styles.exportButton : `${styles.exportButton} ${styles.exportButtonDisabled}`}
               onClick={() => results.wavefunctionData.fchk ? downloadWavefunction('fchk') : alert('FCHK data not available. Check the calculation logs for details.')}
               disabled={!results.wavefunctionData.fchk}
-              title={results.wavefunctionData.fchk ? 'Download FCHK file' : 'FCHK generation failed - see logs'}
+              title={results.wavefunctionData.fchk ? 'Download FCHK file' : 'FCHK generation not yet implemented via CLI'}
             >
-              ↓ FCHK {!results.wavefunctionData.fchk && '(unavailable)'}
+              ↓ FCHK {!results.wavefunctionData.fchk && '(N/A)'}
             </button>
           </div>
         </div>

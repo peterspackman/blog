@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
+    "prebuild": "npm run copy-wasm",
+    "prestart": "npm run copy-wasm",
+    "copy-wasm": "mkdir -p static/wasm && cp node_modules/@peterspackman/occjs/dist/occ.js node_modules/@peterspackman/occjs/dist/occ.wasm node_modules/@peterspackman/occjs/dist/occ.data static/wasm/",
     "start": "docusaurus start",
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
@@ -19,7 +22,7 @@
     "@docusaurus/preset-classic": "3.8.1",
     "@mdx-js/react": "^3.0.0",
     "@peterspackman/lmpjs": "^0.2.0",
-    "@peterspackman/occjs": "file:../occ/packages/occjs",
+    "@peterspackman/occjs": "^0.8.4",
     "@peterspackman/selfies": "^0.2.0",
     "@rdkit/rdkit": "^2025.3.4-1.0.0",
     "@react-three/drei": "^10.0.3",

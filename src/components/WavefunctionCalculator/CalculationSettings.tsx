@@ -1,189 +1,198 @@
 import React from 'react';
 import styles from './CalculationSettings.module.css';
 
-interface CalculationSettingsProps {
+interface SCFSettings {
   method: string;
-  setMethod: (method: string) => void;
   basisSet: string;
-  setBasisSet: (basis: string) => void;
-  maxIterations: number;
-  setMaxIterations: (iterations: number) => void;
-  energyTolerance: number;
-  setEnergyTolerance: (tolerance: number) => void;
-  logLevel: number;
-  setLogLevel: (level: number) => void;
-  optimize: boolean;
-  setOptimize: (optimize: boolean) => void;
-  computeFrequencies: boolean;
-  setComputeFrequencies: (compute: boolean) => void;
   charge: number;
-  setCharge: (charge: number) => void;
+  multiplicity: number;
+  optimize: boolean;
+  computeFrequencies: boolean;
+  maxIterations: number;
+  energyTolerance: number;
   threads: number;
-  setThreads: (threads: number) => void;
+  logLevel: number;
+}
+
+interface CalculationSettingsProps {
+  settings: SCFSettings;
+  updateSettings: (updates: Partial<SCFSettings>) => void;
+  showAdvancedSettings: boolean;
+  setShowAdvancedSettings: (show: boolean) => void;
 }
 
 const CalculationSettings: React.FC<CalculationSettingsProps> = ({
-  method,
-  setMethod,
-  basisSet,
-  setBasisSet,
-  maxIterations,
-  setMaxIterations,
-  energyTolerance,
-  setEnergyTolerance,
-  logLevel,
-  setLogLevel,
-  optimize,
-  setOptimize,
-  computeFrequencies,
-  setComputeFrequencies,
-  charge,
-  setCharge,
-  threads,
-  setThreads
+  settings,
+  updateSettings,
+  showAdvancedSettings,
+  setShowAdvancedSettings
 }) => {
   return (
     <>
+      {/* Simple main settings */}
       <div className={styles.section}>
-        <h3>Calculation Method</h3>
-        
         <div className={styles.field}>
-          <label>Theory Level</label>
-          <select value={method} onChange={(e) => setMethod(e.target.value)}>
-            <option value="hf">Hartree-Fock (HF)</option>
-            <option value="dft-b3lyp">DFT (B3LYP)</option>
-            <option value="dft-pbe">DFT (PBE)</option>
-            <option value="dft-pbe0">DFT (PBE0)</option>
-            <option value="dft-blyp">DFT (BLYP)</option>
-            <option value="dft-wb97x">DFT (ωB97X)</option>
+          <label>Method</label>
+          <select value={settings.method} onChange={(e) => updateSettings({ method: e.target.value })}>
+            <option value="hf">Hartree-Fock</option>
+            <option value="b3lyp">B3LYP</option>
+            <option value="pbe">PBE</option>
+            <option value="pbe0">PBE0</option>
+            <option value="blyp">BLYP</option>
+            <option value="wb97x">ωB97X</option>
           </select>
         </div>
-        
+
         <div className={styles.field}>
           <label>Basis Set</label>
-          <select value={basisSet} onChange={(e) => setBasisSet(e.target.value)}>
+          <select value={settings.basisSet} onChange={(e) => updateSettings({ basisSet: e.target.value })}>
             <option value="sto-3g">STO-3G</option>
             <option value="3-21g">3-21G</option>
             <option value="6-31g">6-31G</option>
             <option value="6-31g(d,p)">6-31G(d,p)</option>
-            <option value="6-311g(d,p)">6-311G(d,p)</option>
             <option value="def2-svp">def2-SVP</option>
             <option value="def2-tzvp">def2-TZVP</option>
             <option value="cc-pvdz">cc-pVDZ</option>
-            <option value="cc-pvtz">cc-pVTZ</option>
-            <option value="cc-pvqz">cc-pVQZ</option>
-            <option value="pcseg-0">pc-0</option>
-            <option value="pcseg-1">pc-1</option>
-            <option value="pcseg-2">pc-2</option>
-            <option value="pcseg-3">pc-3</option>
-            <option value="aug-pcseg-1">aug-pc-1</option>
-            <option value="aug-pcseg-2">aug-pc-2</option>
           </select>
-        </div>
-        
-        <div className={styles.field}>
-          <label>Molecular Charge</label>
-          <input
-            type="number"
-            min="-5"
-            max="5"
-            step="1"
-            value={charge}
-            onChange={(e) => setCharge(parseInt(e.target.value) || 0)}
-          />
-          <small className={styles.fieldDescription}>
-            Net charge on the molecule (restricted to even electron counts)
-          </small>
         </div>
       </div>
 
       <div className={styles.section}>
-        <h3>Calculation Options</h3>
-        
         <div className={styles.field}>
           <label className={styles.checkboxLabel}>
             <input
               type="checkbox"
-              checked={optimize}
-              onChange={(e) => setOptimize(e.target.checked)}
+              checked={settings.optimize}
+              onChange={(e) => updateSettings({ optimize: e.target.checked })}
             />
-            <span>Geometry Optimization</span>
+            <span>Optimize Geometry</span>
           </label>
-          <small className={styles.fieldDescription}>
-            Optimize molecular geometry to find minimum energy structure
-          </small>
         </div>
-        
+
         <div className={styles.field}>
-          <label className={`${styles.checkboxLabel} ${!optimize ? styles.disabled : ''}`}>
+          <label className={`${styles.checkboxLabel} ${!settings.optimize ? styles.disabled : ''}`}>
             <input
               type="checkbox"
-              checked={computeFrequencies}
-              onChange={(e) => setComputeFrequencies(e.target.checked)}
-              disabled={!optimize}
+              checked={settings.computeFrequencies}
+              onChange={(e) => updateSettings({ computeFrequencies: e.target.checked })}
+              disabled={!settings.optimize}
             />
-            <span>Vibrational Frequencies</span>
+            <span>Calculate Frequencies</span>
           </label>
-          <small className={styles.fieldDescription}>
-            Calculate vibrational frequencies after optimization (requires optimization)
-          </small>
         </div>
       </div>
 
+      {/* Advanced settings button */}
       <div className={styles.section}>
-        <h3>SCF Settings</h3>
-        
-        <div className={styles.field}>
-          <label>Max Iterations</label>
-          <input
-            type="number"
-            min="10"
-            max="500"
-            value={maxIterations}
-            onChange={(e) => setMaxIterations(parseInt(e.target.value))}
-          />
-        </div>
-        
-        <div className={styles.field}>
-          <label>Energy Tolerance</label>
-          <select 
-            value={energyTolerance.toString()} 
-            onChange={(e) => setEnergyTolerance(parseFloat(e.target.value))}
-          >
-            <option value="1e-6">1e-6</option>
-            <option value="1e-7">1e-7</option>
-            <option value="1e-8">1e-8</option>
-            <option value="1e-9">1e-9</option>
-            <option value="1e-10">1e-10</option>
-          </select>
-        </div>
-        
-        <div className={styles.field}>
-          <label>Log Level</label>
-          <select value={logLevel} onChange={(e) => setLogLevel(parseInt(e.target.value))}>
-            <option value="0">Trace</option>
-            <option value="1">Debug</option>
-            <option value="2">Info</option>
-            <option value="3">Warning</option>
-            <option value="4">Error</option>
-            <option value="5">Critical</option>
-          </select>
-        </div>
-        
-        <div className={styles.field}>
-          <label>Number of Threads</label>
-          <input
-            type="number"
-            min="1"
-            max="16"
-            value={threads}
-            onChange={(e) => setThreads(parseInt(e.target.value) || 1)}
-          />
-          <small className={styles.fieldDescription}>
-            Number of parallel threads to use for calculations
-          </small>
-        </div>
+        <button
+          className={styles.advancedButton}
+          onClick={() => setShowAdvancedSettings(true)}
+        >
+          Advanced Settings...
+        </button>
       </div>
+
+      {/* Advanced settings modal */}
+      {showAdvancedSettings && (
+        <div className={styles.modal}>
+          <div className={styles.modalContent}>
+            <div className={styles.modalHeader}>
+              <h3>Advanced Settings</h3>
+              <button
+                className={styles.closeButton}
+                onClick={() => setShowAdvancedSettings(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className={styles.modalBody}>
+              <div className={styles.field}>
+                <label>Charge</label>
+                <input
+                  type="number"
+                  min="-5"
+                  max="5"
+                  step="1"
+                  value={settings.charge}
+                  onChange={(e) => updateSettings({ charge: parseInt(e.target.value) || 0 })}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label>Multiplicity</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="7"
+                  step="1"
+                  value={settings.multiplicity}
+                  onChange={(e) => updateSettings({ multiplicity: parseInt(e.target.value) || 1 })}
+                />
+                <small className={styles.fieldDescription}>
+                  Spin multiplicity (2S+1): 1=singlet, 2=doublet, 3=triplet
+                </small>
+              </div>
+
+              <div className={styles.field}>
+                <label>SCF Max Iterations</label>
+                <input
+                  type="number"
+                  min="10"
+                  max="500"
+                  value={settings.maxIterations}
+                  onChange={(e) => updateSettings({ maxIterations: parseInt(e.target.value) })}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label>Energy Tolerance</label>
+                <select
+                  value={settings.energyTolerance.toString()}
+                  onChange={(e) => updateSettings({ energyTolerance: parseFloat(e.target.value) })}
+                >
+                  <option value="1e-6">1e-6</option>
+                  <option value="1e-7">1e-7</option>
+                  <option value="1e-8">1e-8</option>
+                  <option value="1e-9">1e-9</option>
+                  <option value="1e-10">1e-10</option>
+                </select>
+              </div>
+
+              <div className={styles.field}>
+                <label>Threads</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="16"
+                  value={settings.threads}
+                  onChange={(e) => updateSettings({ threads: parseInt(e.target.value) || 1 })}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label>Log Level</label>
+                <select value={settings.logLevel} onChange={(e) => updateSettings({ logLevel: parseInt(e.target.value) })}>
+                  <option value="0">Trace</option>
+                  <option value="1">Debug</option>
+                  <option value="2">Info</option>
+                  <option value="3">Warning</option>
+                  <option value="4">Error</option>
+                </select>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                className={styles.primaryButton}
+                onClick={() => setShowAdvancedSettings(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

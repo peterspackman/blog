@@ -7,6 +7,7 @@ interface OrbitalItemProps {
     energy: number; // in eV
     occupation: number;
     isOccupied: boolean;
+    spin?: 'alpha' | 'beta';
   };
   isHOMO?: boolean;
   isLUMO?: boolean;
@@ -28,20 +29,46 @@ const OrbitalItem: React.FC<OrbitalItemProps> = ({
   className = ''
 }) => {
   const energyInHartree = orbital.energy / 27.2114;
+  const spinLabel = orbital.spin ? ` (${orbital.spin})` : '';
+
+  // Determine styling based on occupation and spin
+  let itemClass = styles.orbitalItem;
+  if (orbital.spin === 'alpha') {
+    itemClass += ` ${orbital.isOccupied ? styles.orbitalAlphaOccupied : styles.orbitalAlphaVirtual}`;
+  } else if (orbital.spin === 'beta') {
+    itemClass += ` ${orbital.isOccupied ? styles.orbitalBetaOccupied : styles.orbitalBetaVirtual}`;
+  } else {
+    itemClass += ` ${orbital.isOccupied ? styles.orbitalOccupied : styles.orbitalVirtual}`;
+  }
+  if (isSelected) itemClass += ` ${styles.orbitalSelected}`;
+  if (className) itemClass += ` ${className}`;
+
+  // Determine spin icon
+  const getSpinIcon = () => {
+    if (orbital.spin === 'alpha') return '↑';
+    if (orbital.spin === 'beta') return '↓';
+    // For restricted (both spins), show both arrows if occupied
+    if (orbital.isOccupied && orbital.occupation >= 2) return '↑↓';
+    if (orbital.isOccupied && orbital.occupation >= 1) return '↑';
+    return null;
+  };
+
+  const spinIcon = getSpinIcon();
 
   return (
     <div
-      className={`${styles.orbitalItem} ${orbital.isOccupied ? styles.orbitalOccupied : styles.orbitalVirtual} ${isSelected ? styles.orbitalSelected : ''} ${className}`}
+      className={itemClass}
       onClick={onClick}
-      title={`MO ${orbital.index}: ${orbital.energy.toFixed(3)} eV (occupation: ${orbital.occupation})`}
+      title={`MO ${orbital.index}${spinLabel}: ${orbital.energy.toFixed(4)} eV (occupation: ${orbital.occupation})`}
       style={{ cursor: onClick ? 'pointer' : 'default' }}
     >
       <div className={styles.orbitalContent}>
         <div className={styles.orbitalEnergy}>
-          {energyInHartree.toFixed(6)} Eh
+          {spinIcon && <span className={styles.spinIcon}>{spinIcon}</span>}
+          {energyInHartree.toFixed(4)} Eh
         </div>
         <div className={styles.orbitalEnergyEV}>
-          {orbital.energy.toFixed(3)} eV
+          {orbital.energy.toFixed(4)} eV
         </div>
         {(isHOMO || isLUMO) && (
           <div className={styles.orbitalLabel}>
@@ -50,11 +77,6 @@ const OrbitalItem: React.FC<OrbitalItemProps> = ({
         )}
       </div>
       <div className={styles.orbitalIndicators}>
-        {orbital.occupation > 0 && (
-          <div className={styles.occupationBadge}>
-            {orbital.occupation === 2.0 ? '↑↓' : orbital.occupation === 1.0 ? '↑' : ''}
-          </div>
-        )}
         {colorIndicator && (
           isSelected ? (
             <input
@@ -69,7 +91,7 @@ const OrbitalItem: React.FC<OrbitalItemProps> = ({
               title={`Change color for MO ${orbital.index}`}
             />
           ) : (
-            <div 
+            <div
               className={styles.orbitalColorIndicator}
               style={{ backgroundColor: colorIndicator }}
               title={`Last used color: ${colorIndicator}`}

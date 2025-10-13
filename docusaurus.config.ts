@@ -162,9 +162,19 @@ const config: Config = {
           label: 'software',
         },
         {
-          to: '/publications',
-          position: 'left',
+          type: 'dropdown',
           label: 'papers',
+          position: 'left',
+          items: [
+            {
+              label: 'Interactive Papers',
+              to: '/papers',
+            },
+            {
+              label: 'Publication List',
+              to: '/publications',
+            },
+          ],
         },
         { to: '/blog', label: 'blog', position: 'left' },
         {

@@ -8,6 +8,8 @@
   justify-content: space-between;
   align-items: center;
   transition: all 0.2s;
+  min-height: 3.5rem;
+  height: 3.5rem;
 }
 
 .orbitalItem:hover {
@@ -23,6 +25,56 @@
 .orbitalVirtual {
   background-color: var(--ifm-color-warning-contrast-background);
   border-color: var(--ifm-color-warning);
+}
+
+/* Alpha orbital colors - Blue */
+.orbitalAlphaOccupied {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  border-left: 3px solid #3b82f6;
+}
+
+.orbitalAlphaOccupied .orbitalEnergy,
+.orbitalAlphaOccupied .orbitalEnergyEV,
+.orbitalAlphaOccupied .orbitalLabel {
+  color: #1e40af;
+}
+
+.orbitalAlphaVirtual {
+  background-color: var(--ifm-color-emphasis-100);
+  border-color: var(--ifm-color-emphasis-300);
+  border-left: 3px solid #3b82f6;
+}
+
+.orbitalAlphaVirtual .orbitalEnergy,
+.orbitalAlphaVirtual .orbitalEnergyEV,
+.orbitalAlphaVirtual .orbitalLabel {
+  color: var(--ifm-color-emphasis-800);
+}
+
+/* Beta orbital colors - Orange */
+.orbitalBetaOccupied {
+  background-color: #fed7aa;
+  border-color: #f97316;
+  border-left: 3px solid #f97316;
+}
+
+.orbitalBetaOccupied .orbitalEnergy,
+.orbitalBetaOccupied .orbitalEnergyEV,
+.orbitalBetaOccupied .orbitalLabel {
+  color: #9a3412;
+}
+
+.orbitalBetaVirtual {
+  background-color: var(--ifm-color-emphasis-100);
+  border-color: var(--ifm-color-emphasis-300);
+  border-left: 3px solid #f97316;
+}
+
+.orbitalBetaVirtual .orbitalEnergy,
+.orbitalBetaVirtual .orbitalEnergyEV,
+.orbitalBetaVirtual .orbitalLabel {
+  color: var(--ifm-color-emphasis-800);
 }
 
 .orbitalSelected {
@@ -43,12 +95,27 @@
   font-weight: 600;
   color: var(--ifm-color-emphasis-800);
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.spinIcon {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  font-weight: normal;
 }
 
 .orbitalEnergyEV {
   font-size: 0.65rem;
   color: var(--ifm-color-emphasis-600);
   line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .orbitalLabel {
@@ -64,27 +131,6 @@
   gap: 0.5rem;
 }
 
-.occupationBadge {
-  background-color: var(--ifm-color-emphasis-200);
-  color: var(--ifm-color-emphasis-800);
-  padding: 0.1rem 0.3rem;
-  border-radius: 0.5rem;
-  font-size: 0.65rem;
-  font-weight: bold;
-  min-width: 1.2rem;
-  text-align: center;
-  line-height: 1;
-}
-
-.orbitalOccupied .occupationBadge {
-  background-color: var(--ifm-color-success);
-  color: var(--ifm-color-success-contrast-foreground);
-}
-
-.orbitalVirtual .occupationBadge {
-  background-color: var(--ifm-color-warning);
-  color: var(--ifm-color-warning-contrast-foreground);
-}
 
 .orbitalColorIndicator {
   width: 12px;
@@ -116,6 +162,7 @@
   box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
 }
 
+
 /* Mobile responsive adjustments */
 @media (max-width: 768px) {
   .orbitalItem {
@@ -129,10 +176,5 @@
   
   .orbitalEnergyEV {
     font-size: 0.7rem;
-  }
-  
-  .occupationBadge {
-    font-size: 0.65rem;
-    padding: 0.1rem 0.3rem;
   }
 }

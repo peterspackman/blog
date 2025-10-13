@@ -81,3 +81,103 @@
   color: var(--ifm-color-emphasis-600);
   line-height: 1.3;
 }
+
+.advancedButton {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: var(--ifm-color-emphasis-200);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.advancedButton:hover {
+  background-color: var(--ifm-color-emphasis-300);
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background-color: var(--ifm-background-surface-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ifm-color-emphasis-600);
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  color: var(--ifm-color-emphasis-800);
+}
+
+.modalBody {
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.modalFooter {
+  padding: 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.primaryButton {
+  padding: 0.5rem 1.5rem;
+  background-color: var(--ifm-color-primary);
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.primaryButton:hover {
+  background-color: var(--ifm-color-primary-dark);
+}
