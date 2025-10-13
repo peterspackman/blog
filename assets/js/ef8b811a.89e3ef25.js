@@ -1,0 +1,1 @@
+"use strict";(globalThis.webpackChunkblog=globalThis.webpackChunkblog||[]).push([[8947],{6600:e=>{e.exports=JSON.parse('{"authors":[{"name":"Peter R. Spackman","title":"Research Fellow @ Curtin University","url":"https://github.com/peterspackman","imageURL":"https://github.com/peterspackman.png","key":"prs","page":null,"count":3}]}')}}]);
