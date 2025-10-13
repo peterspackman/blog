@@ -289,8 +289,7 @@ var Module = {
     },
     locateFile: (path) => {
         if (path.endsWith('.wasm') || path.endsWith('.data')) {
-            const base = self.location.href.substring(0, self.location.href.lastIndexOf('/'));
-            return base + '/wasm/' + path;
+            return '/wasm/' + path;
         }
         return path;
     },
@@ -299,7 +298,7 @@ var Module = {
 
 // Load the OCC module
 try {
-    importScripts('wasm/occ.js');
+    importScripts('/wasm/occ.js');
 } catch (error) {
     self.postMessage({ type: 'error', text: `Failed to load occ.js: ${error.message}` });
     self.postMessage({ type: 'exit', code: 1, files: {}, stdout: '' });
