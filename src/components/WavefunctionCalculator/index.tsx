@@ -94,8 +94,7 @@ interface SCFSettings {
 }
 
 const WavefunctionCalculator: React.FC = () => {
-  const [worker, setWorker] = useState<Worker | null>(null);
-  const [isWorkerReady, setIsWorkerReady] = useState(false);
+  const [activeCliWorker, setActiveCliWorker] = useState<Worker | null>(null);
   const [currentXYZData, setCurrentXYZData] = useState<string>('');
   const [moleculeInfo, setMoleculeInfo] = useState<{ name: string; formula: string; numAtoms: number } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -166,87 +165,6 @@ const WavefunctionCalculator: React.FC = () => {
   const [isTrajectoryControlsExpanded, setIsTrajectoryControlsExpanded] = useState<boolean>(true);
   const [precomputedTrajectories, setPrecomputedTrajectories] = useState<Map<number, string>>(new Map());
 
-  // Initialize worker on mount
-  useEffect(() => {
-    initializeWorker();
-    return () => {
-      if (worker) {
-        worker.terminate();
-      }
-    };
-  }, []);
-
-  const initializeWorker = async () => {
-    try {
-      const newWorker = new Worker(
-        new URL('./ready-worker.js', import.meta.url),
-        { type: 'module' }
-      );
-
-      newWorker.onmessage = handleWorkerMessage;
-      newWorker.onerror = (error) => {
-        console.error('Worker error:', error);
-        setError('Worker error: ' + error.message);
-        setIsWorkerReady(false);
-      };
-
-      setWorker(newWorker);
-
-      // Signal ready state
-      newWorker.postMessage({
-        type: 'init',
-        data: {}
-      });
-    } catch (error) {
-      console.error('Failed to initialize worker:', error);
-      setError('Failed to initialize Web Worker: ' + error.message);
-    }
-  };
-
-  const handleWorkerMessage = (e: MessageEvent) => {
-    const { type, ...data } = e.data;
-
-    switch (type) {
-      case 'initialized':
-        if (data.success) {
-          setIsWorkerReady(true);
-          addLog('Worker initialized successfully', 'info');
-        } else {
-          setIsWorkerReady(false);
-          setError('Worker initialization failed: ' + data.error);
-        }
-        break;
-
-      case 'log':
-        addLog(data.message, mapLogLevel(data.level));
-        break;
-
-      case 'progress':
-        addLog(data.message, 'info');
-        if (data.stage === 'complete') {
-          setIsCalculating(false);
-        }
-        break;
-
-      case 'result':
-        handleCalculationResult(data);
-        break;
-      
-      case 'optimization_progress':
-        addLog(data.message, 'info');
-        break;
-
-      case 'cubeResult':
-        handleCubeResult(data);
-        break;
-
-      case 'error':
-        console.error('Worker error:', data.error);
-        setError('Calculation error: ' + data.error);
-        setIsCalculating(false);
-        break;
-    }
-  };
 
   const mapLogLevel = (level: number): string => {
     switch (level) {
@@ -321,52 +239,6 @@ const WavefunctionCalculator: React.FC = () => {
     }
   };
 
-  const handleCalculationResult = (data: any) => {
-    setIsCalculating(false);
-    
-    if (data.success) {
-      setResults(data.results);
-      setActiveTab('results');
-      addLog('Calculation completed successfully!', 'info');
-      
-      // Pre-compute normal mode trajectories if frequencies were calculated
-      if (data.results.frequencies?.frequencies && data.results.optimization?.finalXYZ) {
-        addLog(`Found frequency data: ${data.results.frequencies.frequencies.length} frequencies, normalModes: ${data.results.frequencies.normalModes ? 'available' : 'missing'}`, 'info');
-        precomputeNormalModeTrajectories(data.results);
-      } else {
-        addLog('No frequency data or optimized geometry available for trajectory pre-computation', 'info');
-      }
-    } else {
-      setError('Calculation failed: ' + data.error);
-    }
-  };
-
-  const handleCubeResult = (data: any) => {
-    if (data.success) {
-      let key: string;
-      if (data.cubeType === 'molecular_orbital') {
-        // Include spin in key for unrestricted calculations
-        key = data.spin
-          ? `${data.cubeType}_${data.orbitalIndex}_${data.spin}_${data.gridSteps || 40}`
-          : `${data.cubeType}_${data.orbitalIndex}_${data.gridSteps || 40}`;
-      } else {
-        key = data.cubeType;
-      }
-
-      setCubeResults(prev => new Map(prev.set(key, data.cubeData)));
-
-      // Store grid info if available
-      if (data.gridInfo) {
-        setCubeGridInfo(data.gridInfo);
-      }
-
-      const spinLabel = data.spin ? ` (${data.spin})` : '';
-      addLog(`Cube computation completed: ${data.cubeType}${data.orbitalIndex !== undefined ? ` (orbital ${data.orbitalIndex}${spinLabel})` : ''} [${data.gridSteps || 40} steps]`, 'info');
-    } else {
-      setError(`Cube computation failed: ${data.error}`);
-      addLog(`Cube computation failed: ${data.error}`, 'error');
-    }
-  };
 
   const runCalculation = () => {
     if (!currentXYZData) {
@@ -390,6 +262,7 @@ const WavefunctionCalculator: React.FC = () => {
 
     // Create CLI worker for this calculation
     const cliWorker = new Worker('/occ-cli-worker.js');
+    setActiveCliWorker(cliWorker);
 
     let outputBuffer = '';
     let hasExited = false;
@@ -420,6 +293,7 @@ const WavefunctionCalculator: React.FC = () => {
             setError(`Calculation failed with exit code ${code}`);
             setIsCalculating(false);
             cliWorker.terminate();
+            setActiveCliWorker(null);
             return;
           }
 
@@ -857,6 +731,7 @@ const WavefunctionCalculator: React.FC = () => {
 
           setIsCalculating(false);
           cliWorker.terminate();
+          setActiveCliWorker(null);
           break;
       }
     };
@@ -865,6 +740,7 @@ const WavefunctionCalculator: React.FC = () => {
       setError(`CLI worker error: ${error.message}`);
       setIsCalculating(false);
       cliWorker.terminate();
+      setActiveCliWorker(null);
     };
 
     // Build command arguments
@@ -903,10 +779,10 @@ const WavefunctionCalculator: React.FC = () => {
   };
 
   const cancelCalculation = () => {
-    if (worker && isCalculating) {
-      worker.terminate();
-      addLog('Calculation cancelled. Restarting worker...', 'warn');
-      initializeWorker();
+    if (activeCliWorker && isCalculating) {
+      activeCliWorker.terminate();
+      setActiveCliWorker(null);
+      addLog('Calculation cancelled by user', 'warn');
       setIsCalculating(false);
     }
   };
@@ -921,6 +797,7 @@ const WavefunctionCalculator: React.FC = () => {
 
     // Create CLI worker for cube generation
     const cliWorker = new Worker('/occ-cli-worker.js');
+    setActiveCliWorker(cliWorker);
 
     let hasExited = false;
 
@@ -944,6 +821,7 @@ const WavefunctionCalculator: React.FC = () => {
             setError(`Cube generation failed with exit code ${code}`);
             addLog('Cube generation failed', 'error');
             cliWorker.terminate();
+            setActiveCliWorker(null);
             return;
           }
 
@@ -970,6 +848,7 @@ const WavefunctionCalculator: React.FC = () => {
           addLog(`Cube computation completed: ${property}${orbital !== undefined ? ` (orbital ${orbital}${spinLabel})` : ''}`, 'info');
 
           cliWorker.terminate();
+          setActiveCliWorker(null);
           break;
       }
     };
@@ -977,6 +856,7 @@ const WavefunctionCalculator: React.FC = () => {
     cliWorker.onerror = (error) => {
       setError(`Cube worker error: ${error.message}`);
       cliWorker.terminate();
+      setActiveCliWorker(null);
     };
 
     // Map cubeType to property name
@@ -1160,8 +1040,8 @@ const WavefunctionCalculator: React.FC = () => {
     <div className={styles.container}>
       <div className={styles.layout}>
         <div className={styles.sidebar}>
-          <div className={`${styles.status} ${isWorkerReady ? styles.statusReady : styles.statusLoading}`}>
-            {isWorkerReady ? '✓ Ready' : '⏳ Loading...'}
+          <div className={`${styles.status} ${styles.statusReady}`}>
+            ✓ Ready
           </div>
 
           <div className={styles.scrollableContent}>
@@ -1220,7 +1100,7 @@ const WavefunctionCalculator: React.FC = () => {
               <button
                 className={`${styles.button} ${styles.buttonPrimary}`}
                 onClick={runCalculation}
-                disabled={isCalculating || !isWorkerReady || !isXYZValid}
+                disabled={isCalculating || !isXYZValid}
               >
                 {isCalculating ? 'Calculating...' : 'Run Calculation'}
               </button>
