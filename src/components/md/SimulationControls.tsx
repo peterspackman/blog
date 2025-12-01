@@ -2,10 +2,124 @@ import React, { useState } from 'react';
 import { BoundaryType } from './BoundaryConditions';
 import { ThermostatType } from './Thermostats';
 
+// 1 internal time unit = sqrt(amu·Å²/eV) ≈ 10.18 fs
+const TIME_UNIT_TO_FS = 10.1805;
+
+// Reusable slider with editable text field
+interface SliderWithInputProps {
+    label: string;
+    value: number;
+    onChange: (value: number) => void;
+    min: number;
+    max: number;
+    step: number;
+    unit?: string;
+    decimals?: number;
+    theme: {
+        text: string;
+        textMuted: string;
+        border: string;
+        inputBg: string;
+    };
+}
+
+const SliderWithInput: React.FC<SliderWithInputProps> = ({
+    label, value, onChange, min, max, step, unit = '', decimals = 2, theme
+}) => {
+    const [inputValue, setInputValue] = useState(value.toFixed(decimals));
+    const [isFocused, setIsFocused] = useState(false);
+
+    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = parseFloat(e.target.value);
+        onChange(val);
+        setInputValue(val.toFixed(decimals));
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setInputValue(e.target.value);
+    };
+
+    const handleInputBlur = () => {
+        setIsFocused(false);
+        const val = parseFloat(inputValue);
+        if (!isNaN(val)) {
+            const clamped = Math.max(min, Math.min(max, val));
+            onChange(clamped);
+            setInputValue(clamped.toFixed(decimals));
+        } else {
+            setInputValue(value.toFixed(decimals));
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            (e.target as HTMLInputElement).blur();
+        }
+    };
+
+    // Sync input value when slider changes externally
+    React.useEffect(() => {
+        if (!isFocused) {
+            setInputValue(value.toFixed(decimals));
+        }
+    }, [value, decimals, isFocused]);
+
+    return (
+        <div style={{ marginBottom: '0.6rem' }}>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '0.25rem',
+            }}>
+                <span style={{ fontSize: '0.8rem', color: theme.text }}>{label}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <input
+                        type="text"
+                        value={isFocused ? inputValue : value.toFixed(decimals)}
+                        onChange={handleInputChange}
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={handleInputBlur}
+                        onKeyDown={handleKeyDown}
+                        style={{
+                            width: '4rem',
+                            padding: '0.15rem 0.3rem',
+                            fontSize: '0.75rem',
+                            fontFamily: 'monospace',
+                            textAlign: 'right',
+                            border: `1px solid ${theme.border}`,
+                            borderRadius: '3px',
+                            backgroundColor: theme.inputBg,
+                            color: theme.text,
+                        }}
+                    />
+                    {unit && <span style={{ fontSize: '0.7rem', color: theme.textMuted, minWidth: '1.5rem' }}>{unit}</span>}
+                </div>
+            </div>
+            <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={value}
+                onChange={handleSliderChange}
+                style={{
+                    width: '100%',
+                    height: '4px',
+                    borderRadius: '2px',
+                    cursor: 'pointer',
+                }}
+            />
+        </div>
+    );
+};
+
 interface SimulationControlsProps {
     running: boolean;
     setRunning: (running: boolean) => void;
     initializeParticles: () => void;
+    minimizing?: boolean;
+    runMinimization?: () => void;
     numParticles: number;
     setNumParticles: (num: number) => void;
     temperature: number;
@@ -20,11 +134,6 @@ interface SimulationControlsProps {
     setBoundaryType: (type: BoundaryType) => void;
     thermostatType: ThermostatType;
     setThermostatType: (type: ThermostatType) => void;
-    epsilonScale: number;
-    setEpsilonScale: (scale: number) => void;
-    sigmaScale: number;
-    setSigmaScale: (scale: number) => void;
-    setBaseParticleRadius: (radius: number) => void;
     chargeScale: number;
     setChargeScale: (scale: number) => void;
     visualScale: number;
@@ -32,16 +141,30 @@ interface SimulationControlsProps {
     // Advanced controls
     charges: number[];
     setCharges: (charges: number[]) => void;
+    typeLabels: string[];
+    setTypeLabels: (labels: string[]) => void;
     typeColors: string[];
     setTypeColors: (colors: string[]) => void;
     epsilonMatrix: number[][];
     sigmaMatrix: number[][];
     updateInteractionParameter: (paramType: string, type1: number, type2: number, value: number) => void;
     numTypes: number;
+    // Debug visualization
+    showCells?: boolean;
+    setShowCells?: (show: boolean) => void;
+    showInteractions?: boolean;
+    setShowInteractions?: (show: boolean) => void;
+    showCutoffRadius?: boolean;
+    setShowCutoffRadius?: (show: boolean) => void;
+    cutoffRadius?: number;
+    setCutoffRadius?: (radius: number) => void;
+    // Theme
+    isDark?: boolean;
 }
 
 const SimulationControls: React.FC<SimulationControlsProps> = ({
     running, setRunning, initializeParticles,
+    minimizing = false, runMinimization,
     numParticles, setNumParticles,
     temperature, setTemperature,
     timeStep, setTimeStep,
@@ -49,511 +172,487 @@ const SimulationControls: React.FC<SimulationControlsProps> = ({
     orangeRatio, setOrangeRatio,
     boundaryType, setBoundaryType,
     thermostatType, setThermostatType,
-    epsilonScale, setEpsilonScale,
-    sigmaScale, setSigmaScale, setBaseParticleRadius,
     chargeScale, setChargeScale,
     visualScale, setVisualScale,
     charges, setCharges,
+    typeLabels, setTypeLabels,
     typeColors, setTypeColors,
     epsilonMatrix, sigmaMatrix, updateInteractionParameter,
-    numTypes
+    numTypes,
+    showCells, setShowCells,
+    showInteractions, setShowInteractions,
+    showCutoffRadius, setShowCutoffRadius,
+    cutoffRadius, setCutoffRadius,
+    isDark = false
 }) => {
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [showTiming, setShowTiming] = useState(false);
+    const [useCombiningRules, setUseCombiningRules] = useState(true);
 
-    const controlStyle = {
-        display: 'flex',
-        flexDirection: 'column' as const,
-        gap: '0.25rem',
-        marginBottom: '0.75rem'
+    // Theme colors
+    const theme = {
+        background: isDark ? '#2d2d2d' : '#f8f9fa',
+        surface: isDark ? '#3d3d3d' : '#ffffff',
+        border: isDark ? '#555' : '#e0e0e0',
+        text: isDark ? '#e0e0e0' : '#333',
+        textMuted: isDark ? '#999' : '#666',
+        accent: isDark ? '#6b9eff' : '#2563eb',
+        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
     };
 
-    const labelStyle = {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '0.875rem',
-        fontWeight: '500' as const
-    };
-
-    const valueStyle = {
-        fontFamily: 'monospace',
-        backgroundColor: '#e9ecef',
-        padding: '0.125rem 0.25rem',
-        borderRadius: '3px',
-        fontSize: '0.875rem',
-        minWidth: '3rem',
-        textAlign: 'center' as const
-    };
-
-    const sliderStyle = {
-        appearance: 'none' as const,
+    const selectStyle: React.CSSProperties = {
         width: '100%',
-        height: '6px',
-        borderRadius: '3px',
-        background: '#d1d5db',
-        outline: 'none'
+        padding: '0.35rem 0.5rem',
+        fontSize: '0.8rem',
+        border: `1px solid ${theme.border}`,
+        borderRadius: '4px',
+        backgroundColor: theme.surface,
+        color: theme.text,
+        cursor: 'pointer',
     };
 
-    const sectionStyle = {
-        marginBottom: '1.5rem'
+    const sectionStyle: React.CSSProperties = {
+        marginBottom: '1rem',
+        paddingBottom: '1rem',
+        borderBottom: `1px solid ${theme.border}`,
     };
 
-    const sectionTitleStyle = {
-        fontSize: '0.875rem',
-        fontWeight: '600' as const,
-        margin: '0 0 1rem 0',
-        textTransform: 'uppercase' as const,
+    const sectionTitleStyle: React.CSSProperties = {
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        textTransform: 'uppercase',
         letterSpacing: '0.5px',
-        color: '#374151'
+        color: theme.textMuted,
+        marginBottom: '0.5rem',
+    };
+
+    // Helper to update epsilon with combining rules
+    const updateEpsilon = (i: number, j: number, val: number) => {
+        updateInteractionParameter('epsilon', i, j, val);
+        if (i === j && useCombiningRules && numTypes > 1) {
+            const eps0 = i === 0 ? val : epsilonMatrix[0][0];
+            const eps1 = i === 1 ? val : epsilonMatrix[1][1];
+            const crossEps = Math.sqrt(eps0 * eps1);
+            updateInteractionParameter('epsilon', 0, 1, crossEps);
+            updateInteractionParameter('epsilon', 1, 0, crossEps);
+        }
+    };
+
+    // Helper to update sigma with combining rules
+    const updateSigma = (i: number, j: number, val: number) => {
+        updateInteractionParameter('sigma', i, j, val);
+        if (i === j && useCombiningRules && numTypes > 1) {
+            const sig0 = i === 0 ? val : sigmaMatrix[0][0];
+            const sig1 = i === 1 ? val : sigmaMatrix[1][1];
+            const crossSig = (sig0 + sig1) / 2;
+            updateInteractionParameter('sigma', 0, 1, crossSig);
+            updateInteractionParameter('sigma', 1, 0, crossSig);
+        }
     };
 
     return (
         <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '1.5rem',
+            backgroundColor: theme.background,
+            padding: '1rem',
             borderRadius: '8px',
-            border: '1px solid #e9ecef',
-            height: 'fit-content'
+            border: `1px solid ${theme.border}`,
+            color: theme.text,
+            fontSize: '0.85rem',
         }}>
             {/* Playback Controls */}
-            <div style={{ marginBottom: '1rem' }}>
-                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: '600' }}>
-                    Simulation Controls
-                </h3>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                <button
+                    onClick={() => setRunning(!running)}
+                    style={{
+                        flex: 1,
+                        padding: '0.5rem',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        backgroundColor: running ? '#f59e0b' : '#10b981',
+                        color: '#fff',
+                    }}
+                >
+                    {running ? '⏸ Pause' : '▶ Start'}
+                </button>
+                <button
+                    onClick={initializeParticles}
+                    style={{
+                        padding: '0.5rem 0.75rem',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        backgroundColor: '#ef4444',
+                        color: '#fff',
+                    }}
+                >
+                    ↺ Reset
+                </button>
+                {runMinimization && (
                     <button
-                        onClick={() => setRunning(!running)}
+                        onClick={runMinimization}
+                        disabled={minimizing || running}
                         style={{
-                            padding: '0.5rem 1rem',
+                            padding: '0.5rem 0.75rem',
                             border: 'none',
                             borderRadius: '6px',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: running ? '#ffba00' : '#00a86b',
-                            color: running ? '#000' : '#fff'
+                            fontSize: '0.85rem',
+                            fontWeight: 600,
+                            cursor: minimizing || running ? 'not-allowed' : 'pointer',
+                            backgroundColor: minimizing ? '#9ca3af' : '#8b5cf6',
+                            color: '#fff',
+                            opacity: running ? 0.5 : 1,
                         }}
                     >
-                        {running ? 'Pause' : 'Start'}
+                        {minimizing ? 'Minimizing...' : 'Minimize'}
                     </button>
-                    <button
-                        onClick={initializeParticles}
-                        style={{
-                            padding: '0.5rem 1rem',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            cursor: 'pointer',
-                            backgroundColor: '#fa383e',
-                            color: '#fff'
-                        }}
-                    >
-                        Reset
-                    </button>
-                </div>
+                )}
             </div>
 
-            {/* System Parameters */}
+            {/* System */}
             <div style={sectionStyle}>
-                <h4 style={sectionTitleStyle}>System Parameters</h4>
-                
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Particles:</span>
-                        <span style={valueStyle}>{numParticles}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="10"
-                        max="200"
-                        step="10"
-                        value={numParticles}
-                        onChange={(e) => setNumParticles(parseInt(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Temperature:</span>
-                        <span style={valueStyle}>{temperature.toFixed(2)}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="0.0"
-                        max="5"
-                        step="0.1"
-                        value={temperature}
-                        onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Orange/Blue Ratio:</span>
-                        <span style={valueStyle}>{Math.round(orangeRatio * 100)}%/{Math.round((1-orangeRatio) * 100)}%</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="0.1"
-                        max="0.9"
-                        step="0.1"
-                        value={orangeRatio}
-                        onChange={(e) => setOrangeRatio(parseFloat(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Boundary Type:</span>
-                    </div>
-                    <select
-                        value={boundaryType}
-                        onChange={(e) => setBoundaryType(e.target.value as BoundaryType)}
-                        style={{
-                            padding: '0.375rem 0.75rem',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            backgroundColor: '#ffffff',
-                            fontSize: '0.875rem'
-                        }}
-                    >
-                        <option value={BoundaryType.REFLECTIVE}>Reflective</option>
-                        <option value={BoundaryType.PERIODIC}>Periodic</option>
-                        <option value={BoundaryType.ABSORBING}>Absorbing</option>
-                        <option value={BoundaryType.ELASTIC}>Elastic</option>
-                    </select>
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Thermostat:</span>
-                    </div>
-                    <select
-                        value={thermostatType}
-                        onChange={(e) => setThermostatType(e.target.value as ThermostatType)}
-                        style={{
-                            padding: '0.375rem 0.75rem',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            backgroundColor: '#ffffff',
-                            fontSize: '0.875rem'
-                        }}
-                    >
-                        <option value={ThermostatType.VELOCITY_RESCALING}>Velocity Rescaling</option>
-                        <option value={ThermostatType.BERENDSEN}>Berendsen</option>
-                        <option value={ThermostatType.LANGEVIN}>Langevin</option>
-                        <option value={ThermostatType.NOSE_HOOVER}>Nosé-Hoover</option>
+                <div style={sectionTitleStyle}>System</div>
+                <SliderWithInput
+                    label="Particles"
+                    value={numParticles}
+                    onChange={(v) => setNumParticles(Math.round(v))}
+                    min={2} max={500} step={1} decimals={0}
+                    theme={theme}
+                />
+                <SliderWithInput
+                    label="Temperature"
+                    value={temperature}
+                    onChange={setTemperature}
+                    min={1} max={3000} step={10} decimals={0} unit="K"
+                    theme={theme}
+                />
+                <SliderWithInput
+                    label="Type ratio"
+                    value={orangeRatio}
+                    onChange={setOrangeRatio}
+                    min={0} max={1} step={0.1} decimals={1}
+                    theme={theme}
+                />
+                <div style={{ marginTop: '0.25rem' }}>
+                    <select value={boundaryType} onChange={(e) => setBoundaryType(e.target.value as BoundaryType)} style={selectStyle}>
+                        <option value={BoundaryType.PERIODIC}>Periodic boundaries</option>
+                        <option value={BoundaryType.REFLECTIVE}>Reflective walls</option>
+                        <option value={BoundaryType.ELASTIC}>Elastic walls</option>
                     </select>
                 </div>
             </div>
 
-            {/* Simulation Settings */}
+            {/* Interactions */}
             <div style={sectionStyle}>
-                <h4 style={sectionTitleStyle}>Simulation Settings</h4>
-                
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Time step:</span>
-                        <span style={valueStyle}>{timeStep}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="0.005"
-                        max="0.1"
-                        step="0.005"
-                        value={timeStep}
-                        onChange={(e) => setTimeStep(parseFloat(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
+                <div style={sectionTitleStyle}>Interactions</div>
 
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Steps per frame:</span>
-                        <span style={valueStyle}>{stepsPerFrame}</span>
+                {/* Per-type LJ parameters */}
+                {[0, 1].slice(0, numTypes).map((i) => (
+                    <div key={i} style={{ marginBottom: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                            <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[i], borderRadius: '2px' }} />
+                            <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>-</span>
+                            <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[i], borderRadius: '2px' }} />
+                        </div>
+                        <SliderWithInput
+                            label="ε (well depth)"
+                            value={epsilonMatrix[i][i]}
+                            onChange={(v) => updateEpsilon(i, i, v)}
+                            min={0.001} max={2} step={0.01} decimals={3} unit="eV"
+                            theme={theme}
+                        />
+                        <SliderWithInput
+                            label="σ (size)"
+                            value={sigmaMatrix[i][i]}
+                            onChange={(v) => updateSigma(i, i, v)}
+                            min={1} max={8} step={0.1} decimals={1} unit="Å"
+                            theme={theme}
+                        />
                     </div>
-                    <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="10"
-                        value={stepsPerFrame}
-                        onChange={(e) => setStepsPerFrame(parseInt(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
-            </div>
+                ))}
 
-            {/* Force Field Parameters */}
-            <div style={sectionStyle}>
-                <h4 style={sectionTitleStyle}>Force Field Parameters</h4>
-                
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Epsilon Scale (ε):</span>
-                        <span style={valueStyle}>{epsilonScale.toFixed(2)}</span>
+                {/* Cross interaction */}
+                {numTypes > 1 && (
+                    <div style={{ marginTop: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[0], borderRadius: '2px' }} />
+                                <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>-</span>
+                                <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[1], borderRadius: '2px' }} />
+                            </div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', cursor: 'pointer', marginLeft: 'auto' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useCombiningRules}
+                                    onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setUseCombiningRules(checked);
+                                        if (checked) {
+                                            const crossEps = Math.sqrt(epsilonMatrix[0][0] * epsilonMatrix[1][1]);
+                                            const crossSig = (sigmaMatrix[0][0] + sigmaMatrix[1][1]) / 2;
+                                            updateInteractionParameter('epsilon', 0, 1, crossEps);
+                                            updateInteractionParameter('epsilon', 1, 0, crossEps);
+                                            updateInteractionParameter('sigma', 0, 1, crossSig);
+                                            updateInteractionParameter('sigma', 1, 0, crossSig);
+                                        }
+                                    }}
+                                    style={{ margin: 0 }}
+                                />
+                                <span style={{ color: theme.textMuted }}>auto</span>
+                            </label>
+                        </div>
+                        {!useCombiningRules && (
+                            <>
+                                <SliderWithInput
+                                    label="ε (cross)"
+                                    value={epsilonMatrix[0][1]}
+                                    onChange={(v) => {
+                                        updateInteractionParameter('epsilon', 0, 1, v);
+                                        updateInteractionParameter('epsilon', 1, 0, v);
+                                    }}
+                                    min={0.001} max={2} step={0.01} decimals={3} unit="eV"
+                                    theme={theme}
+                                />
+                                <SliderWithInput
+                                    label="σ (cross)"
+                                    value={sigmaMatrix[0][1]}
+                                    onChange={(v) => {
+                                        updateInteractionParameter('sigma', 0, 1, v);
+                                        updateInteractionParameter('sigma', 1, 0, v);
+                                    }}
+                                    min={1} max={8} step={0.1} decimals={1} unit="Å"
+                                    theme={theme}
+                                />
+                            </>
+                        )}
                     </div>
-                    <input
-                        type="range"
-                        min="0.1"
-                        max="2"
-                        step="0.1"
-                        value={epsilonScale}
-                        onChange={(e) => setEpsilonScale(parseFloat(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
+                )}
 
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Sigma Scale (σ):</span>
-                        <span style={valueStyle}>{sigmaScale.toFixed(2)}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="0.5"
-                        max="2"
-                        step="0.1"
-                        value={sigmaScale}
-                        onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            setSigmaScale(value);
-                            setBaseParticleRadius(1.5 * value);
-                        }}
-                        style={sliderStyle}
-                    />
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Charge Scale (q):</span>
-                        <span style={valueStyle}>{chargeScale.toFixed(2)}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="0.0"
-                        max="5"
-                        step="0.2"
+                {/* Coulomb */}
+                <div style={{ marginTop: '0.5rem' }}>
+                    <SliderWithInput
+                        label="Coulomb strength"
                         value={chargeScale}
-                        onChange={(e) => setChargeScale(parseFloat(e.target.value))}
-                        style={sliderStyle}
-                    />
-                </div>
-
-                <div style={controlStyle}>
-                    <div style={labelStyle}>
-                        <span>Circle Size:</span>
-                        <span style={valueStyle}>{visualScale.toFixed(1)}</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="1"
-                        max="15"
-                        step="0.5"
-                        value={visualScale}
-                        onChange={(e) => setVisualScale(parseFloat(e.target.value))}
-                        style={sliderStyle}
+                        onChange={setChargeScale}
+                        min={0} max={5} step={0.1} decimals={1} unit="×"
+                        theme={theme}
                     />
                 </div>
             </div>
 
-            {/* Advanced Controls */}
+            {/* Visual */}
+            <div style={{ marginBottom: '0.75rem' }}>
+                <SliderWithInput
+                    label="Circle size"
+                    value={visualScale}
+                    onChange={setVisualScale}
+                    min={1} max={15} step={0.5} decimals={1}
+                    theme={theme}
+                />
+            </div>
+
+            {/* Timing (collapsible) */}
+            <div style={{ marginBottom: '0.75rem' }}>
+                <button
+                    onClick={() => setShowTiming(!showTiming)}
+                    style={{
+                        width: '100%',
+                        padding: '0.4rem',
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: '4px',
+                        backgroundColor: theme.surface,
+                        color: theme.textMuted,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                    }}
+                >
+                    <span>Timing</span>
+                    <span style={{ transform: showTiming ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+                </button>
+                {showTiming && (
+                    <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: theme.surface, borderRadius: '4px' }}>
+                        <SliderWithInput
+                            label="Time step"
+                            value={timeStep * TIME_UNIT_TO_FS}
+                            onChange={(v) => setTimeStep(v / TIME_UNIT_TO_FS)}
+                            min={0.1} max={10} step={0.1} decimals={1} unit="fs"
+                            theme={theme}
+                        />
+                        <SliderWithInput
+                            label="Steps/frame"
+                            value={stepsPerFrame}
+                            onChange={(v) => setStepsPerFrame(Math.round(v))}
+                            min={1} max={100} step={1} decimals={0}
+                            theme={theme}
+                        />
+                        <div style={{ fontSize: '0.65rem', color: theme.textMuted, marginTop: '0.25rem' }}>
+                            {(timeStep * TIME_UNIT_TO_FS * stepsPerFrame).toFixed(0)} fs/frame
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Advanced (collapsible) */}
             <div>
                 <button
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     style={{
                         width: '100%',
-                        padding: '0.75rem',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        backgroundColor: '#f8f9fa',
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
+                        padding: '0.4rem',
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: '4px',
+                        backgroundColor: theme.surface,
+                        color: theme.textMuted,
+                        fontSize: '0.75rem',
                         cursor: 'pointer',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
                     }}
                 >
-                    <span>Advanced Parameters</span>
-                    <span style={{ 
-                        transform: showAdvanced ? 'rotate(180deg)' : 'rotate(0deg)', 
-                        transition: 'transform 0.2s' 
-                    }}>▼</span>
+                    <span>Advanced</span>
+                    <span style={{ transform: showAdvanced ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
                 </button>
-                
+
                 {showAdvanced && (
-                    <div style={{
-                        marginTop: '1rem',
-                        padding: '1rem',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        backgroundColor: '#ffffff'
-                    }}>
+                    <div style={{ marginTop: '0.5rem', padding: '0.5rem', backgroundColor: theme.surface, borderRadius: '4px' }}>
+                        {/* Thermostat */}
+                        <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ ...sectionTitleStyle, marginBottom: '0.25rem' }}>Thermostat</div>
+                            <select value={thermostatType} onChange={(e) => setThermostatType(e.target.value as ThermostatType)} style={selectStyle}>
+                                <option value={ThermostatType.NONE}>None (NVE)</option>
+                                <option value={ThermostatType.LANGEVIN}>Langevin</option>
+                                <option value={ThermostatType.BERENDSEN}>Berendsen</option>
+                                <option value={ThermostatType.VELOCITY_RESCALING}>Velocity rescaling</option>
+                                <option value={ThermostatType.NOSE_HOOVER}>Nosé-Hoover</option>
+                            </select>
+                        </div>
+
                         {/* Particle Types */}
-                        <div style={{ marginBottom: '1.5rem' }}>
-                            <h5 style={{ fontSize: '0.875rem', fontWeight: '600', margin: '0 0 0.75rem 0' }}>
-                                Particle Types
-                            </h5>
-                            
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                {/* Charges */}
-                                <div>
-                                    <h6 style={{ fontSize: '0.75rem', margin: '0 0 0.5rem 0', color: '#6b7280' }}>
-                                        Charges
-                                    </h6>
-                                    {charges.map((charge, i) => (
-                                        <div key={`charge-${i}`} style={{ marginBottom: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
-                                                {i === 0 ? 'Orange' : 'Blue'}: {charge.toFixed(1)}
-                                            </label>
-                                            <input
-                                                type="range"
-                                                min="-3"
-                                                max="3"
-                                                step="0.5"
-                                                value={charge}
-                                                onChange={(e) => {
-                                                    const newCharges = [...charges];
-                                                    newCharges[i] = parseFloat(e.target.value);
-                                                    setCharges(newCharges);
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    appearance: 'none',
-                                                    height: '4px',
-                                                    borderRadius: '2px',
-                                                    background: '#d1d5db'
-                                                }}
-                                            />
-                                        </div>
-                                    ))}
+                        <div style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ ...sectionTitleStyle, marginBottom: '0.5rem' }}>Particle Types</div>
+                            {typeLabels.map((label, i) => (
+                                <div key={i} style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: '60px 50px 1fr',
+                                    gap: '0.5rem',
+                                    alignItems: 'center',
+                                    marginBottom: '0.5rem',
+                                }}>
+                                    {/* Label input */}
+                                    <input
+                                        type="text"
+                                        value={label}
+                                        onChange={(e) => {
+                                            const newLabels = [...typeLabels];
+                                            newLabels[i] = e.target.value;
+                                            setTypeLabels(newLabels);
+                                        }}
+                                        style={{
+                                            padding: '0.2rem 0.3rem',
+                                            fontSize: '0.75rem',
+                                            border: `1px solid ${theme.border}`,
+                                            borderRadius: '3px',
+                                            backgroundColor: theme.inputBg,
+                                            color: theme.text,
+                                        }}
+                                        placeholder="Label"
+                                    />
+                                    {/* Charge input */}
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        value={charges[i]}
+                                        onChange={(e) => {
+                                            const newCharges = [...charges];
+                                            newCharges[i] = parseFloat(e.target.value) || 0;
+                                            setCharges(newCharges);
+                                        }}
+                                        style={{
+                                            padding: '0.2rem 0.3rem',
+                                            fontSize: '0.75rem',
+                                            border: `1px solid ${theme.border}`,
+                                            borderRadius: '3px',
+                                            backgroundColor: theme.inputBg,
+                                            color: theme.text,
+                                        }}
+                                        title="Charge (e)"
+                                    />
+                                    {/* Color select */}
+                                    <select
+                                        value={typeColors[i]}
+                                        onChange={(e) => {
+                                            const newColors = [...typeColors];
+                                            newColors[i] = e.target.value;
+                                            setTypeColors(newColors);
+                                        }}
+                                        style={{
+                                            ...selectStyle,
+                                            fontSize: '0.7rem',
+                                            padding: '0.25rem',
+                                        }}
+                                    >
+                                        <option value="rgba(255, 165, 0, 0.8)">Orange</option>
+                                        <option value="rgba(0, 100, 255, 0.8)">Blue</option>
+                                        <option value="rgba(255, 50, 50, 0.8)">Red</option>
+                                        <option value="rgba(50, 180, 50, 0.8)">Green</option>
+                                        <option value="rgba(160, 50, 200, 0.8)">Purple</option>
+                                        <option value="rgba(100, 100, 100, 0.8)">Gray</option>
+                                        <option value="rgba(128, 128, 255, 0.8)">Light Blue</option>
+                                    </select>
                                 </div>
-                                
-                                {/* Colors */}
-                                <div>
-                                    <h6 style={{ fontSize: '0.75rem', margin: '0 0 0.5rem 0', color: '#6b7280' }}>
-                                        Colors
-                                    </h6>
-                                    {typeColors.map((color, i) => (
-                                        <div key={`color-${i}`} style={{ marginBottom: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.75rem', display: 'block', marginBottom: '0.25rem' }}>
-                                                Type {i}:
-                                            </label>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                <div style={{
-                                                    width: '20px',
-                                                    height: '20px',
-                                                    backgroundColor: color,
-                                                    border: '1px solid #ccc',
-                                                    borderRadius: '3px'
-                                                }} />
-                                                <select
-                                                    value={color}
-                                                    onChange={(e) => {
-                                                        const newColors = [...typeColors];
-                                                        newColors[i] = e.target.value;
-                                                        setTypeColors(newColors);
-                                                    }}
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '0.25rem',
-                                                        border: '1px solid #d1d5db',
-                                                        borderRadius: '4px',
-                                                        fontSize: '0.75rem'
-                                                    }}
-                                                >
-                                                    <option value="rgba(255, 165, 0, 0.8)">Orange</option>
-                                                    <option value="rgba(0, 0, 255, 0.8)">Blue</option>
-                                                    <option value="rgba(255, 0, 0, 0.8)">Red</option>
-                                                    <option value="rgba(0, 128, 0, 0.8)">Green</option>
-                                                    <option value="rgba(128, 0, 128, 0.8)">Purple</option>
-                                                    <option value="rgba(0, 0, 0, 0.8)">Black</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                            ))}
+                            <div style={{ fontSize: '0.65rem', color: theme.textMuted, marginTop: '0.25rem' }}>
+                                Label, Charge (e), Color
                             </div>
                         </div>
-                        
-                        {/* Interaction Matrix */}
-                        <div>
-                            <h5 style={{ fontSize: '0.875rem', fontWeight: '600', margin: '0 0 0.75rem 0' }}>
-                                Pair Interactions
-                            </h5>
-                            
-                            <div style={{ fontSize: '0.75rem', overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr style={{ backgroundColor: '#f3f4f6' }}>
-                                            <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.7rem' }}>Pair</th>
-                                            <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.7rem' }}>ε</th>
-                                            <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.7rem' }}>σ</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {Array.from({ length: numTypes }).map((_, i) =>
-                                            Array.from({ length: i + 1 }).map((_, j) => (
-                                                <tr key={`interaction-${i}-${j}`} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                                    <td style={{ padding: '0.5rem' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                                            <div style={{ width: '12px', height: '12px', backgroundColor: typeColors[i], borderRadius: '2px' }}></div>
-                                                            <div style={{ width: '12px', height: '12px', backgroundColor: typeColors[j], borderRadius: '2px' }}></div>
-                                                            <span style={{ fontSize: '0.7rem' }}>{i}-{j}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '0.5rem' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                            <input
-                                                                type="range"
-                                                                min="0.1"
-                                                                max="2.0"
-                                                                step="0.1"
-                                                                value={epsilonMatrix[i][j]}
-                                                                onChange={(e) => updateInteractionParameter('epsilon', i, j, parseFloat(e.target.value))}
-                                                                style={{
-                                                                    width: '60px',
-                                                                    appearance: 'none',
-                                                                    height: '3px',
-                                                                    borderRadius: '2px',
-                                                                    background: '#d1d5db'
-                                                                }}
-                                                            />
-                                                            <span style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>{epsilonMatrix[i][j].toFixed(1)}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td style={{ padding: '0.5rem' }}>
-                                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                                            <input
-                                                                type="range"
-                                                                min="1.0"
-                                                                max="5.0"
-                                                                step="0.2"
-                                                                value={sigmaMatrix[i][j]}
-                                                                onChange={(e) => updateInteractionParameter('sigma', i, j, parseFloat(e.target.value))}
-                                                                style={{
-                                                                    width: '60px',
-                                                                    appearance: 'none',
-                                                                    height: '3px',
-                                                                    borderRadius: '2px',
-                                                                    background: '#d1d5db'
-                                                                }}
-                                                            />
-                                                            <span style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>{sigmaMatrix[i][j].toFixed(1)}</span>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
+
+                        {/* Debug Visualization */}
+                        {setShowCells && setShowInteractions && setShowCutoffRadius && setCutoffRadius && (
+                            <div style={{ marginBottom: '0.5rem' }}>
+                                <div style={{ ...sectionTitleStyle, marginBottom: '0.5rem' }}>Debug Visualization</div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={showCells}
+                                            onChange={(e) => setShowCells(e.target.checked)}
+                                        />
+                                        Show cells
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={showInteractions}
+                                            onChange={(e) => setShowInteractions(e.target.checked)}
+                                        />
+                                        Show interactions
+                                    </label>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={showCutoffRadius}
+                                            onChange={(e) => setShowCutoffRadius(e.target.checked)}
+                                        />
+                                        Show cutoff radius
+                                    </label>
+                                    <SliderWithInput
+                                        label="Cutoff radius"
+                                        value={cutoffRadius ?? 12}
+                                        onChange={setCutoffRadius}
+                                        min={6} max={12} step={0.5} decimals={1} unit="Å"
+                                        theme={theme}
+                                    />
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 )}
             </div>

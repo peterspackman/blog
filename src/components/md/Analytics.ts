@@ -1,5 +1,8 @@
 import { ParticleSystemData } from './Thermostats';
 
+// Boltzmann constant in eV/K
+const kB = 8.617333262e-5;
+
 export interface CollectiveVariable {
     name: string;
     values: number[];
@@ -69,14 +72,14 @@ export class AnalyticsEngine {
     private initializeCollectiveVariables(): void {
         const variables = [
             { name: 'temperature', unit: 'K', description: 'Instantaneous temperature' },
-            { name: 'pressure', unit: 'atm', description: 'Instantaneous pressure' },
-            { name: 'totalEnergy', unit: 'kJ/mol', description: 'Total energy (kinetic + potential)' },
-            { name: 'kineticEnergy', unit: 'kJ/mol', description: 'Total kinetic energy' },
-            { name: 'potentialEnergy', unit: 'kJ/mol', description: 'Total potential energy' },
-            { name: 'density', unit: 'g/cm³', description: 'System density' },
-            { name: 'volume', unit: 'Ų', description: 'System volume' },
-            { name: 'diffusionCoefficient', unit: 'cm²/s', description: 'Self-diffusion coefficient' },
-            { name: 'heatCapacity', unit: 'J/(mol·K)', description: 'Heat capacity at constant volume' }
+            { name: 'pressure', unit: 'eV/Å²', description: 'Instantaneous pressure' },
+            { name: 'totalEnergy', unit: 'eV', description: 'Total energy (kinetic + potential)' },
+            { name: 'kineticEnergy', unit: 'eV', description: 'Total kinetic energy' },
+            { name: 'potentialEnergy', unit: 'eV', description: 'Total potential energy' },
+            { name: 'density', unit: 'amu/Å²', description: 'System density (2D)' },
+            { name: 'volume', unit: 'Å²', description: 'System area (2D)' },
+            { name: 'diffusionCoefficient', unit: 'Å²/time', description: 'Self-diffusion coefficient' },
+            { name: 'heatCapacity', unit: 'kB', description: 'Heat capacity at constant volume' }
         ];
 
         variables.forEach(variable => {
@@ -155,7 +158,9 @@ export class AnalyticsEngine {
             kineticEnergy += 0.5 * masses[i] * (vx * vx + vy * vy);
         }
 
-        const temperature = kineticEnergy / count; // Boltzmann constant = 1 in reduced units
+        // Temperature in 2D: T = KE / (N * kB) in Kelvin
+        // KE is in eV (from mass in amu, velocity in Å/time_unit)
+        const temperature = kineticEnergy / (count * kB);
         const totalEnergy = kineticEnergy + potentialEnergy;
 
         // Calculate pressure (2D ideal gas + virial correction)
@@ -371,5 +376,9 @@ export class AnalyticsEngine {
 
     setSamplingInterval(interval: number): void {
         this.samplingInterval = Math.max(0.1, interval);
+    }
+
+    getCurrentTime(): number {
+        return this.currentTime;
     }
 }

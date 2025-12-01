@@ -31,7 +31,7 @@ export class LennardJonesPotential extends Potential {
     }
 
     calculate(r: number, type1: number, type2: number): ForceResult {
-        if (r > this.cutoffRadius || r < 0.001) {
+        if (r > this.cutoffRadius) {
             return { potential: 0, force: 0 };
         }
 
@@ -73,7 +73,7 @@ export class CoulombPotential extends Potential {
     constructor(
         charges: number[],
         chargeScale: number = 1.0,
-        coulombConstant: number = 138.935, // (kJ/mol)·Å/e²
+        coulombConstant: number = 14.3996, // eV·Å/e² (1/(4πε₀) in eV-Å-e units)
         cutoffRadius: number = Infinity
     ) {
         super();
@@ -84,7 +84,7 @@ export class CoulombPotential extends Potential {
     }
 
     calculate(r: number, type1: number, type2: number): ForceResult {
-        if (r > this.cutoffRadius || r < 0.001) {
+        if (r > this.cutoffRadius) {
             return { potential: 0, force: 0 };
         }
 

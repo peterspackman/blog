@@ -1,3 +1,6 @@
+// Boltzmann constant in eV/K
+const kB = 8.617333262e-5;
+
 export interface ParticleSystemData {
     positions: Float32Array;
     velocities: Float32Array;
@@ -7,7 +10,7 @@ export interface ParticleSystemData {
 }
 
 export abstract class Thermostat {
-    protected targetTemperature: number;
+    protected targetTemperature: number;  // Kelvin
     protected timeStep: number;
 
     constructor(targetTemperature: number, timeStep: number) {
@@ -16,13 +19,18 @@ export abstract class Thermostat {
     }
 
     abstract apply(particleData: ParticleSystemData): void;
-    
+
     setTargetTemperature(temperature: number): void {
         this.targetTemperature = temperature;
     }
 
     setTimeStep(timeStep: number): void {
         this.timeStep = timeStep;
+    }
+
+    // Get thermal energy kB*T in eV
+    protected get kBT(): number {
+        return kB * this.targetTemperature;
     }
 
     protected calculateCurrentTemperature(particleData: ParticleSystemData): number {
@@ -34,11 +42,12 @@ export abstract class Thermostat {
             const vx = velocities[idx];
             const vy = velocities[idx + 1];
             const v2 = vx * vx + vy * vy;
-            totalKE += 0.5 * masses[i] * v2;
+            totalKE += 0.5 * masses[i] * v2;  // KE in eV (mass in amu, v in Å/time_unit)
         }
 
-        // Temperature in 2D: T = KE / (N * k_B), where k_B = 1 in reduced units
-        return totalKE / count;
+        // Temperature in 2D: T = 2*KE / (2N * k_B) = KE / (N * k_B)
+        // Factor of 2 in numerator for 2D, 2N degrees of freedom
+        return totalKE / (count * kB);  // Returns Kelvin
     }
 
     getDescription(): string {
@@ -80,66 +89,85 @@ export class VelocityRescalingThermostat extends Thermostat {
 }
 
 export class LangevinThermostat extends Thermostat {
-    private friction: number;
+    private baseFriction: number;  // Base friction coefficient γ in 1/time_unit
     private randomForces: Float32Array;
 
-    constructor(targetTemperature: number, timeStep: number, friction: number = 1.0) {
+    // Default friction: γ = 0.01 gives relaxation time τ = 100 internal units ≈ 1 ps
+    // This is appropriate for liquids/gases - not too aggressive
+    constructor(targetTemperature: number, timeStep: number, friction: number = 0.01) {
         super(targetTemperature, timeStep);
-        this.friction = friction;
+        this.baseFriction = friction;
         this.randomForces = new Float32Array(0);
     }
 
     apply(particleData: ParticleSystemData): void {
         const { velocities, masses, count } = particleData;
-        
+
         // Resize random forces array if needed
         if (this.randomForces.length !== count * 2) {
             this.randomForces = new Float32Array(count * 2);
         }
 
+        // Check current temperature and adapt friction
+        const currentTemp = this.calculateCurrentTemperature(particleData);
+        const tempRatio = currentTemp / Math.max(1, this.targetTemperature);
+
+        // Adaptive friction: increase when temperature is way above target
+        // At 2x target temp, friction is 2x base
+        // At 10x target temp, friction is 10x base (capped at 20x)
+        // Below target, use base friction
+        const adaptiveFriction = tempRatio > 1.5
+            ? this.baseFriction * Math.min(20, tempRatio)
+            : this.baseFriction;
+
         // Generate random forces (Box-Muller transform for Gaussian distribution)
         for (let i = 0; i < count * 2; i += 2) {
             const u1 = Math.random();
             const u2 = Math.random();
-            const magnitude = Math.sqrt(-2 * Math.log(u1));
+            const magnitude = Math.sqrt(-2 * Math.log(Math.max(1e-10, u1)));
             this.randomForces[i] = magnitude * Math.cos(2 * Math.PI * u2);
             this.randomForces[i + 1] = magnitude * Math.sin(2 * Math.PI * u2);
         }
 
-        // Apply Langevin dynamics
-        const kT = this.targetTemperature; // Boltzmann constant = 1 in reduced units
-        const gamma = this.friction;
+        // Langevin equation: m*dv/dt = -γ*m*v + sqrt(2*γ*m*kB*T) * noise
+        // Discretized: dv = -γ*v*dt + sqrt(2*γ*kB*T/m) * sqrt(dt) * noise
+        //
+        // Note: When using adaptive friction for damping, we still use base friction
+        // for the random force term to maintain proper equilibration to target temp
+
+        const thermalEnergy = this.kBT;  // eV
         const dt = this.timeStep;
-        
+        const sqrtDt = Math.sqrt(dt);
+
         for (let i = 0; i < count; i++) {
             const idx = i * 2;
             const mass = masses[i];
-            
-            // Friction force: -γ * v
-            const frictionX = -gamma * velocities[idx];
-            const frictionY = -gamma * velocities[idx + 1];
-            
-            // Random force: sqrt(2 * γ * k_B * T * m / dt) * ξ
-            const randomMagnitude = Math.sqrt(2 * gamma * kT * mass / dt);
-            const randomX = randomMagnitude * this.randomForces[idx];
-            const randomY = randomMagnitude * this.randomForces[idx + 1];
-            
-            // Apply forces as velocity changes
-            velocities[idx] += (frictionX + randomX) * dt / mass;
-            velocities[idx + 1] += (frictionY + randomY) * dt / mass;
+
+            // Friction term uses adaptive friction for stronger damping when hot
+            const frictionFactorX = -adaptiveFriction * velocities[idx] * dt;
+            const frictionFactorY = -adaptiveFriction * velocities[idx + 1] * dt;
+
+            // Random term uses base friction to maintain proper temperature target
+            const sigma = Math.sqrt(2 * this.baseFriction * thermalEnergy / mass);
+            const randomX = sigma * sqrtDt * this.randomForces[idx];
+            const randomY = sigma * sqrtDt * this.randomForces[idx + 1];
+
+            // Update velocities
+            velocities[idx] += frictionFactorX + randomX;
+            velocities[idx + 1] += frictionFactorY + randomY;
         }
     }
 
     setFriction(friction: number): void {
-        this.friction = Math.max(0, friction);
+        this.baseFriction = Math.max(0, friction);
     }
 
     getFriction(): number {
-        return this.friction;
+        return this.baseFriction;
     }
 
     getDescription(): string {
-        return "Langevin thermostat with stochastic dynamics";
+        return "Langevin thermostat with adaptive friction";
     }
 }
 
@@ -199,8 +227,8 @@ export class NoseHooverThermostat extends Thermostat {
         const { velocities, masses, count } = particleData;
         const dt = this.timeStep;
         const Q = this.thermostatMass;
-        const kT = this.targetTemperature;
-        
+        const thermalEnergy = this.kBT;  // eV
+
         // Calculate kinetic energy
         let totalKE = 0;
         for (let i = 0; i < count; i++) {
@@ -212,12 +240,12 @@ export class NoseHooverThermostat extends Thermostat {
 
         // Nose-Hoover equations of motion
         const dof = 2 * count; // degrees of freedom in 2D
-        const thermostatForce = (2 * totalKE - dof * kT) / Q;
-        
+        const thermostatForce = (2 * totalKE - dof * thermalEnergy) / Q;
+
         // Update thermostat velocity and position
         this.thermostatVelocity += thermostatForce * dt * 0.5;
         this.thermostatPosition += this.thermostatVelocity * dt;
-        
+
         // Apply thermostat to particle velocities
         const velocityScale = Math.exp(-this.thermostatVelocity * dt);
         for (let i = 0; i < count; i++) {
@@ -225,7 +253,7 @@ export class NoseHooverThermostat extends Thermostat {
             velocities[idx] *= velocityScale;
             velocities[idx + 1] *= velocityScale;
         }
-        
+
         // Final thermostat velocity update
         this.thermostatVelocity += thermostatForce * dt * 0.5;
     }
@@ -245,6 +273,7 @@ export class NoseHooverThermostat extends Thermostat {
 }
 
 export enum ThermostatType {
+    NONE = 'none',
     VELOCITY_RESCALING = 'velocity_rescaling',
     LANGEVIN = 'langevin',
     BERENDSEN = 'berendsen',
@@ -261,8 +290,10 @@ export function createThermostat(
         relaxationTime?: number;
         thermostatMass?: number;
     }
-): Thermostat {
+): Thermostat | null {
     switch (type) {
+        case ThermostatType.NONE:
+            return null;  // NVE - no thermostat
         case ThermostatType.VELOCITY_RESCALING:
             return new VelocityRescalingThermostat(
                 targetTemperature,
@@ -273,7 +304,7 @@ export function createThermostat(
             return new LangevinThermostat(
                 targetTemperature,
                 timeStep,
-                options?.friction ?? 1.0
+                options?.friction ?? 0.01
             );
         case ThermostatType.BERENDSEN:
             return new BerendsenThermostat(
