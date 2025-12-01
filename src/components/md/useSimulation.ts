@@ -315,74 +315,43 @@ export function useSimulation({
         const oldAccels = particleData.oldAccelerations;
         const count = particleData.count;
 
-        // First, calculate forces to see how strong they are
-        calculateForces();
-
-        // Find maximum acceleration to determine if we need substeps
-        let maxAccelSq = 0;
-        for (let i = 0; i < count * 2; i++) {
-            const aSq = accels[i] * accels[i];
-            if (aSq > maxAccelSq) maxAccelSq = aSq;
-        }
-        const maxAccel = Math.sqrt(maxAccelSq);
-
-        // Adaptive timestep: if accelerations are high, subdivide
-        // Target: max displacement per substep ~ 0.1 Å
-        const maxDisplacementPerStep = 0.1;
-        const baseSubsteps = 1;
-        const maxSubsteps = 10;
-
-        // Estimate displacement: d ≈ 0.5 * a * dt²
-        // We want 0.5 * maxAccel * (dt/n)² < maxDisplacementPerStep
-        // So n > dt * sqrt(maxAccel / (2 * maxDisplacementPerStep))
-        let numSubsteps = baseSubsteps;
-        if (maxAccel > 0) {
-            const requiredSubsteps = timeStep * Math.sqrt(maxAccel / (2 * maxDisplacementPerStep));
-            numSubsteps = Math.min(maxSubsteps, Math.max(baseSubsteps, Math.ceil(requiredSubsteps)));
-        }
-
-        const dt = timeStep / numSubsteps;
+        const dt = timeStep;
         const dt2Half = 0.5 * dt * dt;
         const dtHalf = 0.5 * dt;
-        const maxVelocity = 5.0;  // Å/time_unit - clamp to prevent instabilities
+        const maxVelocity = 5.0;  // Å/time_unit - safety clamp
 
-        // Run substeps
-        for (let step = 0; step < numSubsteps; step++) {
-            // Store old accelerations
-            for (let i = 0; i < count * 2; i++) {
-                oldAccels[i] = accels[i];
-            }
+        // Store old accelerations (valid from end of previous call, or zero on first call)
+        for (let i = 0; i < count * 2; i++) {
+            oldAccels[i] = accels[i];
+        }
 
-            // Update positions: r(t+dt) = r(t) + v(t)*dt + 0.5*a(t)*dt²
-            for (let i = 0; i < count; i++) {
-                const idx = i * 2;
-                positions[idx] += velocities[idx] * dt + accels[idx] * dt2Half;
-                positions[idx + 1] += velocities[idx + 1] * dt + accels[idx + 1] * dt2Half;
-            }
+        // Update positions: r(t+dt) = r(t) + v(t)*dt + 0.5*a(t)*dt²
+        for (let i = 0; i < count; i++) {
+            const idx = i * 2;
+            positions[idx] += velocities[idx] * dt + accels[idx] * dt2Half;
+            positions[idx + 1] += velocities[idx + 1] * dt + accels[idx + 1] * dt2Half;
+        }
 
-            // Calculate new forces (except on last substep where we already have them for next call)
-            if (step < numSubsteps - 1) {
-                calculateForces();
-            }
+        // Apply boundary conditions before force calculation
+        if (boundaryCondition) {
+            boundaryCondition.apply(particleData);
+        }
 
-            // Update velocities: v(t+dt) = v(t) + 0.5*[a(t) + a(t+dt)]*dt
-            for (let i = 0; i < count; i++) {
-                const idx = i * 2;
-                velocities[idx] += (oldAccels[idx] + accels[idx]) * dtHalf;
-                velocities[idx + 1] += (oldAccels[idx + 1] + accels[idx + 1]) * dtHalf;
+        // Calculate forces at new positions
+        calculateForces();
 
-                // Clamp velocity magnitude to prevent cascade explosions
-                const vSq = velocities[idx] * velocities[idx] + velocities[idx + 1] * velocities[idx + 1];
-                if (vSq > maxVelocity * maxVelocity) {
-                    const scale = maxVelocity / Math.sqrt(vSq);
-                    velocities[idx] *= scale;
-                    velocities[idx + 1] *= scale;
-                }
-            }
+        // Update velocities: v(t+dt) = v(t) + 0.5*[a(t) + a(t+dt)]*dt
+        for (let i = 0; i < count; i++) {
+            const idx = i * 2;
+            velocities[idx] += (oldAccels[idx] + accels[idx]) * dtHalf;
+            velocities[idx + 1] += (oldAccels[idx + 1] + accels[idx + 1]) * dtHalf;
 
-            // Apply boundary conditions each substep
-            if (boundaryCondition) {
-                boundaryCondition.apply(particleData);
+            // Safety clamp for extreme cases (close approaches cause huge LJ forces)
+            const vSq = velocities[idx] * velocities[idx] + velocities[idx + 1] * velocities[idx + 1];
+            if (vSq > maxVelocity * maxVelocity) {
+                const scale = maxVelocity / Math.sqrt(vSq);
+                velocities[idx] *= scale;
+                velocities[idx + 1] *= scale;
             }
         }
 

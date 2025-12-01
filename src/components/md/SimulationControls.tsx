@@ -115,11 +115,6 @@ const SliderWithInput: React.FC<SliderWithInputProps> = ({
 };
 
 interface SimulationControlsProps {
-    running: boolean;
-    setRunning: (running: boolean) => void;
-    initializeParticles: () => void;
-    minimizing?: boolean;
-    runMinimization?: () => void;
     numParticles: number;
     setNumParticles: (num: number) => void;
     temperature: number;
@@ -163,8 +158,6 @@ interface SimulationControlsProps {
 }
 
 const SimulationControls: React.FC<SimulationControlsProps> = ({
-    running, setRunning, initializeParticles,
-    minimizing = false, runMinimization,
     numParticles, setNumParticles,
     temperature, setTemperature,
     timeStep, setTimeStep,
@@ -259,60 +252,6 @@ const SimulationControls: React.FC<SimulationControlsProps> = ({
             color: theme.text,
             fontSize: '0.85rem',
         }}>
-            {/* Playback Controls */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-                <button
-                    onClick={() => setRunning(!running)}
-                    style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        backgroundColor: running ? '#f59e0b' : '#10b981',
-                        color: '#fff',
-                    }}
-                >
-                    {running ? '⏸ Pause' : '▶ Start'}
-                </button>
-                <button
-                    onClick={initializeParticles}
-                    style={{
-                        padding: '0.5rem 0.75rem',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        backgroundColor: '#ef4444',
-                        color: '#fff',
-                    }}
-                >
-                    ↺ Reset
-                </button>
-                {runMinimization && (
-                    <button
-                        onClick={runMinimization}
-                        disabled={minimizing || running}
-                        style={{
-                            padding: '0.5rem 0.75rem',
-                            border: 'none',
-                            borderRadius: '6px',
-                            fontSize: '0.85rem',
-                            fontWeight: 600,
-                            cursor: minimizing || running ? 'not-allowed' : 'pointer',
-                            backgroundColor: minimizing ? '#9ca3af' : '#8b5cf6',
-                            color: '#fff',
-                            opacity: running ? 0.5 : 1,
-                        }}
-                    >
-                        {minimizing ? 'Minimizing...' : 'Minimize'}
-                    </button>
-                )}
-            </div>
-
             {/* System */}
             <div style={sectionStyle}>
                 <div style={sectionTitleStyle}>System</div>

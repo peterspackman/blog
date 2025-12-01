@@ -14,9 +14,9 @@ import { ElectricField, createElectricField, ElectricFieldPreset } from './md/El
 import { SimulationScenario, SCENARIOS } from './md/scenarios';
 import { ARGON, BOLTZMANN_CONSTANT } from './md/constants';
 import SimulationControls from './md/SimulationControls';
+import SimulationToolbar from './md/SimulationToolbar';
 import AnalyticsPlot from './md/AnalyticsPlot';
-import ScenarioSelector from './md/ScenarioSelector';
-import { FieldControls, SimplifiedFieldControls } from './md/FieldControls';
+import { SimplifiedFieldControls } from './md/FieldControls';
 import { useSimulation } from './md/useSimulation';
 import { useCanvasRenderer } from './md/useCanvasRenderer';
 import { usePointerHandlers } from './md/usePointerHandlers';
@@ -574,33 +574,49 @@ const MolecularDynamics = () => {
             padding: '1rem',
             boxSizing: 'border-box'
         }}>
-            {/* Main content: Canvas + Plot */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+            {/* Main content: Toolbar + Canvas + Plot */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
                 <div style={{ width: '100%', maxWidth: `${canvasWidth + 20}px` }}>
-                    {/* Header with title and scenario selector */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        margin: '0 0 1rem 0',
-                        flexWrap: 'wrap',
-                        gap: '0.5rem',
-                    }}>
-                        <h2 style={{ margin: 0 }}>Molecular Dynamics Simulation</h2>
-                        <ScenarioSelector
-                            scenario={scenario}
-                            onScenarioChange={applyScenario}
-                            isDark={isDark}
-                        />
-                    </div>
+                    {/* Unified toolbar */}
+                    <SimulationToolbar
+                        running={running}
+                        setRunning={setRunning}
+                        onReset={initializeParticles}
+                        minimizing={minimizing}
+                        onMinimize={runMinimization}
+                        scenario={scenario}
+                        onScenarioChange={applyScenario}
+                        time={analytics ? analytics.getCurrentTime() * 0.01018 : 0}
+                        stepCount={stepCount}
+                        isDrawMode={fieldPreset === 'draw'}
+                        setIsDrawMode={(mode) => setFieldPreset(mode ? 'draw' : 'none')}
+                        brushRadius={brushRadius}
+                        setBrushRadius={setBrushRadius}
+                        fieldStrength={fieldStrength}
+                        setFieldStrength={setFieldStrength}
+                        showField={showField}
+                        setShowField={setShowField}
+                        fieldChargeMode={fieldChargeMode}
+                        setFieldChargeMode={setFieldChargeMode}
+                        onClearField={() => {
+                            if (vectorFieldRef.current) {
+                                vectorFieldRef.current.clear();
+                                updateFieldVisualization();
+                            }
+                        }}
+                        isDark={isDark}
+                    />
+
+                    {/* Canvas container with floating controls */}
                     <div ref={containerRef} style={{
                         width: `${canvasWidth + 10}px`,
                         height: `${canvasHeight + 10}px`,
-                        border: width === canvasWidth && height === canvasHeight ? 'none' : `1px solid ${theme.border}`,
-                        backgroundColor: theme.surface,
+                        backgroundColor: theme.canvasBg,
                         position: 'relative',
                         padding: '5px',
-                        margin: '0 auto'
+                        margin: '0.5rem auto 0',
+                        borderRadius: '8px',
+                        border: `1px solid ${theme.border}`,
                     }}>
                         <canvas
                             ref={canvasRef}
@@ -609,7 +625,8 @@ const MolecularDynamics = () => {
                                 width: `${width}px`,
                                 height: `${height}px`,
                                 backgroundColor: theme.canvasBg,
-                                touchAction: 'none'  // Prevent scroll/zoom interference on touch
+                                borderRadius: '4px',
+                                touchAction: 'none'
                             }}
                             onPointerDown={handlePointerDown}
                             onPointerMove={handlePointerMove}
@@ -617,7 +634,40 @@ const MolecularDynamics = () => {
                             onPointerCancel={handlePointerUp}
                             onContextMenu={handleContextMenu}
                         />
-                        {/* Resize handle - subtle corner grip */}
+
+                        {/* Floating field controls inside canvas (only for preset scenarios) */}
+                        {scenario !== 'custom' && (
+                            <SimplifiedFieldControls
+                                fieldPreset={fieldPreset}
+                                fieldStrength={fieldStrength}
+                                setFieldStrength={setFieldStrength}
+                                eFieldPreset={eFieldPreset}
+                                eFieldStrength={eFieldStrength}
+                                setEFieldStrength={setEFieldStrength}
+                                showField={showField}
+                                setShowField={setShowField}
+                                showEField={showEField}
+                                setShowEField={setShowEField}
+                                onFieldStrengthChange={(newStrength) => {
+                                    if (vectorFieldRef.current) {
+                                        applyFieldPreset(vectorFieldRef.current, fieldPreset, {
+                                            strength: newStrength,
+                                            width: 15,
+                                            shape: fieldShape,
+                                        });
+                                        updateFieldVisualization();
+                                    }
+                                }}
+                                onEFieldStrengthChange={(newStrength) => {
+                                    if (electricFieldRef.current) {
+                                        electricFieldRef.current.applyPreset(eFieldPreset, newStrength);
+                                    }
+                                }}
+                                isDark={isDark}
+                            />
+                        )}
+
+                        {/* Resize handle */}
                         <div
                             onMouseDown={handleResizeStart}
                             style={{
@@ -627,76 +677,12 @@ const MolecularDynamics = () => {
                                 width: '12px',
                                 height: '12px',
                                 cursor: 'se-resize',
-                                opacity: 0.4,
+                                opacity: 0.3,
                                 pointerEvents: 'auto',
                                 backgroundImage: `linear-gradient(135deg, transparent 50%, ${isDark ? '#888' : '#999'} 50%)`,
                             }}
                             title="Drag to resize"
                         />
-                    </div>
-
-                    {/* External Field Controls - show full controls for Custom, simplified for scenarios */}
-                    {scenario === 'custom' ? (
-                        <FieldControls
-                            fieldPreset={fieldPreset}
-                            setFieldPreset={setFieldPreset}
-                            fieldStrength={fieldStrength}
-                            setFieldStrength={setFieldStrength}
-                            fieldShape={fieldShape}
-                            setFieldShape={setFieldShape}
-                            showField={showField}
-                            setShowField={setShowField}
-                            brushRadius={brushRadius}
-                            setBrushRadius={setBrushRadius}
-                            fieldChargeMode={fieldChargeMode}
-                            setFieldChargeMode={setFieldChargeMode}
-                            vectorFieldRef={vectorFieldRef}
-                            onVectorFieldUpdate={updateFieldVisualization}
-                            isDark={isDark}
-                        />
-                    ) : (
-                        <SimplifiedFieldControls
-                            fieldPreset={fieldPreset}
-                            fieldStrength={fieldStrength}
-                            setFieldStrength={setFieldStrength}
-                            eFieldPreset={eFieldPreset}
-                            eFieldStrength={eFieldStrength}
-                            setEFieldStrength={setEFieldStrength}
-                            showField={showField}
-                            setShowField={setShowField}
-                            showEField={showEField}
-                            setShowEField={setShowEField}
-                            onFieldStrengthChange={(newStrength) => {
-                                if (vectorFieldRef.current) {
-                                    applyFieldPreset(vectorFieldRef.current, fieldPreset, {
-                                        strength: newStrength,
-                                        width: 15,
-                                        shape: fieldShape,
-                                    });
-                                    updateFieldVisualization();
-                                }
-                            }}
-                            onEFieldStrengthChange={(newStrength) => {
-                                if (electricFieldRef.current) {
-                                    electricFieldRef.current.applyPreset(eFieldPreset, newStrength);
-                                }
-                            }}
-                            isDark={isDark}
-                        />
-                    )}
-
-                    {/* Status line */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginTop: '0.5rem',
-                        fontSize: '0.85rem',
-                    }}>
-                        <span style={{ color: theme.textMuted, fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                            {analytics && `t=${(analytics.getCurrentTime() * 0.01018).toFixed(2)} ps`}
-                            {` | ${stepCount} steps`}
-                            {neighborListRef.current && ` | ${neighborListRef.current.getStats().totalPairs} pairs`}
-                        </span>
                     </div>
                 </div>
                 
@@ -730,7 +716,7 @@ const MolecularDynamics = () => {
                         fontSize: '0.9rem'
                     }}
                 >
-                    {showControls ? '✕ Close' : '⚙ Controls'}
+                    {showControls ? 'Close' : 'Controls'}
                 </button>
             )}
 
@@ -750,11 +736,6 @@ const MolecularDynamics = () => {
                     } : {})
                 }}>
                     <SimulationControls
-                        running={running}
-                        setRunning={setRunning}
-                        initializeParticles={initializeParticles}
-                        minimizing={minimizing}
-                        runMinimization={runMinimization}
                         numParticles={numParticles}
                         setNumParticles={setNumParticles}
                         temperature={temperature}
