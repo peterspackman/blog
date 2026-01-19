@@ -157,7 +157,9 @@ const messageHandlers = {
     'get-file': getFile,
     'list-files': listFiles,
     'clear-files': clearAllFiles,
-    'get-file-info': getFileInfo
+    'get-file-info': getFileInfo,
+    'poll-trajectory': pollTrajectoryFiles,
+    'get-trajectory': getTrajectoryContent
 };
 
 /**
@@ -527,6 +529,114 @@ async function getFileInfo(data, id) {
         
     } catch (error) {
         throw new Error(`Failed to get info for ${filename}: ${error.message}`);
+    }
+}
+
+/**
+ * Poll for trajectory files in the simulation directory
+ */
+async function pollTrajectoryFiles(data, id) {
+    validateWorkerReady();
+
+    const trajectoryPatterns = [
+        /trajectory\.xyz$/i,
+        /\.xyz$/i,
+        /\.dcd$/i,
+        /\.lammpstrj$/i
+    ];
+
+    try {
+        const files = lammpsModule.FS.readdir(SIMULATION_DIR)
+            .filter(name => name !== '.' && name !== '..');
+
+        const trajectoryFiles = [];
+
+        for (const filename of files) {
+            const isTrajectory = trajectoryPatterns.some(pattern => pattern.test(filename));
+
+            if (isTrajectory) {
+                const fullPath = getFullPath(filename);
+                try {
+                    const stat = lammpsModule.FS.stat(fullPath);
+                    // Determine format
+                    let format = 'xyz';
+                    if (/\.dcd$/i.test(filename)) format = 'dcd';
+                    else if (/\.lammpstrj$/i.test(filename)) format = 'lammpstrj';
+
+                    trajectoryFiles.push({
+                        filename,
+                        size: stat.size,
+                        path: fullPath,
+                        format
+                    });
+                } catch (statError) {
+                    // Skip files that can't be stat'd
+                }
+            }
+        }
+
+        postMessage({
+            type: 'trajectory-files',
+            data: trajectoryFiles,
+            id
+        });
+
+    } catch (error) {
+        // Don't throw error for polling - just return empty
+        postMessage({
+            type: 'trajectory-files',
+            data: [],
+            id
+        });
+    }
+}
+
+/**
+ * Get trajectory file content
+ */
+async function getTrajectoryContent(data, id) {
+    validateWorkerReady();
+
+    const { filename } = data;
+    const fullPath = getFullPath(filename);
+
+    try {
+        if (!fileExists(fullPath)) {
+            postMessage({
+                type: 'trajectory-content',
+                data: {
+                    filename,
+                    content: new Uint8Array(0),
+                    size: 0
+                },
+                id
+            });
+            return;
+        }
+
+        const fileContent = lammpsModule.FS.readFile(fullPath);
+
+        postMessage({
+            type: 'trajectory-content',
+            data: {
+                filename,
+                content: fileContent,
+                size: fileContent.length
+            },
+            id
+        });
+
+    } catch (error) {
+        postMessage({
+            type: 'trajectory-content',
+            data: {
+                filename,
+                content: new Uint8Array(0),
+                size: 0,
+                error: error.message
+            },
+            id
+        });
     }
 }
 

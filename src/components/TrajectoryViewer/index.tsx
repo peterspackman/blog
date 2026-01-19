@@ -194,9 +194,38 @@ class PDBConverter {
 
   /**
    * Convert array of XYZ frame strings to PDB format
+   * @param frames - Array of XYZ frame strings
+   * @param moleculeName - Name for the molecule
+   * @param bonds - Optional array of [atom1, atom2] pairs (1-indexed) for CONECT records
    */
-  static convertFramesToPDB(frames: string[], moleculeName = 'MOL'): string {
+  static convertFramesToPDB(frames: string[], moleculeName = 'MOL', bonds?: [number, number][]): string {
     let pdbContent = '';
+
+    // Build CONECT records string if bonds provided
+    let conectRecords = '';
+    if (bonds && bonds.length > 0) {
+      // Build connectivity map (atom -> list of bonded atoms)
+      const connectivity = new Map<number, number[]>();
+      for (const [a1, a2] of bonds) {
+        if (!connectivity.has(a1)) connectivity.set(a1, []);
+        if (!connectivity.has(a2)) connectivity.set(a2, []);
+        connectivity.get(a1)!.push(a2);
+        connectivity.get(a2)!.push(a1);
+      }
+
+      // Generate CONECT records
+      for (const [atomIdx, bonded] of connectivity) {
+        const sortedBonded = [...bonded].sort((a, b) => a - b);
+        for (let i = 0; i < sortedBonded.length; i += 4) {
+          const chunk = sortedBonded.slice(i, i + 4);
+          let conectLine = `CONECT${atomIdx.toString().padStart(5)}`;
+          for (const b of chunk) {
+            conectLine += b.toString().padStart(5);
+          }
+          conectRecords += conectLine + '\n';
+        }
+      }
+    }
     
     frames.forEach((xyzFrame, frameIndex) => {
       pdbContent += `MODEL     ${(frameIndex + 1).toString().padStart(4, ' ')}\n`;
@@ -241,10 +270,15 @@ class PDBConverter {
         // Create ATOM record following PDB format
         pdbContent += `ATOM  ${atomNum} ${atomName} ${resName} ${chainID}${resSeq}    ${xStr}${yStr}${zStr}  1.00  0.00           ${element.padEnd(2, ' ')}\n`;
       }
-      
+
+      // Add CONECT records (for first frame, NGL applies to all)
+      if (frameIndex === 0 && conectRecords) {
+        pdbContent += conectRecords;
+      }
+
       pdbContent += 'ENDMDL\n';
     });
-    
+
     pdbContent += 'END\n';
     return pdbContent;
   }
@@ -285,6 +319,21 @@ class PDBConverter {
   }
 }
 
+// Atom type info for LAMMPS-style simulations
+interface AtomTypeInfo {
+  type: number;
+  mass: number;
+}
+
+// Element data from static JSON
+interface ElementInfo {
+  name: string;
+  symbol: string;
+  covalentRadius: number;
+  vdwRadius: number;
+  mass: number;
+}
+
 interface TrajectoryViewerProps {
   trajectoryData?: string;     // Multi-frame XYZ data
   xyzFrames?: string[];        // Or already parsed frames
@@ -295,9 +344,15 @@ interface TrajectoryViewerProps {
   moleculeName?: string;
   autoPlay?: boolean;
   initialSpeed?: number;
+  autoBond?: boolean;          // Whether NGL should calculate bonds (default: true)
+  bonds?: [number, number][];  // Optional explicit bonds as [atom1, atom2] pairs (1-indexed)
+  // Atom type mapping for LAMMPS-style simulations
+  atomTypes?: AtomTypeInfo[];
+  elementMapping?: Map<number, string>;
+  onElementMappingChange?: (mapping: Map<number, string>) => void;
 }
 
-const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({ 
+const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   trajectoryData,
   xyzFrames,
   structureFile,
@@ -306,7 +361,12 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   trajectoryUrl,
   moleculeName = 'Trajectory',
   autoPlay = false,
-  initialSpeed = 100
+  initialSpeed = 100,
+  autoBond = true,
+  bonds,
+  atomTypes,
+  elementMapping,
+  onElementMappingChange
 }) => {
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
@@ -334,6 +394,15 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   const [supercellZ, setSupercellZ] = useState<number>(1);
   const [frameVolumes, setFrameVolumes] = useState<(number | null)[]>([]);
   const [customUnitCell, setCustomUnitCell] = useState<CustomUnitCellRepresentation | null>(null);
+  const [elementData, setElementData] = useState<ElementInfo[]>([]);
+
+  // Load element data from static JSON
+  useEffect(() => {
+    fetch('/data/elements.json')
+      .then(res => res.json())
+      .then((data: ElementInfo[]) => setElementData(data))
+      .catch(err => console.warn('Failed to load element data:', err));
+  }, []);
 
   // Get theme-aware background color
   const getBackgroundColor = () => {
@@ -564,15 +633,17 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       let structure: any;
       if (typeof structFile === 'string') {
         // URL
-        structure = await nglStageRef.current.loadFile(structFile, { 
-          name: moleculeName
+        structure = await nglStageRef.current.loadFile(structFile, {
+          name: moleculeName,
+          autoBond: autoBond
         });
       } else {
         // File object
         const ext = getFileExtension(structFile.name);
-        structure = await nglStageRef.current.loadFile(structFile, { 
+        structure = await nglStageRef.current.loadFile(structFile, {
           ext: ext,
-          name: moleculeName
+          name: moleculeName,
+          autoBond: autoBond
         });
       }
       
@@ -728,14 +799,16 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       playerRef.current = null;
       
       // Convert to PDB format using the new PDBConverter
-      const pdbData = PDBConverter.convertFramesToPDB(frames, moleculeName);
+      // Pass bonds if provided (from topology file)
+      const pdbData = PDBConverter.convertFramesToPDB(frames, moleculeName, bonds);
       const blob = new Blob([pdbData], { type: 'text/plain' });
       
       // Load with trajectory support
-      const structure = await nglStageRef.current.loadFile(blob, { 
+      const structure = await nglStageRef.current.loadFile(blob, {
         ext: 'pdb',
         name: moleculeName,
-        asTrajectory: true
+        asTrajectory: true,
+        autoBond: autoBond
       });
       
       componentRef.current = structure;
@@ -830,6 +903,7 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       case 'ball+stick':
         repParams.radiusScale = 0.8;
         repParams.bondScale = 0.3;
+        repParams.aspectRatio = 1.5;
         break;
       case 'line':
         repParams.linewidth = 2;
@@ -1291,6 +1365,39 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
                 <span className={styles.overlayValue}>{playbackFPS}</span>
               </div>
               
+              {/* Atom type mapping - only show when atom types are available */}
+              {atomTypes && atomTypes.length > 0 && elementMapping && onElementMappingChange && (
+                <div className={styles.overlaySection}>
+                  <div className={styles.overlaySectionHeader}>Atom Types</div>
+                  {atomTypes.map(({ type, mass }) => (
+                    <div key={type} className={styles.overlayControlGroup}>
+                      <label className={styles.overlayLabel}>
+                        Type {type}{mass > 0 ? ` (${mass.toFixed(1)})` : ''}:
+                      </label>
+                      <input
+                        type="text"
+                        list={`elements-list-${type}`}
+                        value={elementMapping.get(type) || ''}
+                        onChange={(e) => {
+                          const newMapping = new Map(elementMapping);
+                          newMapping.set(type, e.target.value);
+                          onElementMappingChange(newMapping);
+                        }}
+                        placeholder="Element"
+                        className={styles.overlayTextInput}
+                      />
+                      <datalist id={`elements-list-${type}`}>
+                        {elementData.map(el => (
+                          <option key={el.symbol} value={el.symbol}>
+                            {el.name} ({el.mass.toFixed(2)})
+                          </option>
+                        ))}
+                      </datalist>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Unit cell controls - only show when lattice is available */}
               {hasLattice && (
                 <>

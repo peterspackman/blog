@@ -1,65 +1,488 @@
-.leftColumn {
+/* Main container */
+.container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  height: 100%;
+  min-height: 600px;
+  height: min(1200px, calc(100vh - 100px));
+  max-width: none;
+  padding: 0;
 }
 
-.rightColumn {
+/* Tab bar */
+.tabBar {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
-}
-
-.panel {
-  background: var(--ifm-background-surface-color);
+  border-radius: 6px;
+  overflow: hidden;
   border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  margin-bottom: 1rem;
+  background: var(--ifm-background-surface-color);
 }
 
-.panel h3 {
-  margin: 0 0 1rem 0;
-  color: var(--ifm-heading-color);
-  font-size: 1rem;
+.tabBarTabs {
+  display: flex;
+  flex: 1;
+}
+
+.clearStorageBtn {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-left: 1px solid var(--ifm-color-emphasis-300);
+  background: transparent;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.clearStorageBtn:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-danger);
+}
+
+.clearStorageBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clearStorageBtn:disabled:hover {
+  background: transparent;
+  color: var(--ifm-color-emphasis-500);
+}
+
+.tabButton {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.tabButton:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.tabButtonActive {
+  background: var(--ifm-color-primary);
+  color: #fff;
+}
+
+.tabButtonActive:hover {
+  background: var(--ifm-color-primary-dark);
+}
+
+.tabBadge {
+  background: rgba(255, 255, 255, 0.3);
+  color: inherit;
+  border-radius: 10px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  padding-bottom: 0.5rem;
+  min-width: 1.2rem;
+  text-align: center;
 }
 
-.filesPanel {
-  flex: 0 0 auto;
+.tabButton:not(.tabButtonActive) .tabBadge {
+  background: var(--ifm-color-emphasis-200);
 }
 
-.scriptPanel {
+.tabBadgeError {
+  background: var(--ifm-color-danger) !important;
+  color: #fff !important;
+}
+
+.liveDotSmall {
+  width: 6px;
+  height: 6px;
+  background: var(--ifm-color-success);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Tab content */
+.tabContentWrapper {
   flex: 1;
-  min-height: 350px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.outputPanel {
+.tabContent {
   flex: 1;
-  min-height: 200px;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
+  overflow: auto;
 }
 
-.outputFilesPanel {
-  flex: 0 0 auto;
-  margin-top: 1rem;
+/* =============================================
+   INPUT TAB - Split Panel Layout
+   ============================================= */
+
+.inputTabContainer {
+  flex: 1;
+  display: flex;
+  gap: 1rem;
+  position: relative;
+  min-height: 500px;
+}
+
+.inputTabDragging {
+  /* Visual feedback when dragging */
+}
+
+/* Drag overlay */
+.dragOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(var(--ifm-color-primary-rgb, 37, 99, 235), 0.1);
+  border: 3px dashed var(--ifm-color-primary);
+  border-radius: 0.5rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.dragOverlayContent {
+  text-align: center;
+  color: var(--ifm-color-primary);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.dragIcon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+/* Left Panel: File Browser */
+.fileBrowserPanel {
+  width: 240px;
+  min-width: 200px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--ifm-background-surface-color);
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.5rem;
-  padding: 1rem;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  overflow: hidden;
 }
 
-.outputFilesPanel h3 {
+.fileBrowserHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.fileBrowserHeader h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.addFileBtn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--ifm-color-primary);
+  color: white;
+  border-radius: 4px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.addFileBtn:hover {
+  background: var(--ifm-color-primary-dark);
+}
+
+/* File list */
+.fileList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.emptyFileList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--ifm-color-emphasis-500);
+  cursor: pointer;
+  border: 2px dashed var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  margin: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.emptyFileList:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary-lightest);
+}
+
+.dropZoneIcon {
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+.emptyFileList span {
+  font-size: 0.8rem;
+}
+
+/* File list item */
+.fileListItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.fileListItem:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.fileListItemSelected {
+  background: var(--ifm-color-primary-lightest);
+  border-color: var(--ifm-color-primary);
+}
+
+.fileListItemSelected:hover {
+  background: var(--ifm-color-primary-lighter);
+}
+
+.fileItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Checkbox toggle for main file */
+.mainFileToggle {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.mainFileToggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.checkmark {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ifm-color-emphasis-400);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.mainFileToggle input:checked + .checkmark {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+}
+
+.mainFileToggle input:checked + .checkmark::after {
+  content: '✓';
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.mainFileToggle:hover .checkmark {
+  border-color: var(--ifm-color-primary);
+}
+
+.fileName {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mainBadge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: white;
+  background: var(--ifm-color-primary);
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.fileDeleteBtn {
+  background: transparent;
+  border: none;
+  color: var(--ifm-color-emphasis-500);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.fileListItem:hover .fileDeleteBtn {
+  opacity: 1;
+}
+
+.fileDeleteBtn:hover {
+  color: var(--ifm-color-danger);
+}
+
+/* Small drop zone at bottom of file list */
+.dropZoneSmall {
+  padding: 0.6rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-500);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dropZoneSmall:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+}
+
+/* Right Panel: Editor */
+.editorPanel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.editorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.editorHeader h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.readOnlyBadge {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-600);
+  background: var(--ifm-color-emphasis-200);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.editorHint {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-500);
+  font-style: italic;
+}
+
+.editor {
+  flex: 1;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  border: none;
+  padding: 1rem;
+  resize: none;
+  outline: none;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  line-height: 1.5;
+  min-height: 300px;
+}
+
+.editor:focus {
+  background: var(--ifm-background-color);
+}
+
+.editor[readonly] {
+  background: var(--ifm-color-emphasis-100);
+  cursor: default;
+}
+
+.editorFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+}
+
+.editorFooter .buttonGroup {
+  margin: 0;
+}
+
+.editorFooter .status {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+/* =============================================
+   OUTPUT TAB SECTIONS (keep existing)
+   ============================================= */
+
+.outputSection h4,
+.outputFilesSection h4 {
   margin: 0 0 0.75rem 0;
   color: var(--ifm-heading-color);
   font-size: 0.9rem;
@@ -68,41 +491,241 @@
   padding-bottom: 0.5rem;
 }
 
-.outputFilesList {
+/* Output Tab Sections */
+.outputSection {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  min-height: 300px;
+}
+
+.outputHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  padding-bottom: 0.5rem;
+}
+
+.outputHeader h4 {
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+
+.outputActions {
+  display: flex;
   gap: 0.5rem;
 }
 
-.outputFileItem {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem;
-  background: var(--ifm-color-emphasis-100);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
+.outputFilesSection {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  padding: 1rem;
 }
 
-.outputFileItem:hover {
+/* Viewer Tab */
+.viewerContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  min-height: 500px;
+}
+
+.viewerStatus {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.85rem;
+  position: relative;
+}
+
+.trajectoryInfo {
+  color: var(--ifm-font-color-base);
+}
+
+.trajectoryInfo strong {
+  font-weight: 600;
+}
+
+.trajectoryInfo span {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.liveIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--ifm-color-success);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  background: var(--ifm-color-success);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.viewerStatusRight {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.optionsToggle {
+  background: transparent;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--ifm-font-color-base);
+  transition: background 0.15s ease;
+}
+
+.optionsToggle:hover {
   background: var(--ifm-color-emphasis-200);
 }
 
-.outputFileName {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.875rem;
-  color: var(--ifm-heading-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.viewerOptions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 250px;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 0.25rem;
 }
 
+.optionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.85rem;
+}
+
+.optionsClose {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--ifm-color-emphasis-600);
+  padding: 0;
+  line-height: 1;
+}
+
+.optionsClose:hover {
+  color: var(--ifm-font-color-base);
+}
+
+.atomTypeList {
+  padding: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.atomTypeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0.25rem;
+  gap: 1rem;
+}
+
+.atomTypeLabel {
+  font-size: 0.8rem;
+  color: var(--ifm-font-color-base);
+}
+
+.atomTypeMass {
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.75rem;
+}
+
+.elementSelect {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.viewerWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewerPlaceholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-emphasis-600);
+  text-align: center;
+  padding: 2rem;
+}
+
+.placeholderContent {
+  max-width: 400px;
+}
+
+.placeholderContent p {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.placeholderContent small {
+  display: block;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.8rem;
+}
+
+.placeholderContent code {
+  background: var(--ifm-color-emphasis-200);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
+.viewerLoading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* File upload area */
 .fileUpload {
   border: 2px dashed var(--ifm-color-emphasis-300);
   border-radius: 0.5rem;
-  padding: 2rem;
+  padding: 1.5rem;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -128,31 +751,29 @@
 
 .fileUpload small {
   color: var(--ifm-color-emphasis-600);
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
-.fileList {
-  margin-bottom: 1rem;
-}
-
+/* File badges */
 .fileBadges {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .fileBadge {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   background: var(--ifm-color-emphasis-200);
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.25rem;
   font-size: 0.75rem;
   font-family: var(--ifm-font-family-monospace);
   transition: all 0.2s;
+  position: relative;
 }
 
 .fileBadge.selected {
@@ -169,8 +790,28 @@
   background: var(--ifm-color-primary-lighter);
 }
 
+.fileBadge.isMainInput {
+  border: 2px solid var(--ifm-color-primary);
+  padding-top: 0.6rem;
+}
+
+.mainInputBadge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ifm-color-primary);
+  color: white;
+  font-size: 0.55rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .fileBadgeText {
-  max-width: 120px;
+  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -181,7 +822,7 @@
   border: none;
   color: var(--ifm-color-emphasis-600);
   cursor: pointer;
-  font-size: 16px;
+  font-size: 14px;
   padding: 0;
   margin-left: 0.25rem;
   line-height: 1;
@@ -195,43 +836,23 @@
 .inputFileHint {
   font-size: 0.75rem;
   color: var(--ifm-color-emphasis-600);
-  margin-top: 0.25rem;
   font-style: italic;
 }
 
-.field {
-  margin-bottom: 1rem;
-}
-
-.field label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-}
-
-.field select {
-  width: 100%;
-  padding: 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-}
-
+/* Script textarea */
 .inputScript {
   flex: 1;
   font-family: var(--ifm-font-family-monospace);
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.25rem;
-  padding: 1rem;
+  padding: 0.75rem;
   resize: none;
   outline: none;
   background: var(--ifm-background-color);
   color: var(--ifm-font-color-base);
   line-height: 1.4;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 .inputScript:focus {
@@ -239,42 +860,77 @@
   box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
 }
 
+/* Button group */
 .buttonGroup {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
   flex-wrap: wrap;
 }
 
-.buttonGroup .button {
-  flex: 0 0 auto;
-}
-
+/* Status */
 .status {
-  font-size: 0.875rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
   color: var(--ifm-color-emphasis-600);
   font-weight: 500;
 }
 
+/* Output area */
 .output {
   flex: 1;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.8rem;
   background: var(--ifm-color-emphasis-100);
   color: var(--ifm-font-color-base);
-  padding: 1rem;
+  padding: 0.75rem;
   border-radius: 0.25rem;
   overflow-y: auto;
   white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.3;
   border: 1px solid var(--ifm-color-emphasis-200);
-  max-height: 700px;
+  min-height: 0;
 }
 
 .error {
   color: var(--ifm-color-danger);
+}
+
+/* Output files list */
+.outputFilesList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.outputFileItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.outputFileItem:hover {
+  background: var(--ifm-color-emphasis-200);
+}
+
+.outputFileName {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  color: var(--ifm-heading-color);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.fileSize {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
 }
 
 /* Dark mode adjustments */
@@ -288,29 +944,237 @@
   color: #f48771;
 }
 
+[data-theme='dark'] .viewerPlaceholder {
+  background: #2d2d2d;
+}
+
+[data-theme='dark'] .viewerStatus {
+  background: #2d2d2d;
+}
+
 /* Mobile responsive */
-@media (max-width: 996px) {
-  .leftColumn, .rightColumn {
-    height: auto;
+@media (max-width: 768px) {
+  .container {
+    min-height: 500px;
   }
-  
-  .filesPanel {
+
+  /* Input tab stacks vertically on mobile */
+  .inputTabContainer {
+    flex-direction: column;
+    min-height: auto;
+  }
+
+  .fileBrowserPanel {
+    width: 100%;
+    min-width: auto;
     max-height: 200px;
   }
-  
-  .scriptPanel {
+
+  .editorPanel {
+    min-height: 350px;
+  }
+
+  .editor {
     min-height: 250px;
   }
-  
-  .outputPanel {
-    min-height: 300px;
+
+  .outputSection {
+    min-height: 250px;
   }
-  
-  .output {
-    max-height: 300px;
+
+  .viewerContainer {
+    min-height: 400px;
   }
-  
-  .inputScript {
-    min-height: 150px;
+
+  .tabButton {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Dark mode adjustments for input tab */
+[data-theme='dark'] .fileBrowserPanel {
+  background: #1e1e1e;
+}
+
+[data-theme='dark'] .fileBrowserHeader,
+[data-theme='dark'] .editorHeader,
+[data-theme='dark'] .editorFooter {
+  background: #2d2d2d;
+}
+
+[data-theme='dark'] .emptyFileList {
+  border-color: var(--ifm-color-emphasis-400);
+}
+
+[data-theme='dark'] .editor {
+  background: #1e1e1e;
+}
+
+[data-theme='dark'] .editor[readonly] {
+  background: #2d2d2d;
+}
+
+/* Output tab with chart layout */
+.outputWithChart {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  flex: 1;
+  min-height: 400px;
+}
+
+.consoleSection {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chartSection {
+  border-left: 1px solid var(--ifm-color-emphasis-200);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.thermoChart {
+  flex: 1;
+  min-height: 200px;
+  width: 100%;
+  background: var(--ifm-background-surface-color);
+}
+
+.thermoChartEmpty {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.85rem;
+  background: var(--ifm-color-emphasis-100);
+}
+
+/* Histogram/Data file chart */
+.histogramChart {
+  flex: 1;
+  min-height: 200px;
+  width: 100%;
+  background: var(--ifm-background-surface-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.histogramChartEmpty {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.85rem;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.histogramSlider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.histogramSlider input[type="range"] {
+  flex: 1;
+  height: 4px;
+  cursor: pointer;
+}
+
+.histogramTimestep {
+  font-size: 0.75rem;
+  color: var(--ifm-color-emphasis-600);
+  font-family: var(--ifm-font-family-monospace);
+  min-width: 60px;
+  text-align: right;
+}
+
+/* Data file selector in chart section */
+.dataFileSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-color-emphasis-100);
+  font-size: 0.8rem;
+}
+
+.dataFileSelector label {
+  color: var(--ifm-color-emphasis-600);
+  white-space: nowrap;
+}
+
+.dataFileSelector select {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  font-size: 0.8rem;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.chartSectionTabs {
+  display: flex;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.chartTabButton {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chartTabButton:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.chartTabButtonActive {
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  font-weight: 500;
+  border-bottom: 2px solid var(--ifm-color-primary);
+}
+
+.chartContent {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Stack vertically on narrower screens */
+@media (max-width: 700px) {
+  .outputWithChart {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 150px;
+  }
+
+  .chartSection {
+    grid-row: 2;
+    border-left: none;
+    border-top: 1px solid var(--ifm-color-emphasis-200);
+  }
+
+  .consoleSection {
+    grid-row: 1;
   }
 }

@@ -550,6 +550,42 @@
   }
 }
 
+/* Grid Layout for QM1D */
+.gridLayout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 1rem;
+  width: 100%;
+}
+
+.canvasArea {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0; /* Prevent grid blowout */
+}
+
+.canvasWrapper {
+  background-color: var(--ifm-background-color, white);
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ifm-color-emphasis-300, #d1d5db);
+}
+
+.sidebarArea {
+  min-width: 0; /* Prevent grid blowout */
+}
+
+@media (max-width: 1024px) {
+  .gridLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebarArea {
+    order: -1; /* Move controls above canvas on mobile */
+  }
+}
+
 .main {
   display: flex;
   align-items: center;

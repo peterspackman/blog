@@ -237,6 +237,26 @@
   box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
 }
 
+.overlayTextInput {
+  width: 60px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
+.overlayTextInput:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.overlayTextInput:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
 .overlayCheckbox {
   margin: 0;
 }
@@ -298,6 +318,21 @@
   outline: none;
   border-color: var(--ifm-color-primary);
   box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.overlaySection {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.overlaySectionHeader {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
 }
 
 .trajectoryControls {

@@ -1,21 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import Layout from '@theme/Layout';
-import Particle2DBox from '@site/src/components/Particle2DBox';
+import QM2DVisualization from '@site/src/components/QM2DVisualization';
 import styles from './qm-visualizations.module.css';
 
-export default function QMVisualizations() {
-  const [activeVisualization, setActiveVisualization] = useState<'1D' | '2D'>('1D');
-
+export default function QM2D() {
   return (
     <Layout
-      title="Quantum Mechanics Visualizations"
-      description="Interactive visualizations of quantum mechanics concepts">
-      <main className={styles.mainContainer}>
-        <div className={styles.visualizationContainer}>
-            <div className={styles.visualization}>
-              <h2>2D Particle in a Box</h2>
-              <Particle2DBox className={styles.centeredVisualization}/>
-            </div>
+      title="2D Quantum Mechanics"
+      description="Interactive visualization of a 2D quantum particle in a box">
+      <main className={styles.mainContainerWide}>
+        <div className={styles.visualizationContainerFull}>
+          <QM2DVisualization />
         </div>
       </main>
     </Layout>

@@ -1,75 +1,326 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import styles from './LammpsInterface.module.css';
+import { TabId, DEFAULT_SCRIPT } from './types';
+import { useLammpsWorker } from './hooks/useLammpsWorker';
+import { useLocalStorage, restoreFilesFromState } from './hooks/useLocalStorage';
+import { detectMainInputFile } from './utils/fileDetection';
+import { parseLammpsDataFile, lammpsDataToPDB, LammpsDataFile } from './utils/lammpsDataParser';
+import { InputTab } from './tabs/InputTab';
+import { OutputTab } from './tabs/OutputTab';
+import { ViewerTab } from './tabs/ViewerTab';
 
 interface LammpsInterfaceProps {}
 
-interface UploadedFile {
-  name: string;
-  content: ArrayBuffer;
-}
+// Count frames in XYZ trajectory data
+const countXYZFrames = (data: string): number => {
+  const lines = data.trim().split('\n');
+  let count = 0;
+  let i = 0;
+  while (i < lines.length) {
+    const numAtoms = parseInt(lines[i], 10);
+    if (!isNaN(numAtoms) && numAtoms > 0) {
+      count++;
+      i += numAtoms + 2;
+    } else {
+      i++;
+    }
+  }
+  return count;
+};
+
+// Check if a file is a topology file (PDB, GRO, etc.)
+const isTopologyFile = (filename: string): boolean => {
+  return /\.(pdb|ent|pqr|gro)$/i.test(filename);
+};
+
+// Check if file is a LAMMPS coord/data file (for conversion to PDB)
+const isLammpsCoordFile = (filename: string): boolean => {
+  return /coord\.lmp$/i.test(filename) ||
+         /data\.lmp$/i.test(filename) ||
+         /\.data$/i.test(filename);
+};
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: 'input', label: 'Input' },
+  { id: 'output', label: 'Output' },
+  { id: 'viewer', label: 'Viewer' },
+];
 
 const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
-  const [worker, setWorker] = useState<Worker | null>(null);
-  const [isReady, setIsReady] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [status, setStatus] = useState('Loading LAMMPS...');
-  const [output, setOutput] = useState<Array<{ text: string; isError: boolean }>>([]);
-  const defaultScript = `# LAMMPS input script
-units lj
-dimension 3
-atom_style atomic
-lattice fcc 0.8442
-region box block 0 4 0 4 0 4
-create_box 1 box
-create_atoms 1 box
-mass 1 1.0
-velocity all create 1.44 87287 loop geom
-pair_style lj/cut 2.5
-pair_coeff 1 1 1.0 1.0 2.5
-neighbor 0.3 bin
-neigh_modify delay 0 every 20 check no
-fix 1 all nve
-thermo 100
-dump 1 all xyz 50 trajectory.xyz
-run 1000
-undump 1`;
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabId>('input');
 
-  const [inputScript, setInputScript] = useState(defaultScript);
-  
+  // File management state
   const [uploadedFiles, setUploadedFiles] = useState<Map<string, ArrayBuffer>>(new Map());
   const [selectedMainFile, setSelectedMainFile] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const [vfsFiles, setVfsFiles] = useState<Array<{name: string; size: number; isDirectory: boolean; path: string}>>([]);
+  const [inputScript, setInputScript] = useState(DEFAULT_SCRIPT);
   const [isScriptModified, setIsScriptModified] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
 
-  // Initialize worker
-  useEffect(() => {
-    initializeWorker();
-    return () => {
-      if (worker) {
-        worker.terminate();
+  // Local storage persistence
+  const { savedState, saveInputs, saveOutputs, clearStorage, hasStoredData } = useLocalStorage();
+  const hasRestoredRef = useRef(false);
+
+  // Trajectory display state
+  const [trajectoryData, setTrajectoryData] = useState<string | null>(null);
+  const [trajectoryFormat, setTrajectoryFormat] = useState<'xyz' | 'dcd' | 'lammpstrj' | null>(null);
+  const [trajectoryFilename, setTrajectoryFilename] = useState<string | null>(null);
+  const [trajectoryBinaryContent, setTrajectoryBinaryContent] = useState<ArrayBuffer | null>(null);
+  const [frameCount, setFrameCount] = useState(0);
+  const [lastFetchedSize, setLastFetchedSize] = useState(0);
+
+  // Element mapping for LAMMPS atom types (type number -> element symbol)
+  const [elementMapping, setElementMapping] = useState<Map<number, string>>(new Map());
+
+  // Parse LAMMPS data file and extract info (without converting to PDB yet)
+  const lammpsData = useMemo((): { data: LammpsDataFile; filename: string } | null => {
+    console.log('[LAMMPS Debug] Checking uploaded files:', Array.from(uploadedFiles.keys()));
+    for (const [name, content] of uploadedFiles) {
+      console.log(`[LAMMPS Debug] File "${name}" - isLammpsCoordFile: ${isLammpsCoordFile(name)}`);
+      if (isLammpsCoordFile(name)) {
+        try {
+          const text = new TextDecoder().decode(content);
+          const parsed = parseLammpsDataFile(text);
+          console.log('[LAMMPS Debug] Parsed result:', parsed ? {
+            atoms: parsed.atoms.length,
+            bonds: parsed.bonds.length,
+            masses: parsed.masses,
+            atomTypes: parsed.atomTypes
+          } : null);
+          if (parsed) {
+            return { data: parsed, filename: name };
+          }
+        } catch (e) {
+          console.warn('Failed to parse LAMMPS data file:', e);
+        }
       }
-    };
-  }, []);
-
-  // Cleanup effect to ensure worker termination
-  useEffect(() => {
-    return () => {
-      if (worker) {
-        worker.terminate();
-      }
-    };
-  }, [worker]);
-
-  // Auto-scroll output
-  useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [output]);
+    return null;
+  }, [uploadedFiles]);
+
+  // Initialize element mapping from masses when LAMMPS data is loaded
+  useEffect(() => {
+    if (lammpsData && elementMapping.size === 0) {
+      const newMapping = new Map<number, string>();
+
+      if (lammpsData.data.masses.length > 0) {
+        // Use masses to guess elements
+        for (const { type, mass } of lammpsData.data.masses) {
+          const elements: [number, string][] = [
+            [1.008, 'H'], [12.01, 'C'], [14.01, 'N'], [16.00, 'O'],
+            [19.00, 'F'], [32.06, 'S'], [35.45, 'Cl'], [39.95, 'Ar'],
+          ];
+          let closest = 'X';
+          let minDiff = Infinity;
+          for (const [m, el] of elements) {
+            const diff = Math.abs(mass - m);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closest = el;
+            }
+          }
+          newMapping.set(type, minDiff < 1.5 ? closest : 'X');
+        }
+      } else if (lammpsData.data.atomTypes > 0) {
+        // No masses section - initialize mapping from atomTypes count
+        // Default all to 'X', user can change via UI
+        for (let i = 1; i <= lammpsData.data.atomTypes; i++) {
+          newMapping.set(i, 'X');
+        }
+        console.log('[LAMMPS Debug] No masses found, initialized default mapping for', lammpsData.data.atomTypes, 'types');
+      }
+
+      setElementMapping(newMapping);
+    }
+  }, [lammpsData, elementMapping.size]);
+
+  // Find topology file from uploaded files (for DCD trajectories or initial structure view)
+  // Priority: PDB files first, then convert LAMMPS data files to PDB
+  const topologyFile = useMemo(() => {
+    // First check for native PDB/GRO files
+    for (const [name, content] of uploadedFiles) {
+      if (isTopologyFile(name)) {
+        console.log('[LAMMPS Debug] Found native topology file:', name);
+        return { name, content, hasExplicitBonds: true };
+      }
+    }
+
+    // If no PDB but we have parsed LAMMPS data, convert to PDB with current element mapping
+    if (lammpsData) {
+      console.log('[LAMMPS Debug] Converting LAMMPS data to PDB with element mapping:',
+        Object.fromEntries(elementMapping));
+      const pdbContent = lammpsDataToPDB(lammpsData.data, elementMapping.size > 0 ? elementMapping : undefined);
+      console.log('[LAMMPS Debug] Generated PDB (first 500 chars):', pdbContent.substring(0, 500));
+      console.log('[LAMMPS Debug] PDB has CONECT records:', pdbContent.includes('CONECT'));
+      const encoder = new TextEncoder();
+      return {
+        name: lammpsData.filename.replace(/\.\w+$/, '.pdb'),
+        content: encoder.encode(pdbContent).buffer,
+        hasExplicitBonds: lammpsData.data.bonds.length > 0
+      };
+    }
+
+    console.log('[LAMMPS Debug] No topology file found');
+    return null;
+  }, [uploadedFiles, lammpsData, elementMapping]);
+
+  // Create atom type info for UI - either from masses or synthesized from atomTypes count
+  const atomTypeInfo = useMemo(() => {
+    if (!lammpsData) return undefined;
+
+    if (lammpsData.data.masses.length > 0) {
+      return lammpsData.data.masses;
+    }
+
+    // No masses section - create synthetic entries based on atomTypes count
+    if (lammpsData.data.atomTypes > 0) {
+      const synthetic: { type: number; mass: number }[] = [];
+      for (let i = 1; i <= lammpsData.data.atomTypes; i++) {
+        synthetic.push({ type: i, mass: 0 }); // mass 0 indicates unknown
+      }
+      return synthetic;
+    }
+
+    return undefined;
+  }, [lammpsData]);
+
+  // Worker hook - now returns trajectory state directly
+  const {
+    worker,
+    isReady,
+    isRunning,
+    status,
+    output,
+    vfsFiles,
+    trajectoryFiles,
+    trajectoryContent,
+    appendOutput,
+    clearOutput,
+    uploadFile,
+    deleteFile: workerDeleteFile,
+    runSimulation,
+    cancelSimulation,
+    listFiles,
+    getFile,
+    getFileContentAsText,
+    pollTrajectory,
+    fetchTrajectory,
+    clearTrajectoryContent,
+    reuploadFiles,
+  } = useLammpsWorker();
+
+  // Restore from local storage on mount (once worker is ready)
+  useEffect(() => {
+    if (!hasRestoredRef.current && savedState && isReady) {
+      hasRestoredRef.current = true;
+
+      // Restore uploaded files
+      if (savedState.uploadedFiles && Object.keys(savedState.uploadedFiles).length > 0) {
+        const restoredFiles = restoreFilesFromState(savedState.uploadedFiles);
+        setUploadedFiles(restoredFiles);
+
+        // Upload to worker
+        restoredFiles.forEach((content, filename) => {
+          uploadFile(filename, content);
+        });
+      }
+
+      // Restore selected file and script
+      if (savedState.selectedMainFile) {
+        setSelectedMainFile(savedState.selectedMainFile);
+      }
+      if (savedState.inputScript) {
+        setInputScript(savedState.inputScript);
+      }
+
+      // Restore output
+      if (savedState.output && savedState.output.length > 0) {
+        savedState.output.forEach(line => appendOutput(line.text, line.isError));
+      }
+
+      console.log('[LAMMPS] Restored state from local storage');
+    }
+  }, [savedState, isReady, uploadFile, appendOutput]);
+
+  // Save outputs when simulation completes
+  useEffect(() => {
+    if (status === 'Complete' && output.length > 0) {
+      saveOutputs(output);
+    }
+  }, [status, output, saveOutputs]);
+
+  // Trajectory polling state
+  const [isPolling, setIsPolling] = useState(false);
+
+  // When trajectory files are found, fetch the content
+  useEffect(() => {
+    if (trajectoryFiles.length > 0) {
+      // Prefer DCD (binary, proper trajectory format with topology-based bonds)
+      const dcdFile = trajectoryFiles.find(f => f.format === 'dcd');
+      const targetFile = dcdFile || trajectoryFiles[0];
+
+      // Only fetch if size changed (new content available)
+      if (targetFile.size > lastFetchedSize) {
+        fetchTrajectory(targetFile.filename);
+      }
+    }
+  }, [trajectoryFiles, lastFetchedSize, fetchTrajectory]);
+
+  // When trajectory content is received, parse and display it
+  useEffect(() => {
+    if (trajectoryContent && trajectoryContent.size > 0) {
+      setLastFetchedSize(trajectoryContent.size);
+
+      // Determine format from filename
+      let format: 'xyz' | 'dcd' | 'lammpstrj' = 'xyz';
+      if (/\.dcd$/i.test(trajectoryContent.filename)) format = 'dcd';
+      else if (/\.lammpstrj$/i.test(trajectoryContent.filename)) format = 'lammpstrj';
+
+      setTrajectoryFormat(format);
+      setTrajectoryFilename(trajectoryContent.filename);
+
+      if (format === 'xyz' || format === 'lammpstrj') {
+        // Text-based trajectory
+        const text = new TextDecoder().decode(trajectoryContent.content);
+        setTrajectoryData(text);
+        setTrajectoryBinaryContent(null);
+        const frames = countXYZFrames(text);
+        setFrameCount(frames);
+      } else if (format === 'dcd') {
+        // Binary trajectory - store the raw content
+        setTrajectoryData(null);
+        setTrajectoryBinaryContent(trajectoryContent.content.buffer);
+        // DCD frame count will be determined by the viewer
+        setFrameCount(0);
+      }
+    }
+  }, [trajectoryContent]);
+
+  // Start/stop polling based on simulation running state
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    if (isRunning) {
+      setIsPolling(true);
+      // Start polling every 2 seconds
+      pollInterval = setInterval(() => {
+        pollTrajectory();
+      }, 2000);
+    } else {
+      setIsPolling(false);
+      // Final poll after simulation ends
+      if (worker) {
+        setTimeout(() => {
+          pollTrajectory();
+        }, 500);
+      }
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [isRunning, worker, pollTrajectory]);
 
   // Update script content when selected file changes (only if not manually modified)
   useEffect(() => {
@@ -81,290 +332,18 @@ undump 1`;
           setInputScript(text);
         }
       } else {
-        // No file selected, show default script
-        setInputScript(defaultScript);
+        setInputScript(DEFAULT_SCRIPT);
       }
     }
-  }, [selectedMainFile, uploadedFiles, defaultScript, isScriptModified]);
+  }, [selectedMainFile, uploadedFiles, isScriptModified]);
 
-  const initializeWorker = async () => {
-    try {
-      appendOutput('Creating LAMMPS Web Worker...');
-      
-      // Create our custom worker
-      const newWorker = new Worker(
-        new URL('./lammps-worker.js', import.meta.url),
-        { type: 'module' }
-      );
+  // Keep worker in sync with uploaded files
+  useEffect(() => {
+    reuploadFiles(uploadedFiles);
+  }, [uploadedFiles, reuploadFiles]);
 
-      newWorker.onmessage = handleWorkerMessage;
-      newWorker.onerror = (error) => {
-        appendOutput(`Worker error: ${error.message}`, true);
-        setStatus('Error');
-      };
-
-      setWorker(newWorker);
-      appendOutput('Web Worker created, initializing LAMMPS...');
-      
-      // Send initialization message to the worker
-      newWorker.postMessage({ type: 'init' });
-      
-    } catch (error) {
-      appendOutput(`Failed to create worker: ${error.message}`, true);
-      setStatus('Error');
-    }
-  };
-
-  const handleWorkerMessage = (e: MessageEvent) => {
-    const { type, data } = e.data;
-    const currentWorker = e.target as Worker; // Get the worker that sent this message
-    
-    // Debug logging
-    console.log('Worker message:', type, data);
-
-    switch (type) {
-      case 'ready':
-        appendOutput(data);
-        
-        // Upload any previously loaded files
-        if (uploadedFiles.size > 0) {
-          appendOutput(`Re-uploading ${uploadedFiles.size} file(s) to new worker...`);
-          for (let [filename, content] of uploadedFiles) {
-            // If this is the currently selected and modified file, use the current script content
-            let fileContent = content;
-            if (filename === selectedMainFile && isScriptModified) {
-              const encoder = new TextEncoder();
-              fileContent = encoder.encode(inputScript).buffer;
-            }
-            
-            worker?.postMessage({
-              type: 'upload-file',
-              data: {
-                name: filename,
-                content: fileContent
-              }
-            });
-          }
-        }
-        
-        setStatus('Ready');
-        setIsReady(true);
-        break;
-        
-      case 'stdout':
-        appendOutput(data);
-        break;
-        
-      case 'stderr':
-        appendOutput(data, true);
-        break;
-        
-      case 'completed':
-        appendOutput(data.message);
-        appendOutput('Checking for output files...');
-        setStatus('Complete');
-        setIsRunning(false);
-        // Automatically list files after completion using the current worker reference
-        console.log('Sending list-files request after completion');
-        setTimeout(() => {
-          console.log('Actually sending list-files message');
-          currentWorker.postMessage({
-            type: 'list-files',
-            data: {}
-          });
-        }, 500); // Small delay to ensure files are flushed
-        break;
-        
-      case 'cancelled':
-        appendOutput(data);
-        setStatus('Cancelled');
-        setIsRunning(false);
-        break;
-        
-      case 'error':
-        appendOutput(data, true);
-        setStatus('Error');
-        setIsRunning(false);
-        break;
-        
-      case 'file-uploaded':
-        if (typeof data === 'string') {
-          appendOutput(data);
-        } else {
-          appendOutput(`Uploaded: ${data.filename} (${data.size} bytes)`);
-        }
-        break;
-        
-      case 'file-deleted':
-        if (typeof data === 'string') {
-          appendOutput(data);
-        } else {
-          appendOutput(`Deleted: ${data.filename}`);
-        }
-        break;
-        
-      case 'file-not-found':
-        appendOutput(data.message, true);
-        break;
-        
-      case 'file-list':
-        setVfsFiles(data);
-        if (data.length === 0) {
-          appendOutput('VFS is empty - no files found');
-        } else {
-          appendOutput(`VFS contains ${data.length} file(s):`);
-          data.forEach((file: any) => {
-            if (!file.isDirectory) {
-              appendOutput(`  → ${file.name} (${file.size > 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${file.size} B`})`);
-            }
-          });
-          appendOutput('Files available in Output Files panel below');
-        }
-        break;
-        
-      case 'file-content':
-        // Trigger download when file content is received
-        const blob = new Blob([data.content], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = data.filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        appendOutput(`Downloaded: ${data.filename} (${data.size} bytes)`);
-        break;
-    }
-  };
-
-  const appendOutput = (text: string, isError: boolean = false) => {
-    setOutput(prev => [...prev, { text, isError }]);
-  };
-
-  const clearOutput = () => {
-    setOutput([]);
-  };
-
-  const listVFSFiles = () => {
-    if (!isReady || !worker) {
-      appendOutput('Worker not ready yet!', true);
-      return;
-    }
-
-    worker.postMessage({
-      type: 'list-files',
-      data: {}
-    });
-  };
-
-  const cancelRun = () => {
-    if (!isRunning || !worker) {
-      return;
-    }
-
-    appendOutput('Cancelling simulation and restarting worker...', true);
-    
-    // Terminate the current worker
-    worker.terminate();
-    setWorker(null);
-    setIsReady(false);
-    setIsRunning(false);
-    setStatus('Cancelled - Restarting...');
-    
-    // Create a new worker after a short delay
-    setTimeout(() => {
-      initializeWorker();
-    }, 500);
-  };
-
-  const downloadFile = (filename: string) => {
-    if (!isReady || !worker) {
-      appendOutput('Worker not ready yet!', true);
-      return;
-    }
-
-    appendOutput(`Downloading ${filename}...`);
-    worker.postMessage({
-      type: 'get-file',
-      data: { filename }
-    });
-  };
-
-  const handleScriptChange = (newScript: string) => {
-    setInputScript(newScript);
-    setIsScriptModified(true);
-    
-    // If we have a selected file, update its content in memory
-    if (selectedMainFile) {
-      const updatedFiles = new Map(uploadedFiles);
-      const encoder = new TextEncoder();
-      const encodedContent = encoder.encode(newScript);
-      updatedFiles.set(selectedMainFile, encodedContent.buffer);
-      setUploadedFiles(updatedFiles);
-    }
-  };
-
-  const resetScriptToOriginal = () => {
-    setIsScriptModified(false);
-    // This will trigger the useEffect to reload the original content
-  };
-
-  const runLammps = () => {
-    if (!isReady || !worker) {
-      appendOutput('LAMMPS worker not ready yet!', true);
-      return;
-    }
-
-    setStatus('Running...');
-    setIsRunning(true);
-
-    try {
-      const textAreaInput = inputScript.trim();
-
-      if (selectedMainFile) {
-        // If file has been modified, upload the current content first
-        if (isScriptModified) {
-          appendOutput(`Uploading edited version of ${selectedMainFile}...`);
-          const encoder = new TextEncoder();
-          const encodedContent = encoder.encode(inputScript);
-          
-          worker.postMessage({
-            type: 'upload-file',
-            data: {
-              name: selectedMainFile,
-              content: encodedContent.buffer
-            }
-          });
-        }
-        
-        // Use selected main input file
-        worker.postMessage({
-          type: 'run-lammps',
-          data: {
-            inputFile: selectedMainFile
-          }
-        });
-      } else if (textAreaInput) {
-        // Use textarea input
-        worker.postMessage({
-          type: 'run-lammps',
-          data: {
-            inputContent: textAreaInput,
-            inputFile: 'input.lmp'
-          }
-        });
-      } else {
-        throw new Error('No input provided! Either select a main input file or enter commands in the textarea.');
-      }
-    } catch (error) {
-      appendOutput(`Error: ${error.message}`, true);
-      setStatus('Error');
-      setIsRunning(false);
-    }
-  };
-
-  const handleFileUpload = (files: FileList) => {
+  // Handle file upload
+  const handleFileUpload = useCallback((files: FileList) => {
     const newFiles = new Map(uploadedFiles);
     let filesProcessed = 0;
     const totalFiles = files.length;
@@ -380,34 +359,27 @@ undump 1`;
 
         appendOutput(`Read file: ${file.name} (${content.byteLength} bytes)`);
 
-        // Update state when all files are processed
         if (filesProcessed === totalFiles) {
           setUploadedFiles(new Map(newFiles));
 
-          // Send all new files to worker if ready
+          // Auto-detect main input file if none selected
+          if (!selectedMainFile) {
+            const detected = detectMainInputFile(Array.from(newFiles.keys()));
+            if (detected) {
+              setSelectedMainFile(detected);
+              appendOutput(`Auto-detected main input file: ${detected}`);
+            }
+          }
+
+          // Upload to worker
           if (worker && isReady) {
             appendOutput(`Sending ${totalFiles} file(s) to LAMMPS worker...`);
             Array.from(files).forEach(file => {
-              let fileContent = newFiles.get(file.name);
-              
-              // If this is the currently selected and modified file, use the current script content
-              if (file.name === selectedMainFile && isScriptModified && fileContent) {
-                const encoder = new TextEncoder();
-                fileContent = encoder.encode(inputScript).buffer;
-              }
-              
+              const fileContent = newFiles.get(file.name);
               if (fileContent) {
-                worker.postMessage({
-                  type: 'upload-file',
-                  data: {
-                    name: file.name,
-                    content: fileContent
-                  }
-                });
+                uploadFile(file.name, fileContent);
               }
             });
-          } else {
-            appendOutput('Worker not ready, files will be uploaded when ready', true);
           }
         }
       };
@@ -417,202 +389,202 @@ undump 1`;
       };
       reader.readAsArrayBuffer(file);
     });
-  };
+  }, [uploadedFiles, selectedMainFile, worker, isReady, appendOutput, uploadFile]);
 
-  const deleteFile = (filename: string) => {
+  // Handle file deletion
+  const handleFileDelete = useCallback((filename: string) => {
     const newFiles = new Map(uploadedFiles);
     newFiles.delete(filename);
     setUploadedFiles(newFiles);
-    
+
     if (selectedMainFile === filename) {
       setSelectedMainFile('');
+      setIsScriptModified(false);
     }
 
-    if (worker && isReady) {
-      worker.postMessage({
-        type: 'delete-file',
-        data: { filename: filename }
-      });
+    workerDeleteFile(filename);
+  }, [uploadedFiles, selectedMainFile, workerDeleteFile]);
+
+  // Handle main file selection
+  const handleMainFileSelect = useCallback((filename: string) => {
+    setSelectedMainFile(filename);
+    setIsScriptModified(false);
+  }, []);
+
+  // Handle script change
+  const handleScriptChange = useCallback((newScript: string) => {
+    setInputScript(newScript);
+    setIsScriptModified(true);
+
+    // Update file content in memory if we have a selected file
+    if (selectedMainFile) {
+      const encoder = new TextEncoder();
+      const updatedFiles = new Map(uploadedFiles);
+      updatedFiles.set(selectedMainFile, encoder.encode(newScript).buffer);
+      setUploadedFiles(updatedFiles);
     }
-  };
+  }, [selectedMainFile, uploadedFiles]);
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFileUpload(e.dataTransfer.files);
-  };
+  // Handle clearing storage and resetting state
+  const handleClearStorage = useCallback(() => {
+    // Clear localStorage
+    clearStorage();
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+    // Reset all component state
+    setUploadedFiles(new Map());
+    setSelectedMainFile('');
+    setInputScript(DEFAULT_SCRIPT);
+    setIsScriptModified(false);
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+    // Clear trajectory state
+    setTrajectoryData(null);
+    setTrajectoryFormat(null);
+    setTrajectoryFilename(null);
+    setTrajectoryBinaryContent(null);
+    setFrameCount(0);
+    setLastFetchedSize(0);
+    clearTrajectoryContent();
 
-  const inputFiles = Array.from(uploadedFiles.keys()).filter(
-    filename => filename.endsWith('.lmp') || filename.endsWith('.in') || 
-               filename.endsWith('.inp') || filename.includes('input')
-  );
+    // Clear element mapping
+    setElementMapping(new Map());
+
+    // Clear output
+    clearOutput();
+
+    // Switch to input tab
+    setActiveTab('input');
+
+    appendOutput('Cleared all saved data and reset state.');
+  }, [clearStorage, clearOutput, clearTrajectoryContent, appendOutput]);
+
+  // Handle run
+  const handleRun = useCallback(() => {
+    // Save state to local storage before running
+    saveInputs(uploadedFiles, selectedMainFile, inputScript);
+
+    // Clear previous output and charts
+    clearOutput();
+
+    // Clear previous trajectory
+    setTrajectoryData(null);
+    setTrajectoryFormat(null);
+    setTrajectoryFilename(null);
+    setTrajectoryBinaryContent(null);
+    setFrameCount(0);
+    setLastFetchedSize(0);
+    clearTrajectoryContent();
+
+    try {
+      const scriptContent = inputScript.trim();
+
+      if (selectedMainFile) {
+        // Upload edited content if modified
+        if (isScriptModified) {
+          appendOutput(`Uploading edited version of ${selectedMainFile}...`);
+          const encoder = new TextEncoder();
+          uploadFile(selectedMainFile, encoder.encode(inputScript).buffer);
+        }
+        runSimulation(selectedMainFile);
+      } else if (scriptContent) {
+        runSimulation('input.lmp', scriptContent);
+      } else {
+        appendOutput('No input provided! Either select a main input file or enter commands.', true);
+      }
+    } catch (error) {
+      appendOutput(`Error: ${(error as Error).message}`, true);
+    }
+  }, [inputScript, selectedMainFile, isScriptModified, appendOutput, uploadFile, runSimulation, clearTrajectoryContent, clearOutput, saveInputs, uploadedFiles]);
+
+  // Count errors for badge
+  const errorCount = output.filter(line => line.isError).length;
 
   return (
-    <div className="container" style={{ maxWidth: 'none', padding: '1rem' }}>
-      <div className="row" style={{ margin: 0 }}>
-        <div className="col col--6" style={{ padding: '0 0.5rem 0 0' }}>
-          <div className={styles.leftColumn}>
-            {/* Files Panel */}
-            <div className={`${styles.panel} ${styles.filesPanel}`}>
-          <h3>Files</h3>
-          <div 
-            className={`${styles.fileUpload} ${isDragging ? styles.dragover : ''}`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <div>Click or drag files here</div>
-            <small>Upload LAMMPS input files, data files, etc.</small>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-            style={{ display: 'none' }}
-          />
-          
-          {uploadedFiles.size > 0 && (
-            <>
-              <div className={styles.fileBadges}>
-                {Array.from(uploadedFiles.keys()).map(filename => {
-                  const isInputFile = filename.endsWith('.lmp') || filename.endsWith('.in') || 
-                                    filename.endsWith('.inp') || filename.includes('input');
-                  const isSelected = selectedMainFile === filename;
-                  
-                  return (
-                    <div 
-                      key={filename} 
-                      className={`${styles.fileBadge} ${isSelected ? styles.selected : ''}`}
-                      onClick={() => {
-                        if (isInputFile) {
-                          const newSelection = isSelected ? '' : filename;
-                          setSelectedMainFile(newSelection);
-                          setIsScriptModified(false); // Reset modification flag when changing files
-                        }
-                      }}
-                      style={{ cursor: isInputFile ? 'pointer' : 'default' }}
-                      title={isInputFile ? 'Click to select as main input file' : filename}
-                    >
-                      <span className={styles.fileBadgeText}>{filename}</span>
-                      <button 
-                        className={styles.deleteBtn}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteFile(filename);
-                        }}
-                        title="Delete file"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-              {inputFiles.length > 0 && (
-                <div className={styles.inputFileHint}>
-                  Click input files above to specify main input file
-                </div>
-              )}
-            </>
-          )}
-        </div>
+    <div className={styles.container}>
+      {/* Tab bar */}
+      <div className={styles.tabBar}>
+        <div className={styles.tabBarTabs}>
+          {TABS.map(({ id, label }) => {
+            const isActive = activeTab === id;
+            const badge = id === 'output' && errorCount > 0 ? errorCount :
+                         id === 'viewer' && frameCount > 0 ? frameCount : undefined;
 
-        {/* Script Panel */}
-        <div className={`${styles.panel} ${styles.scriptPanel}`}>
-          <h3>LAMMPS Script</h3>
-          <textarea
-            className={styles.inputScript}
-            value={inputScript}
-            onChange={(e) => handleScriptChange(e.target.value)}
-            placeholder="Enter LAMMPS commands here or select an input file above..."
-          />
-          <div className={styles.buttonGroup}>
-            {!isRunning ? (
-              <button 
-                onClick={runLammps} 
-                disabled={!isReady}
-                className="button button--primary"
+            return (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                className={`${styles.tabButton} ${isActive ? styles.tabButtonActive : ''}`}
               >
-                Run LAMMPS
+                {label}
+                {badge !== undefined && (
+                  <span className={`${styles.tabBadge} ${id === 'output' && errorCount > 0 ? styles.tabBadgeError : ''}`}>
+                    {badge}
+                  </span>
+                )}
+                {id === 'viewer' && isPolling && (
+                  <span className={styles.liveDotSmall} />
+                )}
               </button>
-            ) : (
-              <button 
-                onClick={cancelRun}
-                className="button button--danger"
-              >
-                Cancel Run
-              </button>
-            )}
-            <button onClick={clearOutput} className="button button--secondary">
-              Clear Output
-            </button>
-            <button 
-              onClick={listVFSFiles} 
-              disabled={!isReady}
-              className="button button--secondary"
-            >
-              List VFS Files
-            </button>
-          </div>
-          <div className={styles.status}>Status: {status}</div>
-            </div>
-          </div>
+            );
+          })}
         </div>
-
-        <div className="col col--6" style={{ padding: '0 0 0 0.5rem' }}>
-          <div className={styles.rightColumn}>
-            {/* Output Panel */}
-            <div className={`${styles.panel} ${styles.outputPanel}`}>
-        <h3>Output</h3>
-        <div ref={outputRef} className={styles.output}>
-          {output.length === 0 ? (
-            'Waiting for LAMMPS to initialize...'
-          ) : (
-            output.map((line, index) => (
-              <div
-                key={index}
-                className={line.isError ? styles.error : ''}
-              >
-                {line.text}
-              </div>
-            ))
-          )}
-        </div>
+        <button
+          className={styles.clearStorageBtn}
+          onClick={handleClearStorage}
+          disabled={isRunning}
+          title="Clear saved state and reset"
+        >
+          Clear
+        </button>
       </div>
 
-            {/* Output Files Panel - positioned below right panel */}
-            {vfsFiles.length > 0 && (
-              <div className={styles.outputFilesPanel}>
-                <h3>Output Files</h3>
-                <div className={styles.outputFilesList}>
-                  {vfsFiles.filter(file => !file.isDirectory).map(file => (
-                    <div key={file.name} className={styles.outputFileItem}>
-                      <span className={styles.outputFileName}>{file.name}</span>
-                      <button 
-                        className="button button--primary button--sm"
-                        onClick={() => downloadFile(file.name)}
-                        disabled={!isReady}
-                      >
-                        Download
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Tab content */}
+      <div className={styles.tabContentWrapper}>
+        {activeTab === 'input' && (
+          <InputTab
+            uploadedFiles={uploadedFiles}
+            selectedMainFile={selectedMainFile}
+            inputScript={inputScript}
+            isReady={isReady}
+            isRunning={isRunning}
+            status={status}
+            onFileUpload={handleFileUpload}
+            onFileDelete={handleFileDelete}
+            onMainFileSelect={handleMainFileSelect}
+            onScriptChange={handleScriptChange}
+            onRun={handleRun}
+            onCancel={cancelSimulation}
+          />
+        )}
+
+        {activeTab === 'output' && (
+          <OutputTab
+            output={output}
+            vfsFiles={vfsFiles}
+            isReady={isReady}
+            isRunning={isRunning}
+            onClearOutput={clearOutput}
+            onListFiles={listFiles}
+            onDownloadFile={getFile}
+            onFetchFileContent={getFileContentAsText}
+          />
+        )}
+
+        {activeTab === 'viewer' && (
+          <ViewerTab
+            trajectoryData={trajectoryData}
+            trajectoryFormat={trajectoryFormat}
+            trajectoryFilename={trajectoryFilename}
+            frameCount={frameCount}
+            isSimulationRunning={isRunning}
+            isPolling={isPolling}
+            topologyFile={topologyFile}
+            trajectoryBinaryContent={trajectoryBinaryContent}
+            atomTypes={atomTypeInfo}
+            elementMapping={elementMapping}
+            onElementMappingChange={setElementMapping}
+            bonds={lammpsData?.data.bonds.map(b => [b.atom1, b.atom2] as [number, number])}
+          />
+        )}
       </div>
     </div>
   );

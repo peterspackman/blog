@@ -32,6 +32,7 @@
     "clsx": "^2.0.0",
     "echarts": "^5.6.0",
     "echarts-gl": "^2.0.9",
+    "fft.js": "^4.0.4",
     "ngl": "^2.4.0",
     "prism-react-renderer": "^2.3.0",
     "react": "^19.0.0",
