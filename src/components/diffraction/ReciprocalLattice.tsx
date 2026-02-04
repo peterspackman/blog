@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import type { CrystalStructure, Reflection } from './physics';
-import { isAllowedReflection, calculateStructureFactor, CU_K_ALPHA } from './physics';
+import { isAllowedReflection, calculateStructureFactor, calculateReciprocalLattice, calculateDSpacing, calculateTwoTheta, CU_K_ALPHA } from './physics';
 import type { ControlTheme } from '../shared/controls';
 
 export interface ReciprocalLatticeProps {
@@ -8,7 +8,7 @@ export interface ReciprocalLatticeProps {
     height: number;
     structure: CrystalStructure;
     reflections: Reflection[];
-    plane: 'hk0' | 'h0l' | '0kl';
+    zoneAxis: [number, number, number]; // Zone axis [uvw] - shows plane perpendicular to this direction
     maxIndex: number;
     showAbsences: boolean;
     selectedReflection: [number, number, number] | null;
@@ -20,6 +20,8 @@ export interface ReciprocalLatticeProps {
     oscillationRange?: number;
     twoThetaMax?: number;
     bFactor?: number;
+    showIndexingCircles?: boolean; // Show indexing circles for d-spacing families
+    onShowIndexingCirclesChange?: (show: boolean) => void;
 }
 
 // Vertex shader for detector pattern
@@ -47,6 +49,7 @@ const DETECTOR_FRAGMENT_SHADER = `
     uniform int u_isDark;
     uniform float u_beamStopRadius;
     uniform float u_powderSmear; // 0 = single crystal, 1 = full powder rings
+    uniform float u_maxRadius; // Detector radius in pixels
 
     #define PI 3.14159265359
 
@@ -105,17 +108,20 @@ const DETECTOR_FRAGMENT_SHADER = `
 
         // Distance from center
         float distFromCenter = length(pos - center);
-        float maxRadius = min(u_resolution.x, u_resolution.y) * 0.45;
 
-        // Theme-aware colors: light mode = white bg, black spots; dark mode = black bg, white spots
-        vec3 bgColor = u_isDark == 1 ? vec3(0.02, 0.02, 0.04) : vec3(0.98, 0.98, 0.97);
-        vec3 spotColor = u_isDark == 1 ? vec3(1.0, 1.0, 1.0) : vec3(0.0, 0.0, 0.0);
-        vec3 borderColor = u_isDark == 1 ? vec3(0.15) : vec3(0.85);
-        vec3 edgeColor = u_isDark == 1 ? vec3(0.3) : vec3(0.7);
+        // Clean styling: white/light background, black/gray spots
+        vec3 bgColor = vec3(1.0, 1.0, 1.0);
+        vec3 spotColor = vec3(0.0, 0.0, 0.0);
+        vec3 borderColor = vec3(0.95);
+        vec3 edgeColor = vec3(0.7);
         vec3 color = bgColor;
 
-        // Only render within detector circle
-        if (distFromCenter < maxRadius) {
+        // Antialiased detector boundary
+        float edgeWidth = 1.5;
+        float edgeSoftness = 1.0;
+        float insideDetector = 1.0 - smoothstep(u_maxRadius - edgeWidth, u_maxRadius + edgeSoftness, distFromCenter);
+
+        if (insideDetector > 0.01) {
             // Beam stop - contrasting color
             if (distFromCenter < u_beamStopRadius) {
                 color = u_isDark == 1 ? vec3(0.0) : vec3(0.5);
@@ -123,14 +129,15 @@ const DETECTOR_FRAGMENT_SHADER = `
                 // Accumulate spot contributions (counts)
                 float totalCounts = 0.0;
 
-                for (int i = 0; i < 1000; i++) {
+                for (int i = 0; i < 4096; i++) {
                     if (i >= u_numSpots) break;
 
                     float idx = float(i * 2);
                     vec4 posData = texture2D(u_spotData, vec2((idx + 0.5) / u_dataSize, 0.5));
                     vec4 intensityData = texture2D(u_spotData, vec2((idx + 1.5) / u_dataSize, 0.5));
 
-                    vec2 spotCenter = center + posData.xy;
+                    // Flip y-coordinate: spot data is in Canvas 2D coords (y-down), WebGL is y-up
+                    vec2 spotCenter = center + vec2(posData.x, -posData.y);
                     float spotRadius = posData.z;
                     float elongation = posData.w;
                     float intensity = intensityData.x;
@@ -149,21 +156,18 @@ const DETECTOR_FRAGMENT_SHADER = `
 
                 // Mix background with spot color based on intensity
                 color = mix(bgColor, spotColor, logCounts);
-
-                // Add slight noise for realism (detector noise)
-                float noise = fract(sin(dot(pos, vec2(12.9898, 78.233))) * 43758.5453);
-                float noiseAmount = u_isDark == 1 ? 0.015 : -0.01;
-                color += vec3(noise * noiseAmount);
             }
+
+            // Blend with border at edge (antialiased)
+            color = mix(borderColor, color, insideDetector);
+
+            // Draw edge ring with antialiasing
+            float edgeRing = smoothstep(u_maxRadius - edgeWidth - 0.5, u_maxRadius - edgeWidth + 0.5, distFromCenter) *
+                            (1.0 - smoothstep(u_maxRadius - 0.5, u_maxRadius + 0.5, distFromCenter));
+            color = mix(color, edgeColor, edgeRing * 0.8);
         } else {
             // Outside detector - border color
             color = borderColor;
-        }
-
-        // Detector edge highlight
-        float edgeDist = abs(distFromCenter - maxRadius);
-        if (edgeDist < 2.0) {
-            color = edgeColor;
         }
 
         gl_FragColor = vec4(color, 1.0);
@@ -180,6 +184,10 @@ interface SpotData {
     h: number;
     k: number;
     l: number;
+    // Extra fields for powder mode
+    twoTheta?: number;
+    isPowderOnly?: boolean;
+    baseIntensity?: number;
 }
 
 interface GLState {
@@ -196,6 +204,7 @@ interface GLState {
         isDark: WebGLUniformLocation | null;
         beamStopRadius: WebGLUniformLocation | null;
         powderSmear: WebGLUniformLocation | null;
+        maxRadius: WebGLUniformLocation | null;
     };
 }
 
@@ -204,7 +213,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     height,
     structure,
     reflections,
-    plane,
+    zoneAxis,
     maxIndex,
     showAbsences,
     selectedReflection,
@@ -216,6 +225,8 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     oscillationRange = 2,
     twoThetaMax = 120,
     bFactor = 0,
+    showIndexingCircles = false,
+    onShowIndexingCirclesChange,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const glCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -223,11 +234,9 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     const glStateRef = useRef<GLState | null>(null);
     const spotsRef = useRef<SpotData[]>([]);
 
-    // Zoom and pan state
-    const [zoom, setZoom] = useState(1);
-    const [pan, setPan] = useState({ x: 0, y: 0 });
-    const isDragging = useRef(false);
-    const lastMouse = useRef({ x: 0, y: 0 });
+    // Fixed zoom (no pan/zoom interaction)
+    const zoom = 1;
+    const pan = { x: 0, y: 0 };
 
     // Powder smear animation state
     const [powderSmear, setPowderSmear] = useState(0);
@@ -236,141 +245,225 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
     const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
 
-    // Get axis labels and indices based on plane selection
-    const getPlaneInfo = useCallback(() => {
-        switch (plane) {
-            case 'hk0':
-                return { xLabel: 'h', yLabel: 'k', fixedIndex: 2, fixedLabel: 'l=0' };
-            case 'h0l':
-                return { xLabel: 'h', yLabel: 'l', fixedIndex: 1, fixedLabel: 'k=0' };
-            case '0kl':
-                return { xLabel: 'k', yLabel: 'l', fixedIndex: 0, fixedLabel: 'h=0' };
-        }
-    }, [plane]);
+    // Zone axis [u,v,w] - reflections (h,k,l) are in the zone if h*u + k*v + l*w = 0
+    const [u, v, w] = zoneAxis;
 
-    // Get hkl from x,y coordinates based on plane
-    const getHKL = useCallback((x: number, y: number): [number, number, number] => {
-        switch (plane) {
-            case 'hk0':
-                return [x, y, 0];
-            case 'h0l':
-                return [x, 0, y];
-            case '0kl':
-                return [0, x, y];
+    // Check if a reflection is in the zone (satisfies zone law)
+    const isInZone = useCallback((h: number, k: number, l: number): boolean => {
+        return h * u + k * v + l * w === 0;
+    }, [u, v, w]);
+
+    // Format zone axis for display
+    const zoneLabel = useMemo(() => `[${u}${v}${w}]`, [u, v, w]);
+
+    // Compute 2D projection basis vectors for the zone axis
+    // We need two orthogonal vectors perpendicular to [uvw]
+    const projectionBasis = useMemo(() => {
+        // Find two vectors perpendicular to [u,v,w]
+        // First basis vector: cross product with a convenient vector
+        let b1x: number, b1y: number, b1z: number;
+        if (Math.abs(u) <= Math.abs(v) && Math.abs(u) <= Math.abs(w)) {
+            // u is smallest, use [1,0,0] × [u,v,w]
+            b1x = 0; b1y = -w; b1z = v;
+        } else if (Math.abs(v) <= Math.abs(w)) {
+            // v is smallest, use [0,1,0] × [u,v,w]
+            b1x = w; b1y = 0; b1z = -u;
+        } else {
+            // w is smallest, use [0,0,1] × [u,v,w]
+            b1x = -v; b1y = u; b1z = 0;
         }
-    }, [plane]);
+
+        // Normalize b1
+        const b1Len = Math.sqrt(b1x * b1x + b1y * b1y + b1z * b1z);
+        if (b1Len > 0) {
+            b1x /= b1Len; b1y /= b1Len; b1z /= b1Len;
+        }
+
+        // Second basis vector: [u,v,w] × b1
+        const b2x = v * b1z - w * b1y;
+        const b2y = w * b1x - u * b1z;
+        const b2z = u * b1y - v * b1x;
+
+        // Normalize b2
+        const b2Len = Math.sqrt(b2x * b2x + b2y * b2y + b2z * b2z);
+
+        return {
+            b1: { x: b1x, y: b1y, z: b1z },
+            b2: { x: b2x / b2Len, y: b2y / b2Len, z: b2z / b2Len }
+        };
+    }, [u, v, w]);
+
+    // Project (h,k,l) to 2D coordinates using the basis vectors
+    // Uses simplified orthogonal projection
+    const projectToPlane = useCallback((h: number, k: number, l: number, recip: { astar: number; bstar: number; cstar: number }) => {
+        // Simplified orthogonal projection
+        const qx = h * recip.astar;
+        const qy = k * recip.bstar;
+        const qz = l * recip.cstar;
+
+        // Project onto basis vectors
+        const { b1, b2 } = projectionBasis;
+        const px = qx * b1.x + qy * b1.y + qz * b1.z;
+        const py = qx * b2.x + qy * b2.y + qz * b2.z;
+
+        return { px, py };
+    }, [projectionBasis]);
 
     // Calculate structure factor magnitude for a point
     // Build a lookup map for reflection intensities (from passed reflections which may have noise)
-    // Store by sorted absolute values since (h,k,l) and permutations have same intensity
+    // For cubic: use sorted absolute values since (h,k,l) and permutations have same intensity
+    // For non-cubic: use d-spacing as key since permutations may differ
+    const isCubic = structure.latticeType === 'cubic' ||
+        structure.latticeType === 'fcc' ||
+        structure.latticeType === 'bcc';
+
     const intensityMap = useMemo(() => {
         const map = new Map<string, number>();
         for (const ref of reflections) {
-            // Use canonical key: sorted absolute values (since cubic symmetry)
-            const sorted = [Math.abs(ref.h), Math.abs(ref.k), Math.abs(ref.l)].sort((a, b) => b - a);
-            const key = `${sorted[0]},${sorted[1]},${sorted[2]}`;
-            // Only store if not already present (first one wins)
+            let key: string;
+            if (isCubic) {
+                // Cubic: sorted absolute values (permutations equivalent)
+                const sorted = [Math.abs(ref.h), Math.abs(ref.k), Math.abs(ref.l)].sort((a, b) => b - a);
+                key = `${sorted[0]},${sorted[1]},${sorted[2]}`;
+            } else {
+                // Non-cubic: use d-spacing as key (5 decimal places)
+                key = ref.dSpacing.toFixed(5);
+            }
             if (!map.has(key)) {
                 map.set(key, ref.intensity);
             }
         }
         return map;
-    }, [reflections]);
+    }, [reflections, isCubic]);
 
     const getIntensity = useCallback((h: number, k: number, l: number): number => {
-        // Look up from passed reflections using canonical key
-        const sorted = [Math.abs(h), Math.abs(k), Math.abs(l)].sort((a, b) => b - a);
-        const key = `${sorted[0]},${sorted[1]},${sorted[2]}`;
+        let key: string;
+        if (isCubic) {
+            const sorted = [Math.abs(h), Math.abs(k), Math.abs(l)].sort((a, b) => b - a);
+            key = `${sorted[0]},${sorted[1]},${sorted[2]}`;
+        } else {
+            // Non-cubic: calculate d-spacing for this hkl
+            const d = calculateDSpacing(h, k, l, structure);
+            key = d.toFixed(5);
+        }
         const found = intensityMap.get(key);
         if (found !== undefined) return found;
 
         // Reflection not in list (beyond twoThetaMax or filtered out) - return 0
         return 0;
-    }, [intensityMap]);
+    }, [intensityMap, isCubic, structure]);
 
     // Pre-calculate spot data for detector mode
     const spotData = useMemo(() => {
         if (viewMode !== 'detector') return [];
 
         const spots: SpotData[] = [];
-        const k = 1 / wavelength;
-        const astar = 1 / structure.a;
+        const kWave = 1 / wavelength;
         const oscRad = (oscillationRange * Math.PI) / 180;
         const plotSize = Math.min(width, height) - 80;
         const maxRadius = plotSize / 2;
+        const recip = calculateReciprocalLattice(structure);
 
-        for (let i = -maxIndex; i <= maxIndex; i++) {
-            for (let j = -maxIndex; j <= maxIndex; j++) {
-                if (i === 0 && j === 0) continue;
+        // Detector scale: edge of detector corresponds to 2θ max
+        // Clamp twoThetaMax to 85° to avoid tan blowing up
+        const effectiveTwoThetaMax = Math.min(twoThetaMax, 85);
+        const twoThetaMaxRad = (effectiveTwoThetaMax * Math.PI) / 180;
+        const distanceFactor = 100 / detectorDistance;
+        // Scale so that tan(2θ_max) maps to maxRadius
+        const scale = maxRadius / Math.tan(twoThetaMaxRad) * distanceFactor;
 
-                const [h, k_idx, l] = getHKL(i, j);
-                const absH = Math.abs(h);
-                const absK = Math.abs(k_idx);
-                const absL = Math.abs(l);
+        // Iterate over all hkl combinations
+        // For single crystal: filter by zone law
+        // For powder: include all reflections (zone filtering disabled)
+        for (let h = -maxIndex; h <= maxIndex; h++) {
+            for (let k_idx = -maxIndex; k_idx <= maxIndex; k_idx++) {
+                for (let l = -maxIndex; l <= maxIndex; l++) {
+                    if (h === 0 && k_idx === 0 && l === 0) continue;
 
-                const isAllowed = isAllowedReflection(absH, absK, absL, structure);
+                    const absH = Math.abs(h);
+                    const absK = Math.abs(k_idx);
+                    const absL = Math.abs(l);
 
-                const qx = h * astar;
-                const qy = k_idx * astar;
-                const qz = l * astar;
-                const qMag = Math.sqrt(qx * qx + qy * qy + qz * qz);
+                    const isAllowed = isAllowedReflection(absH, absK, absL, structure);
+                    if (!isAllowed) continue;
 
-                const d = 1 / qMag;
-                const sinTheta = wavelength / (2 * d);
+                    const qx = h * recip.astar;
+                    const qy = k_idx * recip.bstar;
+                    const qz = l * recip.cstar;
+                    const qMag = Math.sqrt(qx * qx + qy * qy + qz * qz);
 
-                if (Math.abs(sinTheta) > 1) continue;
+                    if (qMag === 0) continue;
+                    const d = 1 / qMag;
+                    const sinTheta = wavelength / (2 * d);
 
-                const theta = Math.asin(sinTheta);
-                const twoTheta = 2 * theta;
+                    if (Math.abs(sinTheta) > 1) continue;
 
-                const qIn2D = Math.sqrt(
-                    (plane === '0kl' ? 0 : h * h) * astar * astar +
-                    (plane === 'h0l' ? 0 : k_idx * k_idx) * astar * astar +
-                    (plane === 'hk0' ? 0 : l * l) * astar * astar
-                );
+                    const theta = Math.asin(sinTheta);
+                    const twoTheta = 2 * theta;
 
-                const ewaldRadius = 2 * k * Math.sin(theta);
-                const tolerance = oscRad * k * 2; // Wider tolerance for oscillation
-                const onEwald = Math.abs(qIn2D - ewaldRadius) < tolerance;
+                    // Check 2θ limits
+                    const twoThetaDeg = (twoTheta * 180) / Math.PI;
+                    if (twoThetaDeg > twoThetaMax) continue;
+                    // Can't show backscattering (≥90°) on flat detector
+                    if (twoThetaDeg >= 85) continue;
 
-                if (!isAllowed || !onEwald) continue;
+                    // For single crystal mode: check zone and Ewald sphere
+                    // For powder mode (powderSmear > 0): include all reflections
+                    const inZone = isInZone(h, k_idx, l);
 
-                // Detector position: r = D * tan(2θ)
-                // Closer detector = spots spread further apart (wider angle coverage)
-                // Further detector = spots closer together (narrower angle coverage)
-                const detectorR = Math.tan(twoTheta);
-                const phi = Math.atan2(j, i);
+                    // Project to 2D for azimuthal angle
+                    const { px, py } = projectToPlane(h, k_idx, l, recip);
 
-                // Scale based on max 2θ we want to show and detector distance
-                // Larger detector distance = smaller angular range visible = less spread
-                const maxTwoTheta = Math.PI / 3; // 60 degrees max
-                const distanceFactor = 100 / detectorDistance; // Normalize to 100mm
-                const scale = maxRadius * 0.85 / Math.tan(maxTwoTheta);
-                const detectorX = detectorR * Math.cos(phi) * scale * distanceFactor;
-                const detectorY = -detectorR * Math.sin(phi) * scale * distanceFactor;
+                    // Ewald sphere check (only for single crystal)
+                    const qIn2D = Math.sqrt(px * px + py * py);
+                    const ewaldRadius = 2 * kWave * Math.sin(theta);
+                    const tolerance = oscRad * kWave * 2;
+                    const onEwald = Math.abs(qIn2D - ewaldRadius) < tolerance;
 
-                const intensity = getIntensity(h, k_idx, l);
-                // Much smaller, tighter spots
-                const baseRadius = 2.5;
-                const radius = baseRadius;
-                const elongation = 1.0 + twoTheta * 0.15; // Subtle elongation
+                    // Skip if not visible in single crystal mode
+                    // But include all for powder mode (we mark isPowderOnly)
+                    const visibleInSingleCrystal = inZone && onEwald;
 
-                spots.push({
-                    x: detectorX,
-                    y: detectorY,
-                    radius,
-                    elongation,
-                    intensity,
-                    angle: phi,
-                    h,
-                    k: k_idx,
-                    l,
-                });
+                    // Detector position: r = tan(2θ) * distance
+                    const detectorR = Math.tan(twoTheta) * scale;
+
+                    // Azimuthal angle from the 2D projection
+                    // For powder, this is just an initial angle - it will be smeared to a full ring
+                    const phi = Math.atan2(py, px);
+
+                    const detectorX = detectorR * Math.cos(phi);
+                    const detectorY = -detectorR * Math.sin(phi);
+
+                    const intensity = getIntensity(h, k_idx, l);
+
+                    // Spot size and elongation
+                    // On a flat detector, spots elongate radially at higher angles
+                    // due to oblique incidence: factor ~ 1/cos²(2θ) = 1 + tan²(2θ)
+                    const baseRadius = 2.5;
+                    const tanTwoTheta = Math.tan(twoTheta);
+                    const radialStretch = 1 + tanTwoTheta * tanTwoTheta * 0.3; // Scaled down for visual
+                    const elongation = Math.min(3.0, radialStretch); // Cap to avoid extreme elongation
+
+                    spots.push({
+                        x: detectorX,
+                        y: detectorY,
+                        radius: baseRadius,
+                        elongation,
+                        intensity: visibleInSingleCrystal ? intensity : 0, // Start with 0 for powder-only spots
+                        angle: phi,
+                        h,
+                        k: k_idx,
+                        l,
+                        twoTheta,
+                        isPowderOnly: !visibleInSingleCrystal,
+                        baseIntensity: intensity,
+                    });
+                }
             }
         }
 
         return spots;
-    }, [viewMode, wavelength, structure, maxIndex, plane, getHKL, getIntensity, detectorDistance, oscillationRange, width, height]);
+    }, [viewMode, wavelength, structure, maxIndex, isInZone, projectToPlane, getIntensity, detectorDistance, oscillationRange, width, height, twoThetaMax]);
 
     // Initialize WebGL for detector mode
     useEffect(() => {
@@ -426,6 +519,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                 isDark: gl.getUniformLocation(program, 'u_isDark'),
                 beamStopRadius: gl.getUniformLocation(program, 'u_beamStopRadius'),
                 powderSmear: gl.getUniformLocation(program, 'u_powderSmear'),
+                maxRadius: gl.getUniformLocation(program, 'u_maxRadius'),
             },
         };
 
@@ -436,7 +530,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         };
     }, [viewMode]);
 
-    // Update texture when spots change
+    // Update texture when spots change or powder smear changes
     useEffect(() => {
         if (viewMode !== 'detector') return;
         const state = glStateRef.current;
@@ -446,21 +540,34 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         const dataSize = Math.max(4, spotData.length * 2);
         const textureData = new Float32Array(dataSize * 4);
 
+        // For powder mode, interpolate between single crystal and powder intensities
+        // Single crystal: only show spots visible in current zone/Ewald
+        // Powder: show all reflections with their true intensities (will be smeared to rings)
         let maxIntensity = 1;
         for (const spot of spotData) {
-            maxIntensity = Math.max(maxIntensity, spot.intensity);
+            // Effective intensity depends on powder smear level
+            const singleCrystalIntensity = spot.isPowderOnly ? 0 : (spot.baseIntensity ?? spot.intensity);
+            const powderIntensity = spot.baseIntensity ?? spot.intensity;
+            const effectiveIntensity = singleCrystalIntensity + powderSmear * (powderIntensity - singleCrystalIntensity);
+            maxIntensity = Math.max(maxIntensity, effectiveIntensity);
         }
 
         for (let i = 0; i < spotData.length; i++) {
             const spot = spotData[i];
             const idx = i * 8;
+
+            // Calculate effective intensity based on powder smear
+            const singleCrystalIntensity = spot.isPowderOnly ? 0 : (spot.baseIntensity ?? spot.intensity);
+            const powderIntensity = spot.baseIntensity ?? spot.intensity;
+            const effectiveIntensity = singleCrystalIntensity + powderSmear * (powderIntensity - singleCrystalIntensity);
+
             // Position data
             textureData[idx] = spot.x;
             textureData[idx + 1] = spot.y;
             textureData[idx + 2] = spot.radius;
             textureData[idx + 3] = spot.elongation;
             // Intensity data
-            textureData[idx + 4] = spot.intensity;
+            textureData[idx + 4] = effectiveIntensity;
             textureData[idx + 5] = spot.angle;
         }
 
@@ -471,7 +578,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         }
 
         spotsRef.current = spotData;
-    }, [spotData, viewMode]);
+    }, [spotData, viewMode, powderSmear]);
 
     // Render detector pattern
     useEffect(() => {
@@ -490,10 +597,18 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             canvas.height = height;
         }
 
+        // Calculate max intensity considering powder smear
         let maxIntensity = 1;
         for (const spot of spotData) {
-            maxIntensity = Math.max(maxIntensity, spot.intensity);
+            const singleCrystalIntensity = spot.isPowderOnly ? 0 : (spot.baseIntensity ?? spot.intensity);
+            const powderIntensity = spot.baseIntensity ?? spot.intensity;
+            const effectiveIntensity = singleCrystalIntensity + powderSmear * (powderIntensity - singleCrystalIntensity);
+            maxIntensity = Math.max(maxIntensity, effectiveIntensity);
         }
+
+        // Calculate detector radius (must match spot positioning)
+        const detectorPlotSize = Math.min(width, height) - 80;
+        const detectorRadius = detectorPlotSize / 2;
 
         // WebGL render
         gl.viewport(0, 0, width, height);
@@ -507,6 +622,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         gl.uniform1i(uniforms.isDark, isDark ? 1 : 0);
         gl.uniform1f(uniforms.beamStopRadius, 0); // Disabled beam stop
         gl.uniform1f(uniforms.powderSmear, powderSmear);
+        gl.uniform1f(uniforms.maxRadius, detectorRadius * zoom);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -522,52 +638,105 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
         ctx.clearRect(0, 0, width, height);
 
-        const { fixedLabel } = getPlaneInfo();
         const centerX = width / 2;
         const centerY = height / 2;
         const plotSize = Math.min(width, height) - 80;
         const maxRadius = plotSize / 2;
 
-        // Calculate 2θ max ring position (same math as spot positioning)
-        const maxTwoThetaRef = Math.PI / 3; // 60 degrees reference
-        const distanceFactor = 100 / detectorDistance;
-        const scale = maxRadius * 0.85 / Math.tan(maxTwoThetaRef);
-        const twoThetaMaxRad = (twoThetaMax * Math.PI) / 180;
-        const twoThetaMaxRadius = Math.tan(twoThetaMaxRad) * scale * distanceFactor * zoom;
-
-        // Draw 2θ max boundary ring
-        if (twoThetaMaxRadius > 10 && twoThetaMaxRadius < maxRadius * 2) {
-            ctx.strokeStyle = isDark ? 'rgba(147, 197, 253, 0.6)' : 'rgba(37, 99, 235, 0.5)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath();
-            ctx.arc(centerX - pan.x * zoom, centerY + pan.y * zoom, twoThetaMaxRadius, 0, 2 * Math.PI);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Label the ring
-            ctx.fillStyle = isDark ? 'rgba(147, 197, 253, 0.9)' : 'rgba(37, 99, 235, 0.8)';
-            ctx.font = '9px "Segoe UI", system-ui, sans-serif';
-            ctx.textAlign = 'left';
-            const labelX = centerX - pan.x * zoom + twoThetaMaxRadius * 0.707 + 4;
-            const labelY = centerY + pan.y * zoom - twoThetaMaxRadius * 0.707 - 4;
-            if (labelX > 20 && labelX < width - 40 && labelY > 20 && labelY < height - 20) {
-                ctx.fillText(`2θ=${twoThetaMax}°`, labelX, labelY);
-            }
-        }
+        // Detector edge now corresponds to 2θ max - label it
+        ctx.fillStyle = '#999';
+        ctx.font = '9px "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`2θ=${twoThetaMax}°`, centerX, centerY - maxRadius * zoom + 12);
 
         // Title
-        ctx.fillStyle = theme.text;
+        ctx.fillStyle = '#333';
         ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText(`Detector Pattern (${fixedLabel})`, 10, 15);
+        const modeText = powderSmear > 0.5 ? 'Powder' : `Zone ${zoneLabel}`;
+        ctx.fillText(`${modeText}`, 10, 15);
 
         // Info
         ctx.font = '10px "Segoe UI", system-ui, sans-serif';
-        ctx.fillStyle = theme.textMuted;
+        ctx.fillStyle = '#666';
         ctx.textAlign = 'right';
-        const smearText = powderSmear > 0.01 ? ` | Smear: ${(powderSmear * 100).toFixed(0)}%` : '';
-        ctx.fillText(`Zoom: ${zoom.toFixed(1)}x | λ=${wavelength.toFixed(3)}Å${smearText}`, width - 10, height - 10);
+        const spotCountText = spotData.length > 4000 ? `⚠️ ${spotData.length}` : `${spotData.length}`;
+        ctx.fillText(`λ=${wavelength.toFixed(3)}Å | ${spotCountText} spots`, width - 10, height - 10);
+
+        // Draw indexing circles for d-spacing families
+        if (showIndexingCircles && powderSmear < 0.5) {
+            // Calculate scale to convert 2θ to pixel radius (same as spot positioning)
+            const effectiveTwoThetaMax = Math.min(twoThetaMax, 85);
+            const twoThetaMaxRad = (effectiveTwoThetaMax * Math.PI) / 180;
+            const distanceFactor = 100 / detectorDistance;
+            const scale = maxRadius / Math.tan(twoThetaMaxRad) * distanceFactor;
+
+            // Group spots by d-spacing to draw indexing circles
+            // Use 2θ as proxy (spots at same 2θ have same d-spacing)
+            const visibleSpots = spotData.filter(s => s.intensity > 0.01 && s.twoTheta !== undefined);
+            const dSpacingGroups = new Map<string, { twoTheta: number; radius: number; hkl: string; count: number }>();
+
+            for (const spot of visibleSpots) {
+                if (spot.twoTheta === undefined) continue;
+                // Round 2θ to group equivalent reflections (0.1° tolerance)
+                const twoThetaKey = (Math.round(spot.twoTheta * 180 / Math.PI * 10) / 10).toFixed(1);
+
+                if (!dSpacingGroups.has(twoThetaKey)) {
+                    const circleRadius = Math.tan(spot.twoTheta) * scale * zoom;
+                    // Use absolute values for hkl label
+                    const h = Math.abs(spot.h), k = Math.abs(spot.k), l = Math.abs(spot.l);
+                    // Sort to get canonical form {hkl}
+                    const sorted = [h, k, l].sort((a, b) => b - a);
+                    dSpacingGroups.set(twoThetaKey, {
+                        twoTheta: spot.twoTheta,
+                        radius: circleRadius,
+                        hkl: `{${sorted[0]}${sorted[1]}${sorted[2]}}`,
+                        count: 1
+                    });
+                } else {
+                    dSpacingGroups.get(twoThetaKey)!.count++;
+                }
+            }
+
+            // Draw indexing circles for each d-spacing family
+            ctx.lineWidth = 1.5;
+            const colors = [
+                'rgba(220, 60, 60, 0.6)',   // red
+                'rgba(60, 140, 60, 0.6)',   // green
+                'rgba(60, 60, 200, 0.6)',   // blue
+                'rgba(180, 120, 40, 0.6)',  // orange
+                'rgba(120, 60, 180, 0.6)',  // purple
+                'rgba(60, 160, 160, 0.6)',  // teal
+            ];
+
+            let colorIdx = 0;
+            const sortedGroups = Array.from(dSpacingGroups.values()).sort((a, b) => a.radius - b.radius);
+
+            for (const group of sortedGroups) {
+                if (group.radius > 5 && group.radius < maxRadius * zoom * 1.2) {
+                    const color = colors[colorIdx % colors.length];
+                    ctx.strokeStyle = color;
+                    ctx.setLineDash([]);
+
+                    ctx.beginPath();
+                    ctx.arc(centerX - pan.x * zoom, centerY + pan.y * zoom, group.radius, 0, 2 * Math.PI);
+                    ctx.stroke();
+
+                    // Label with {hkl}
+                    ctx.fillStyle = color;
+                    ctx.font = 'bold 9px "Segoe UI", system-ui, sans-serif';
+                    ctx.textAlign = 'left';
+                    // Position label at different angles to avoid overlap
+                    const labelAngle = -Math.PI / 4 + (colorIdx * 0.3);
+                    const labelX = centerX - pan.x * zoom + group.radius * Math.cos(labelAngle) + 3;
+                    const labelY = centerY + pan.y * zoom + group.radius * Math.sin(labelAngle) - 3;
+                    ctx.fillText(group.hkl, labelX, labelY);
+
+                    colorIdx++;
+                }
+            }
+
+        }
 
         // Draw selected spot highlight
         if (selectedReflection) {
@@ -577,34 +746,26 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                 s.l === selectedReflection[2]
             );
             if (spot) {
-                const centerX = width / 2;
-                const centerY = height / 2;
                 const pixelX = centerX + (spot.x - pan.x) * zoom;
                 const pixelY = centerY + (spot.y - pan.y) * zoom;
 
-                ctx.strokeStyle = isDark ? '#fbbf24' : '#d97706';
+                ctx.strokeStyle = '#e67700';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(pixelX, pixelY, spot.radius * zoom + 6, 0, 2 * Math.PI);
                 ctx.stroke();
 
                 // Label
-                ctx.fillStyle = isDark ? '#fbbf24' : '#d97706';
+                ctx.fillStyle = '#e67700';
                 ctx.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
                 ctx.textAlign = 'left';
                 ctx.fillText(`(${spot.h},${spot.k},${spot.l})`, pixelX + spot.radius * zoom + 8, pixelY + 4);
             }
         }
 
-        // Zoom instructions
-        ctx.fillStyle = theme.textMuted;
-        ctx.font = '9px "Segoe UI", system-ui, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText('Scroll to zoom, drag to pan', 10, height - 10);
+    }, [viewMode, spotData, zoom, pan, width, height, isDark, theme, selectedReflection, wavelength, zoneLabel, powderSmear, twoThetaMax, detectorDistance, showIndexingCircles]);
 
-    }, [viewMode, spotData, zoom, pan, width, height, isDark, theme, selectedReflection, wavelength, getPlaneInfo, powderSmear, twoThetaMax, detectorDistance]);
-
-    // Draw reciprocal lattice (original Canvas 2D mode)
+    // Draw reciprocal lattice (Canvas 2D mode) - zone axis aware
     useEffect(() => {
         if (viewMode !== 'reciprocal') return;
 
@@ -618,185 +779,195 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         const plotSize = Math.min(width, height) - 2 * margin;
         const centerX = width / 2;
         const centerY = height / 2;
-        const scale = plotSize / (2 * maxIndex + 1);
 
-        const { xLabel, yLabel, fixedLabel } = getPlaneInfo();
+        // Calculate reciprocal lattice parameters
+        const recip = calculateReciprocalLattice(structure);
+
+        // Collect all reflections in the zone and compute their 2D positions
+        interface PlotPoint {
+            h: number; k: number; l: number;
+            px: number; py: number;
+        }
+        const points: PlotPoint[] = [];
+
+        for (let h = -maxIndex; h <= maxIndex; h++) {
+            for (let k = -maxIndex; k <= maxIndex; k++) {
+                for (let l = -maxIndex; l <= maxIndex; l++) {
+                    if (!isInZone(h, k, l)) continue;
+
+                    const { px, py } = projectToPlane(h, k, l, recip);
+                    points.push({ h, k, l, px, py });
+                }
+            }
+        }
+
+        // Calculate bounding box for scaling
+        let minX = 0, maxX = 0, minY = 0, maxY = 0;
+        for (const pt of points) {
+            minX = Math.min(minX, pt.px);
+            maxX = Math.max(maxX, pt.px);
+            minY = Math.min(minY, pt.py);
+            maxY = Math.max(maxY, pt.py);
+        }
+        const extentX = maxX - minX || 1;
+        const extentY = maxY - minY || 1;
+        const scale = plotSize / Math.max(extentX, extentY) * 0.85;
 
         // Clear canvas
         ctx.fillStyle = theme.surface || theme.inputBg;
         ctx.fillRect(0, 0, width, height);
 
-        // Draw grid
-        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 1;
-
-        for (let i = -maxIndex; i <= maxIndex; i++) {
-            const x = centerX + i * scale;
-            ctx.beginPath();
-            ctx.moveTo(x, margin);
-            ctx.lineTo(x, height - margin);
-            ctx.stroke();
-
-            const y = centerY - i * scale;
-            ctx.beginPath();
-            ctx.moveTo(margin, y);
-            ctx.lineTo(width - margin, y);
-            ctx.stroke();
-        }
-
-        // Draw axes
+        // Draw simple axes through origin
         ctx.strokeStyle = theme.textMuted;
-        ctx.lineWidth = 1.5;
-
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.moveTo(margin, centerY);
         ctx.lineTo(width - margin, centerY);
         ctx.stroke();
-
         ctx.beginPath();
         ctx.moveTo(centerX, margin);
         ctx.lineTo(centerX, height - margin);
         ctx.stroke();
+        ctx.setLineDash([]);
 
-        // Find max intensity for scaling
+        // Calculate the maximum Q value for the 2θ limit
+        // Q_max = 2 * sin(θ_max) / λ = 1 / d_min
+        const thetaMaxRad = (twoThetaMax / 2) * Math.PI / 180;
+        const qMax = 2 * Math.sin(thetaMaxRad) / wavelength;
+
+        // Draw limiting circle for 2θ max
+        // We need to find the radius in projected coordinates
+        // The radius in reciprocal space is qMax, we need to project it
+        // For simplicity, use the maximum extent to estimate the circle radius
+        const qMaxRadius = qMax * scale;
+        if (qMaxRadius > 10 && qMaxRadius < plotSize) {
+            ctx.strokeStyle = isDark ? 'rgba(255, 180, 100, 0.5)' : 'rgba(200, 100, 50, 0.5)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, qMaxRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Label for 2θ max circle
+            ctx.font = '9px "Segoe UI", system-ui, sans-serif';
+            ctx.fillStyle = isDark ? 'rgba(255, 180, 100, 0.8)' : 'rgba(180, 80, 30, 0.8)';
+            ctx.textAlign = 'left';
+            ctx.fillText(`2θ=${twoThetaMax}°`, centerX + qMaxRadius * 0.7 + 5, centerY - qMaxRadius * 0.7);
+        }
+
+        // Find max intensity for scaling (only for points within 2θ limit)
         let maxIntensity = 1;
-        for (let i = -maxIndex; i <= maxIndex; i++) {
-            for (let j = -maxIndex; j <= maxIndex; j++) {
-                if (i === 0 && j === 0) continue;
-                const [h, k, l] = getHKL(i, j);
-                if (isAllowedReflection(Math.abs(h), Math.abs(k), Math.abs(l), structure)) {
-                    const intensity = getIntensity(h, k, l);
+        for (const pt of points) {
+            if (pt.h === 0 && pt.k === 0 && pt.l === 0) continue;
+            if (isAllowedReflection(Math.abs(pt.h), Math.abs(pt.k), Math.abs(pt.l), structure)) {
+                // Check if within 2θ limit
+                const d = calculateDSpacing(pt.h, pt.k, pt.l, structure);
+                const twoTheta = calculateTwoTheta(d, wavelength);
+                if (!isNaN(twoTheta) && twoTheta <= twoThetaMax) {
+                    const intensity = getIntensity(pt.h, pt.k, pt.l);
                     maxIntensity = Math.max(maxIntensity, intensity);
                 }
             }
         }
 
         // Draw reciprocal lattice points
-        for (let i = -maxIndex; i <= maxIndex; i++) {
-            for (let j = -maxIndex; j <= maxIndex; j++) {
-                const x = centerX + i * scale;
-                const y = centerY - j * scale;
+        for (const pt of points) {
+            const x = centerX + pt.px * scale;
+            const y = centerY - pt.py * scale;
 
-                const [h, k, l] = getHKL(i, j);
-                const absH = Math.abs(h);
-                const absK = Math.abs(k);
-                const absL = Math.abs(l);
+            const absH = Math.abs(pt.h);
+            const absK = Math.abs(pt.k);
+            const absL = Math.abs(pt.l);
 
-                const isOrigin = i === 0 && j === 0;
-                const isAllowed = isAllowedReflection(absH, absK, absL, structure);
-                const isSelected =
-                    selectedReflection &&
-                    h === selectedReflection[0] &&
-                    k === selectedReflection[1] &&
-                    l === selectedReflection[2];
+            const isOrigin = pt.h === 0 && pt.k === 0 && pt.l === 0;
+            const isAllowed = isAllowedReflection(absH, absK, absL, structure);
+            const isSelected =
+                selectedReflection &&
+                pt.h === selectedReflection[0] &&
+                pt.k === selectedReflection[1] &&
+                pt.l === selectedReflection[2];
 
-                if (isOrigin) {
-                    ctx.fillStyle = isDark ? '#888' : '#666';
+            // Check 2θ limit for non-origin points
+            let withinTwoThetaLimit = true;
+            if (!isOrigin) {
+                const d = calculateDSpacing(pt.h, pt.k, pt.l, structure);
+                const twoTheta = calculateTwoTheta(d, wavelength);
+                withinTwoThetaLimit = !isNaN(twoTheta) && twoTheta <= twoThetaMax;
+            }
+
+            if (isOrigin) {
+                ctx.fillStyle = isDark ? '#888' : '#666';
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fill();
+            } else if (isAllowed && withinTwoThetaLimit) {
+                const intensity = getIntensity(pt.h, pt.k, pt.l);
+                const normalizedIntensity = intensity / maxIntensity;
+                // Use both size and opacity for intensity visualization
+                // Size varies from 4 to 10 based on intensity
+                const radius = 4 + normalizedIntensity * 6;
+                // Opacity varies from 0.3 to 1.0 based on intensity
+                const opacity = 0.3 + normalizedIntensity * 0.7;
+
+                if (isSelected) {
+                    ctx.strokeStyle = isDark ? '#fbbf24' : '#d97706';
+                    ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(x, y, 3, 0, 2 * Math.PI);
-                    ctx.fill();
-                } else if (isAllowed) {
-                    const intensity = getIntensity(h, k, l);
-                    const normalizedIntensity = intensity / maxIntensity;
-                    const radius = 3 + normalizedIntensity * 12;
-
-                    if (isSelected) {
-                        ctx.fillStyle = isDark ? '#fbbf24' : '#d97706';
-                        ctx.strokeStyle = isDark ? '#fbbf24' : '#d97706';
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.arc(x, y, radius + 3, 0, 2 * Math.PI);
-                        ctx.stroke();
-                    }
-
-                    ctx.fillStyle = isDark ? '#6b9eff' : '#2563eb';
-                    ctx.beginPath();
-                    ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                    ctx.fill();
-                } else if (showAbsences) {
-                    // Small grey dots with 25% opacity for systematic absences
-                    ctx.fillStyle = isDark ? 'rgba(180, 180, 180, 0.25)' : 'rgba(100, 100, 100, 0.25)';
-                    ctx.beginPath();
-                    ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
-                    ctx.fill();
+                    ctx.arc(x, y, radius + 3, 0, 2 * Math.PI);
+                    ctx.stroke();
                 }
+
+                // Use rgba for intensity-based darkness
+                ctx.fillStyle = isDark
+                    ? `rgba(107, 158, 255, ${opacity})`
+                    : `rgba(37, 99, 235, ${opacity})`;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+            } else if (isAllowed && !withinTwoThetaLimit) {
+                // Beyond 2θ limit - show as faded
+                ctx.fillStyle = isDark ? 'rgba(107, 158, 255, 0.2)' : 'rgba(37, 99, 235, 0.2)';
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            } else if (showAbsences && withinTwoThetaLimit) {
+                ctx.fillStyle = isDark ? 'rgba(180, 180, 180, 0.25)' : 'rgba(100, 100, 100, 0.25)';
+                ctx.beginPath();
+                ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
+                ctx.fill();
             }
         }
 
-        // Draw axis labels
-        ctx.fillStyle = theme.text;
-        ctx.font = 'bold 12px "Segoe UI", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-
-        ctx.fillText(xLabel, width - margin + 15, centerY + 4);
-        ctx.fillText(yLabel, centerX, margin - 10);
-
-        // Title
-        ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(`Reciprocal Space (${fixedLabel})`, 10, 15);
-
-        // Scale indicator
+        // Info text
         ctx.font = '10px "Segoe UI", system-ui, sans-serif';
         ctx.fillStyle = theme.textMuted;
         ctx.textAlign = 'right';
-        ctx.fillText(`Max: ${maxIndex}`, width - 10, height - 10);
+        ctx.fillText(`${points.length} reflections`, width - 10, height - 10);
     }, [
         viewMode,
         width,
         height,
         structure,
         reflections,
-        plane,
+        zoneAxis,
         maxIndex,
         showAbsences,
         selectedReflection,
         theme,
         isDark,
-        getPlaneInfo,
-        getHKL,
+        isInZone,
+        projectToPlane,
         getIntensity,
+        twoThetaMax,
+        wavelength,
     ]);
-
-    // Mouse handlers for zoom/pan
-    const handleWheel = useCallback((e: React.WheelEvent) => {
-        if (viewMode !== 'detector') return;
-        e.preventDefault();
-
-        const delta = e.deltaY > 0 ? 0.9 : 1.1;
-        setZoom(z => Math.max(0.5, Math.min(10, z * delta)));
-    }, [viewMode]);
-
-    const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        if (viewMode !== 'detector') return;
-        isDragging.current = true;
-        lastMouse.current = { x: e.clientX, y: e.clientY };
-    }, [viewMode]);
-
-    const handleMouseMove = useCallback((e: React.MouseEvent) => {
-        if (viewMode !== 'detector' || !isDragging.current) return;
-
-        const dx = e.clientX - lastMouse.current.x;
-        const dy = e.clientY - lastMouse.current.y;
-        lastMouse.current = { x: e.clientX, y: e.clientY };
-
-        setPan(p => ({ x: p.x - dx / zoom, y: p.y + dy / zoom }));
-    }, [viewMode, zoom]);
-
-    const handleMouseUp = useCallback(() => {
-        isDragging.current = false;
-    }, []);
-
-    const handleDoubleClick = useCallback(() => {
-        if (viewMode !== 'detector') return;
-        setZoom(1);
-        setPan({ x: 0, y: 0 });
-    }, [viewMode]);
 
     // Handle click for selection
     const handleClick = useCallback(
         (e: React.MouseEvent) => {
-            if (!onSelectReflection || isDragging.current) return;
+            if (!onSelectReflection) return;
 
             const canvas = viewMode === 'detector' ? glCanvasRef.current : canvasRef.current;
             if (!canvas) return;
@@ -830,31 +1001,56 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     onSelectReflection([closestSpot.h, closestSpot.k, closestSpot.l]);
                 }
             } else {
-                const plotSize = Math.min(width, height) - 80;
-                const scale = plotSize / (2 * maxIndex + 1);
+                // For reciprocal view, find the closest point in the zone
+                const margin = 40;
+                const plotSize = Math.min(width, height) - 2 * margin;
+                const recip = calculateReciprocalLattice(structure);
 
-                const i = Math.round((clickX - centerX) / scale);
-                const j = Math.round((centerY - clickY) / scale);
-
-                if (
-                    Math.abs(i) <= maxIndex &&
-                    Math.abs(j) <= maxIndex &&
-                    !(i === 0 && j === 0)
-                ) {
-                    const [h, k, l] = getHKL(i, j);
-                    if (isAllowedReflection(Math.abs(h), Math.abs(k), Math.abs(l), structure)) {
-                        onSelectReflection([h, k, l]);
+                // Build list of points in zone
+                const zonePoints: { h: number; k: number; l: number; px: number; py: number }[] = [];
+                let minPx = 0, maxPx = 0, minPy = 0, maxPy = 0;
+                for (let h = -maxIndex; h <= maxIndex; h++) {
+                    for (let k = -maxIndex; k <= maxIndex; k++) {
+                        for (let l = -maxIndex; l <= maxIndex; l++) {
+                            if (!isInZone(h, k, l)) continue;
+                            const { px, py } = projectToPlane(h, k, l, recip);
+                            minPx = Math.min(minPx, px);
+                            maxPx = Math.max(maxPx, px);
+                            minPy = Math.min(minPy, py);
+                            maxPy = Math.max(maxPy, py);
+                            zonePoints.push({ h, k, l, px, py });
+                        }
                     }
+                }
+
+                const extentX = maxPx - minPx || 1;
+                const extentY = maxPy - minPy || 1;
+                const scale = plotSize / Math.max(extentX, extentY) * 0.85;
+
+                // Find closest point to click
+                let closestDist = Infinity;
+                let closestPoint: { h: number; k: number; l: number } | null = null;
+                for (const pt of zonePoints) {
+                    if (pt.h === 0 && pt.k === 0 && pt.l === 0) continue;
+                    const x = centerX + pt.px * scale;
+                    const y = centerY - pt.py * scale;
+                    const dist = Math.sqrt((clickX - x) ** 2 + (clickY - y) ** 2);
+                    if (dist < closestDist && dist < 20) {
+                        closestDist = dist;
+                        closestPoint = { h: pt.h, k: pt.k, l: pt.l };
+                    }
+                }
+
+                if (closestPoint && isAllowedReflection(Math.abs(closestPoint.h), Math.abs(closestPoint.k), Math.abs(closestPoint.l), structure)) {
+                    onSelectReflection([closestPoint.h, closestPoint.k, closestPoint.l]);
                 }
             }
         },
-        [width, height, maxIndex, plane, structure, onSelectReflection, viewMode, zoom, pan, getHKL]
+        [width, height, maxIndex, structure, onSelectReflection, viewMode, zoom, pan, isInZone, projectToPlane]
     );
 
-    // Reset zoom/pan when switching modes or structure changes
+    // Reset powder state when switching modes or structure changes
     useEffect(() => {
-        setZoom(1);
-        setPan({ x: 0, y: 0 });
         setPowderSmear(0);
         setIsAnimating(false);
         if (animationRef.current) {
@@ -921,14 +1117,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     borderRadius: '4px',
                     border: `1px solid ${theme.border}`,
                     overflow: 'hidden',
-                    cursor: isDragging.current ? 'grabbing' : 'grab',
                 }}
-                onWheel={handleWheel}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onDoubleClick={handleDoubleClick}
                 onClick={handleClick}
             >
                 <canvas
@@ -952,33 +1141,59 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                         pointerEvents: 'none',
                     }}
                 />
-                {/* Powder animation button */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        handlePowderToggle();
-                    }}
+                {/* Inline controls */}
+                <div
                     style={{
                         position: 'absolute',
-                        top: 8,
-                        right: 8,
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        border: `1px solid ${theme.border}`,
-                        borderRadius: '4px',
-                        backgroundColor: powderSmear > 0.5
-                            ? (theme.accent || '#2563eb')
-                            : (isDark ? 'rgba(60,60,60,0.9)' : 'rgba(255,255,255,0.9)'),
-                        color: powderSmear > 0.5 ? '#fff' : theme.text,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        top: 6,
+                        right: 6,
+                        display: 'flex',
+                        gap: '4px',
                     }}
-                    title={powderSmear > 0.5 ? 'Reset to single crystal' : 'Animate to powder pattern'}
                 >
-                    {isAnimating ? 'Smearing...' : (powderSmear > 0.5 ? 'Reset' : 'Powder')}
-                </button>
+                    {/* Indexing circles toggle */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onShowIndexingCirclesChange?.(!showIndexingCircles);
+                        }}
+                        style={{
+                            padding: '3px 6px',
+                            fontSize: '9px',
+                            fontWeight: 500,
+                            border: '1px solid #ccc',
+                            borderRadius: '3px',
+                            backgroundColor: showIndexingCircles ? '#2563eb' : '#fff',
+                            color: showIndexingCircles ? '#fff' : '#333',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        }}
+                        title="Toggle indexing circles"
+                    >
+                        Index
+                    </button>
+                    {/* Powder animation button */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handlePowderToggle();
+                        }}
+                        style={{
+                            padding: '3px 6px',
+                            fontSize: '9px',
+                            fontWeight: 500,
+                            border: '1px solid #ccc',
+                            borderRadius: '3px',
+                            backgroundColor: powderSmear > 0.5 ? '#2563eb' : '#fff',
+                            color: powderSmear > 0.5 ? '#fff' : '#333',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        }}
+                        title={powderSmear > 0.5 ? 'Reset to single crystal' : 'Animate to powder pattern'}
+                    >
+                        {isAnimating ? '...' : (powderSmear > 0.5 ? 'Crystal' : 'Powder')}
+                    </button>
+                </div>
             </div>
         );
     }

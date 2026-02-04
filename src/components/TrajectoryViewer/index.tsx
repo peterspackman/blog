@@ -430,6 +430,31 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
 
     window.addEventListener('resize', handleResize);
 
+    // Handle fullscreen changes — clear stale dimensions and let NGL recalculate
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement && stageRef.current) {
+        // Three.js / NGL sets explicit pixel dimensions on the container and
+        // canvas during fullscreen (both inline styles AND HTML attributes).
+        // Strip everything so the CSS flex layout drives sizing again.
+        stageRef.current.style.width = '';
+        stageRef.current.style.height = '';
+        const canvas = stageRef.current.querySelector('canvas');
+        if (canvas) {
+          canvas.style.width = '';
+          canvas.style.height = '';
+          canvas.removeAttribute('width');
+          canvas.removeAttribute('height');
+        }
+      }
+      // Let the container reflow to its CSS size, then tell NGL to recalculate
+      requestAnimationFrame(() => {
+        handleResize();
+        requestAnimationFrame(handleResize);
+      });
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
     // Listen for theme changes
     const handleThemeChange = () => {
       if (nglStageRef.current) {
@@ -446,6 +471,8 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       observer.disconnect();
       if (nglStageRef.current) {
         nglStageRef.current.dispose();
@@ -1191,8 +1218,12 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
   };
 
   const toggleFullscreen = () => {
-    if (nglStageRef.current) {
-      nglStageRef.current.toggleFullscreen(stageRef.current);
+    const el = stageRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      el.requestFullscreen();
     }
   };
 
@@ -1461,50 +1492,50 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       </div>
 
       {/* Trajectory controls - horizontal layout */}
-      {totalFrames > 1 && (
-        <div className={styles.trajectoryControls}>
-          <div className={styles.compactControls}>
-            {/* Left side - Player controls */}
-            <div className={styles.playerControls}>
-              <button 
-                onClick={() => setFrame(Math.max(0, currentFrame - 1))}
-                className={styles.playerButton}
-                disabled={currentFrame === 0}
-                title="Previous frame"
-              >
-                ⏮
-              </button>
-              <button 
-                onClick={isPlaying ? pause : play}
-                className={`${styles.playerButton} ${styles.playPauseButton}`}
-                title={isPlaying ? "Pause" : "Play"}
-              >
-                {isPlaying ? '⏸' : '⏵'}
-              </button>
-              <button 
-                onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
-                className={styles.playerButton}
-                disabled={currentFrame === totalFrames - 1}
-                title="Next frame"
-              >
-                ⏭
-              </button>
-            </div>
-            
-            {/* Center/Right - Frame slider */}
-            <div className={styles.frameControls}>
-              <input
-                type="range"
-                min="0"
-                max={totalFrames - 1}
-                value={currentFrame}
-                onChange={(e) => setFrame(parseInt(e.target.value))}
-                className={styles.frameSlider}
-              />
-            </div>
+      <div className={styles.trajectoryControls}>
+        <div className={styles.compactControls}>
+          {/* Left side - Player controls */}
+          <div className={styles.playerControls}>
+            <button
+              onClick={() => setFrame(Math.max(0, currentFrame - 1))}
+              className={styles.playerButton}
+              disabled={totalFrames <= 1 || currentFrame === 0}
+              title="Previous frame"
+            >
+              ⏮
+            </button>
+            <button
+              onClick={isPlaying ? pause : play}
+              className={`${styles.playerButton} ${styles.playPauseButton}`}
+              disabled={totalFrames <= 1}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {isPlaying ? '⏸' : '⏵'}
+            </button>
+            <button
+              onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
+              className={styles.playerButton}
+              disabled={totalFrames <= 1 || currentFrame === totalFrames - 1}
+              title="Next frame"
+            >
+              ⏭
+            </button>
+          </div>
+
+          {/* Center/Right - Frame slider */}
+          <div className={styles.frameControls}>
+            <input
+              type="range"
+              min="0"
+              max={Math.max(totalFrames - 1, 0)}
+              value={currentFrame}
+              onChange={(e) => setFrame(parseInt(e.target.value))}
+              className={styles.frameSlider}
+              disabled={totalFrames <= 1}
+            />
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

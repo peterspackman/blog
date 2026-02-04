@@ -9,11 +9,11 @@ export interface PowderPatternProps {
     height: number;
     reflections: Reflection[];
     wavelength: number;
-    peakWidth: number; // Gaussian broadening (degrees)
-    showLabels: boolean;
+    peakWidth: number; // Gaussian broadening (degrees FWHM)
     twoThetaRange: [number, number];
     selectedReflection: [number, number, number] | null;
     onSelectReflection?: (hkl: [number, number, number] | null) => void;
+    showMarkers?: boolean; // Show clickable dots at peak positions
     theme: ControlTheme;
 }
 
@@ -55,10 +55,10 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
     reflections,
     wavelength,
     peakWidth,
-    showLabels,
     twoThetaRange,
     selectedReflection,
     onSelectReflection,
+    showMarkers = true,
     theme,
 }) => {
     const chartRef = useRef<HTMLDivElement>(null);
@@ -104,73 +104,38 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
             animation: false,
         });
 
-        // Peak markers (vertical lines at reflection positions)
-        const peakMarkers = reflections
-            .filter((r) => r.twoTheta >= twoThetaRange[0] && r.twoTheta <= twoThetaRange[1])
-            .map((r) => ({
-                xAxis: r.twoTheta,
-                lineStyle: {
-                    color: selectedReflection &&
+        // Scatter points for clickable/hoverable peaks (optional)
+        if (showMarkers) {
+            const peakPoints = reflections
+                .filter((r) => r.twoTheta >= twoThetaRange[0] && r.twoTheta <= twoThetaRange[1])
+                .map((r) => {
+                    const isSelected = selectedReflection &&
                         r.h === selectedReflection[0] &&
                         r.k === selectedReflection[1] &&
-                        r.l === selectedReflection[2]
-                        ? (isDark ? '#fbbf24' : '#d97706')
-                        : (isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'),
-                    width: selectedReflection &&
-                        r.h === selectedReflection[0] &&
-                        r.k === selectedReflection[1] &&
-                        r.l === selectedReflection[2]
-                        ? 2
-                        : 1,
-                    type: 'solid' as const,
-                },
-                label: {
-                    show: showLabels && r.intensity > 5, // Only label significant peaks
-                    formatter: formatHKL(r.h, r.k, r.l),
-                    position: 'end' as const,
-                    color: theme.textMuted,
-                    fontSize: 9,
-                    rotate: 90,
-                    offset: [0, -5],
-                },
-            }));
+                        r.l === selectedReflection[2];
+                    return {
+                        value: [r.twoTheta, r.intensity],
+                        symbolSize: isSelected ? 14 : 8,
+                        itemStyle: {
+                            color: isSelected
+                                ? (isDark ? '#fbbf24' : '#d97706')
+                                : (isDark ? '#6b9eff' : '#2563eb'),
+                            borderColor: isDark ? '#fff' : '#333',
+                            borderWidth: 1,
+                        },
+                        // Store reflection data for click handler
+                        h: r.h, k: r.k, l: r.l,
+                    };
+                });
 
-        // Add dummy series for markLine
-        series.push({
-            name: 'Peaks',
-            type: 'line',
-            data: [],
-            markLine: {
-                silent: false,
-                symbol: 'none',
-                data: peakMarkers,
+            series.push({
+                name: 'Peak positions',
+                type: 'scatter',
+                data: peakPoints,
+                z: 10, // Ensure scatter is on top of line
                 animation: false,
-            },
-        });
-
-        // Scatter points for clickable peaks
-        const peakPoints = reflections
-            .filter((r) => r.twoTheta >= twoThetaRange[0] && r.twoTheta <= twoThetaRange[1])
-            .map((r) => ({
-                value: [r.twoTheta, r.intensity],
-                itemStyle: {
-                    color: selectedReflection &&
-                        r.h === selectedReflection[0] &&
-                        r.k === selectedReflection[1] &&
-                        r.l === selectedReflection[2]
-                        ? (isDark ? '#fbbf24' : '#d97706')
-                        : (isDark ? '#6b9eff' : '#2563eb'),
-                },
-                data: { h: r.h, k: r.k, l: r.l },
-            }));
-
-        series.push({
-            name: 'Peak positions',
-            type: 'scatter',
-            data: peakPoints,
-            symbolSize: 8,
-            animation: false,
-        });
+            });
+        }
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -302,10 +267,10 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
         reflections,
         wavelength,
         peakWidth,
-        showLabels,
         twoThetaRange,
         selectedReflection,
         onSelectReflection,
+        showMarkers,
         theme,
     ]);
 

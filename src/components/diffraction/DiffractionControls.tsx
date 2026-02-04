@@ -27,15 +27,9 @@ export interface DiffractionControlsProps {
     twoThetaMax: number;
     onTwoThetaMaxChange: (max: number) => void;
 
-    // Powder pattern
-    peakWidth: number;
-    onPeakWidthChange: (width: number) => void;
-    showPeakLabels: boolean;
-    onShowPeakLabelsChange: (show: boolean) => void;
-
     // Reciprocal space
-    reciprocalPlane: 'hk0' | 'h0l' | '0kl';
-    onReciprocalPlaneChange: (plane: 'hk0' | 'h0l' | '0kl') => void;
+    zoneAxis: [number, number, number];
+    onZoneAxisChange: (axis: [number, number, number]) => void;
     maxIndex: number;
     onMaxIndexChange: (max: number) => void;
     showAbsences: boolean;
@@ -45,28 +39,26 @@ export interface DiffractionControlsProps {
     onOscillationRangeChange: (range: number) => void;
     detectorDistance: number;
     onDetectorDistanceChange: (dist: number) => void;
+    showIndexingCircles: boolean;
+    onShowIndexingCirclesChange: (show: boolean) => void;
 
-    // Electron density (2D slice)
-    slicePosition: number;
-    onSlicePositionChange: (pos: number) => void;
-    sliceAxis: 'x' | 'y' | 'z';
-    onSliceAxisChange: (axis: 'x' | 'y' | 'z') => void;
-    densityResolution: number;
-    onDensityResolutionChange: (res: number) => void;
-    showContours: boolean;
-    onShowContoursChange: (show: boolean) => void;
-    noise: number;
-    onNoiseChange: (noise: number) => void;
-    bFactor: number;
-    onBFactorChange: (b: number) => void;
-
-    // Unit cell
+    // Display options
+    peakWidth: number;
+    onPeakWidthChange: (width: number) => void;
+    showPeakMarkers: boolean;
+    onShowPeakMarkersChange: (show: boolean) => void;
     showBonds: boolean;
     onShowBondsChange: (show: boolean) => void;
     showLabels: boolean;
     onShowLabelsChange: (show: boolean) => void;
-    supercell: [number, number, number];
-    onSupercellChange: (supercell: [number, number, number]) => void;
+
+    // Advanced (move to collapsed section)
+    noise: number;
+    onNoiseChange: (noise: number) => void;
+    bFactor: number;
+    onBFactorChange: (b: number) => void;
+    showContours: boolean;
+    onShowContoursChange: (show: boolean) => void;
 
     // Custom form factors
     formFactors: Record<string, ControlPoint[]>;
@@ -84,12 +76,8 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
     onWavelengthChange,
     twoThetaMax,
     onTwoThetaMaxChange,
-    peakWidth,
-    onPeakWidthChange,
-    showPeakLabels,
-    onShowPeakLabelsChange,
-    reciprocalPlane,
-    onReciprocalPlaneChange,
+    zoneAxis,
+    onZoneAxisChange,
     maxIndex,
     onMaxIndexChange,
     showAbsences,
@@ -99,28 +87,37 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
     onOscillationRangeChange,
     detectorDistance,
     onDetectorDistanceChange,
-    slicePosition,
-    onSlicePositionChange,
-    sliceAxis,
-    onSliceAxisChange,
-    densityResolution,
-    onDensityResolutionChange,
-    showContours,
-    onShowContoursChange,
-    noise,
-    onNoiseChange,
-    bFactor,
-    onBFactorChange,
+    showIndexingCircles,
+    onShowIndexingCirclesChange,
+    peakWidth,
+    onPeakWidthChange,
+    showPeakMarkers,
+    onShowPeakMarkersChange,
     showBonds,
     onShowBondsChange,
     showLabels,
     onShowLabelsChange,
-    supercell,
-    onSupercellChange,
+    noise,
+    onNoiseChange,
+    bFactor,
+    onBFactorChange,
+    showContours,
+    onShowContoursChange,
     formFactors,
     onFormFactorsChange,
     theme,
 }) => {
+    const buttonStyle = (isActive: boolean) => ({
+        flex: 1,
+        padding: '0.25rem',
+        fontSize: '0.65rem',
+        border: `1px solid ${theme.border}`,
+        borderRadius: '4px',
+        backgroundColor: isActive ? theme.accent || '#2563eb' : theme.inputBg,
+        color: isActive ? '#fff' : theme.text,
+        cursor: 'pointer',
+    });
+
     return (
         <div
             style={{
@@ -131,7 +128,7 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                 color: theme.text,
             }}
         >
-            {/* Crystal Structure */}
+            {/* Section 1: Crystal Structure */}
             <CollapsibleSection
                 title="Crystal Structure"
                 defaultExpanded={true}
@@ -182,9 +179,9 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                 </div>
             </CollapsibleSection>
 
-            {/* X-ray Parameters */}
+            {/* Section 2: X-ray & Viewing */}
             <CollapsibleSection
-                title="X-ray Source"
+                title="X-ray & Viewing"
                 defaultExpanded={true}
                 theme={theme}
             >
@@ -208,47 +205,18 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                 >
                     <button
                         onClick={() => onWavelengthChange(CU_K_ALPHA)}
-                        style={{
-                            flex: 1,
-                            padding: '0.25rem',
-                            fontSize: '0.65rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor:
-                                Math.abs(wavelength - CU_K_ALPHA) < 0.001
-                                    ? theme.accent || '#2563eb'
-                                    : theme.inputBg,
-                            color:
-                                Math.abs(wavelength - CU_K_ALPHA) < 0.001
-                                    ? '#fff'
-                                    : theme.text,
-                            cursor: 'pointer',
-                        }}
+                        style={buttonStyle(Math.abs(wavelength - CU_K_ALPHA) < 0.001)}
                     >
                         Cu Kα
                     </button>
                     <button
                         onClick={() => onWavelengthChange(MO_K_ALPHA)}
-                        style={{
-                            flex: 1,
-                            padding: '0.25rem',
-                            fontSize: '0.65rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor:
-                                Math.abs(wavelength - MO_K_ALPHA) < 0.001
-                                    ? theme.accent || '#2563eb'
-                                    : theme.inputBg,
-                            color:
-                                Math.abs(wavelength - MO_K_ALPHA) < 0.001
-                                    ? '#fff'
-                                    : theme.text,
-                            cursor: 'pointer',
-                        }}
+                        style={buttonStyle(Math.abs(wavelength - MO_K_ALPHA) < 0.001)}
                     >
                         Mo Kα
                     </button>
                 </div>
+
                 <SliderWithInput
                     label="2θ max"
                     value={twoThetaMax}
@@ -260,70 +228,8 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                     unit="°"
                     theme={theme}
                 />
-            </CollapsibleSection>
 
-            {/* Atomic Form Factors */}
-            <CollapsibleSection
-                title="Atomic Form Factors"
-                defaultExpanded={false}
-                theme={theme}
-            >
-                <FormFactorEditor
-                    width={220}
-                    height={160}
-                    elements={structure.atoms.map(a => a.element)}
-                    theme={theme}
-                    formFactors={formFactors}
-                    onFormFactorsChange={onFormFactorsChange}
-                />
-                <div
-                    style={{
-                        marginTop: '0.5rem',
-                        padding: '0.4rem',
-                        backgroundColor: theme.inputBg,
-                        borderRadius: '4px',
-                        fontSize: '0.65rem',
-                        color: theme.textMuted,
-                    }}
-                >
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.2rem', color: theme.text }}>
-                        f(s) = atomic scattering factor
-                    </div>
-                    <div>Drag points to customize. Click element to select.</div>
-                </div>
-            </CollapsibleSection>
-
-            {/* Powder Pattern */}
-            <CollapsibleSection
-                title="Powder Pattern"
-                defaultExpanded={false}
-                theme={theme}
-            >
-                <SliderWithInput
-                    label="Peak width"
-                    value={peakWidth}
-                    onChange={onPeakWidthChange}
-                    min={0.1}
-                    max={3}
-                    step={0.1}
-                    decimals={1}
-                    unit="°"
-                    theme={theme}
-                />
-                <ToggleSwitch
-                    label="Show (hkl) labels"
-                    checked={showPeakLabels}
-                    onChange={onShowPeakLabelsChange}
-                    theme={theme}
-                />
-            </CollapsibleSection>
-
-            {/* Reciprocal Space */}
-            <CollapsibleSection
-                title="Reciprocal Space"
-                defaultExpanded={false}
-                theme={theme}
-            >
+                {/* Zone axis text input */}
                 <div style={{ marginBottom: '0.5rem' }}>
                     <label
                         style={{
@@ -333,42 +239,68 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                             marginBottom: '0.25rem',
                         }}
                     >
-                        Plane
+                        Zone Axis [uvw]
                     </label>
-                    <select
-                        value={reciprocalPlane}
-                        onChange={(e) =>
-                            onReciprocalPlaneChange(
-                                e.target.value as 'hk0' | 'h0l' | '0kl'
-                            )
-                        }
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                        {[0, 1, 2].map((idx) => (
+                            <input
+                                key={idx}
+                                type="number"
+                                value={zoneAxis[idx]}
+                                onChange={(e) => {
+                                    const newAxis = [...zoneAxis] as [number, number, number];
+                                    newAxis[idx] = parseInt(e.target.value) || 0;
+                                    onZoneAxisChange(newAxis);
+                                }}
+                                style={{
+                                    flex: 1,
+                                    width: '100%',
+                                    padding: '0.3rem',
+                                    fontSize: '0.8rem',
+                                    textAlign: 'center',
+                                    border: `1px solid ${theme.border}`,
+                                    borderRadius: '4px',
+                                    backgroundColor: theme.inputBg,
+                                    color: theme.text,
+                                }}
+                            />
+                        ))}
+                    </div>
+                </div>
+
+                {/* Max index preset buttons */}
+                <div style={{ marginBottom: '0.5rem' }}>
+                    <label
                         style={{
-                            width: '100%',
-                            padding: '0.4rem',
-                            fontSize: '0.8rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor: theme.inputBg,
-                            color: theme.text,
-                            cursor: 'pointer',
+                            display: 'block',
+                            fontSize: '0.75rem',
+                            color: theme.textMuted,
+                            marginBottom: '0.25rem',
                         }}
                     >
-                        <option value="hk0">hk0 (l = 0)</option>
-                        <option value="h0l">h0l (k = 0)</option>
-                        <option value="0kl">0kl (h = 0)</option>
-                    </select>
+                        Max index
+                    </label>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {[5, 8, 12].map((n) => (
+                            <button
+                                key={n}
+                                onClick={() => onMaxIndexChange(n)}
+                                style={buttonStyle(maxIndex === n)}
+                            >
+                                {n}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <SliderWithInput
-                    label="Max index"
-                    value={maxIndex}
-                    onChange={(v) => onMaxIndexChange(Math.round(v))}
-                    min={3}
-                    max={15}
-                    step={1}
-                    decimals={0}
-                    unit=""
+
+                <ToggleSwitch
+                    label="Show absences"
+                    checked={showAbsences}
+                    onChange={onShowAbsencesChange}
                     theme={theme}
                 />
+
+                {/* Detector-specific controls */}
                 {reciprocalView === 'detector' && (
                     <>
                         <SliderWithInput
@@ -393,156 +325,59 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                             unit="mm"
                             theme={theme}
                         />
+                        <ToggleSwitch
+                            label="Indexing circles"
+                            checked={showIndexingCircles}
+                            onChange={onShowIndexingCirclesChange}
+                            theme={theme}
+                        />
                     </>
                 )}
+            </CollapsibleSection>
+
+            {/* Section 3: Display Options */}
+            <CollapsibleSection
+                title="Display Options"
+                defaultExpanded={false}
+                theme={theme}
+            >
+                <SliderWithInput
+                    label="Peak FWHM"
+                    value={peakWidth}
+                    onChange={onPeakWidthChange}
+                    min={0.1}
+                    max={3}
+                    step={0.1}
+                    decimals={1}
+                    unit="°"
+                    theme={theme}
+                />
                 <ToggleSwitch
-                    label="Show absences"
-                    checked={showAbsences}
-                    onChange={onShowAbsencesChange}
+                    label="Show peak markers"
+                    checked={showPeakMarkers}
+                    onChange={onShowPeakMarkersChange}
+                    theme={theme}
+                />
+                <ToggleSwitch
+                    label="Show bonds"
+                    checked={showBonds}
+                    onChange={onShowBondsChange}
+                    theme={theme}
+                />
+                <ToggleSwitch
+                    label="Show axis labels"
+                    checked={showLabels}
+                    onChange={onShowLabelsChange}
                     theme={theme}
                 />
             </CollapsibleSection>
 
-            {/* Electron Density (simplified - slice controls only) */}
+            {/* Section 4: Advanced */}
             <CollapsibleSection
-                title="Electron Density"
+                title="Advanced"
                 defaultExpanded={false}
                 theme={theme}
             >
-                <div style={{ marginBottom: '0.5rem' }}>
-                    <label
-                        style={{
-                            display: 'block',
-                            fontSize: '0.75rem',
-                            color: theme.textMuted,
-                            marginBottom: '0.25rem',
-                        }}
-                    >
-                        Slice Axis
-                    </label>
-                    <div
-                        style={{
-                            display: 'flex',
-                            gap: '0.4rem',
-                        }}
-                    >
-                        {(['x', 'y', 'z'] as const).map((axis) => (
-                            <button
-                                key={axis}
-                                onClick={() => onSliceAxisChange(axis)}
-                                style={{
-                                    flex: 1,
-                                    padding: '0.25rem',
-                                    fontSize: '0.65rem',
-                                    border: `1px solid ${theme.border}`,
-                                    borderRadius: '4px',
-                                    backgroundColor:
-                                        sliceAxis === axis
-                                            ? theme.accent || '#2563eb'
-                                            : theme.inputBg,
-                                    color:
-                                        sliceAxis === axis
-                                            ? '#fff'
-                                            : theme.text,
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                {axis}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <SliderWithInput
-                    label={`${sliceAxis}-slice`}
-                    value={slicePosition}
-                    onChange={onSlicePositionChange}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    decimals={2}
-                    unit=""
-                    theme={theme}
-                />
-                <div
-                    style={{
-                        display: 'flex',
-                        gap: '0.4rem',
-                        marginBottom: '0.5rem',
-                    }}
-                >
-                    <button
-                        onClick={() => onSlicePositionChange(0)}
-                        style={{
-                            flex: 1,
-                            padding: '0.25rem',
-                            fontSize: '0.65rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor:
-                                slicePosition === 0
-                                    ? theme.accent || '#2563eb'
-                                    : theme.inputBg,
-                            color: slicePosition === 0 ? '#fff' : theme.text,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        0
-                    </button>
-                    <button
-                        onClick={() => onSlicePositionChange(0.25)}
-                        style={{
-                            flex: 1,
-                            padding: '0.25rem',
-                            fontSize: '0.65rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor:
-                                Math.abs(slicePosition - 0.25) < 0.01
-                                    ? theme.accent || '#2563eb'
-                                    : theme.inputBg,
-                            color:
-                                Math.abs(slicePosition - 0.25) < 0.01
-                                    ? '#fff'
-                                    : theme.text,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        ¼
-                    </button>
-                    <button
-                        onClick={() => onSlicePositionChange(0.5)}
-                        style={{
-                            flex: 1,
-                            padding: '0.25rem',
-                            fontSize: '0.65rem',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '4px',
-                            backgroundColor:
-                                Math.abs(slicePosition - 0.5) < 0.01
-                                    ? theme.accent || '#2563eb'
-                                    : theme.inputBg,
-                            color:
-                                Math.abs(slicePosition - 0.5) < 0.01
-                                    ? '#fff'
-                                    : theme.text,
-                            cursor: 'pointer',
-                        }}
-                    >
-                        ½
-                    </button>
-                </div>
-
-                <SliderWithInput
-                    label="Max HKL"
-                    value={densityResolution}
-                    onChange={(v) => onDensityResolutionChange(Math.round(v))}
-                    min={4}
-                    max={16}
-                    step={1}
-                    decimals={0}
-                    unit=""
-                    theme={theme}
-                />
                 <SliderWithInput
                     label="Noise"
                     value={noise}
@@ -565,6 +400,12 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                     unit="Ų"
                     theme={theme}
                 />
+                <ToggleSwitch
+                    label="Show contours"
+                    checked={showContours}
+                    onChange={onShowContoursChange}
+                    theme={theme}
+                />
                 <div
                     style={{
                         marginTop: '0.5rem',
@@ -578,27 +419,9 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                     <div><strong>Noise:</strong> Adds random error to reflection intensities</div>
                     <div><strong>B-factor:</strong> Thermal motion damping (Debye-Waller)</div>
                 </div>
-            </CollapsibleSection>
 
-            {/* Display Options */}
-            <CollapsibleSection
-                title="Display Options"
-                defaultExpanded={false}
-                theme={theme}
-            >
-                <ToggleSwitch
-                    label="Show bonds"
-                    checked={showBonds}
-                    onChange={onShowBondsChange}
-                    theme={theme}
-                />
-                <ToggleSwitch
-                    label="Show axis labels"
-                    checked={showLabels}
-                    onChange={onShowLabelsChange}
-                    theme={theme}
-                />
-                <div style={{ marginTop: '0.5rem' }}>
+                {/* Form Factor Editor */}
+                <div style={{ marginTop: '0.75rem' }}>
                     <label
                         style={{
                             display: 'block',
@@ -607,61 +430,27 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                             marginBottom: '0.25rem',
                         }}
                     >
-                        Supercell
+                        Atomic Form Factors
                     </label>
+                    <FormFactorEditor
+                        width={220}
+                        height={140}
+                        elements={structure.atoms.map(a => a.element)}
+                        theme={theme}
+                        formFactors={formFactors}
+                        onFormFactorsChange={onFormFactorsChange}
+                    />
                     <div
                         style={{
-                            display: 'flex',
-                            gap: '0.4rem',
+                            marginTop: '0.25rem',
+                            fontSize: '0.6rem',
+                            color: theme.textMuted,
                         }}
                     >
-                        {[1, 2, 3].map((n) => (
-                            <button
-                                key={n}
-                                onClick={() => onSupercellChange([n, n, n])}
-                                style={{
-                                    flex: 1,
-                                    padding: '0.25rem',
-                                    fontSize: '0.65rem',
-                                    border: `1px solid ${theme.border}`,
-                                    borderRadius: '4px',
-                                    backgroundColor:
-                                        supercell[0] === n
-                                            ? theme.accent || '#2563eb'
-                                            : theme.inputBg,
-                                    color:
-                                        supercell[0] === n
-                                            ? '#fff'
-                                            : theme.text,
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                {n}×{n}×{n}
-                            </button>
-                        ))}
+                        Drag points to customize f(s). Click element to select.
                     </div>
                 </div>
             </CollapsibleSection>
-
-            {/* Help text */}
-            <div
-                style={{
-                    marginTop: '1rem',
-                    padding: '0.5rem',
-                    backgroundColor: theme.inputBg,
-                    borderRadius: '4px',
-                    fontSize: '0.7rem',
-                    color: theme.textMuted,
-                }}
-            >
-                <strong>Tips:</strong>
-                <ul style={{ margin: '0.3rem 0 0 1rem', padding: 0 }}>
-                    <li>Use tabs to switch between 3D/Density views</li>
-                    <li>Click peaks in PXRD to highlight reflections</li>
-                    <li>Empty circles show systematic absences</li>
-                    <li>Adjust z-slice to scan electron density</li>
-                </ul>
-            </div>
         </div>
     );
 };

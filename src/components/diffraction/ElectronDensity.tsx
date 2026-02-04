@@ -19,9 +19,8 @@ export interface ElectronDensityProps {
     height: number;
     structure: CrystalStructure;
     wavelength: number;
-    slicePosition: number; // Position along slice axis (0-1)
-    sliceAxis?: 'x' | 'y' | 'z'; // Which axis to slice along (default 'z')
-    resolution: number;
+    slicePosition: number; // Position along zone axis (0-1)
+    zoneAxis?: [number, number, number]; // Zone axis [uvw] - slice plane is perpendicular to this
     showContours: boolean;
     maxHKL: number;
     theme: ControlTheme;
@@ -98,11 +97,14 @@ const VERTEX_SHADER = `
 `;
 
 // Fragment shader - computes Fourier synthesis with Gaussian damping
+// Supports arbitrary zone axis slicing
 const FRAGMENT_SHADER = `
     precision highp float;
     varying vec2 v_texCoord;
     uniform float u_slicePos;
-    uniform int u_sliceAxis; // 0=x, 1=y, 2=z
+    uniform vec3 u_zoneAxis; // Zone axis direction (normalized)
+    uniform vec3 u_basis1; // First basis vector spanning the slice plane
+    uniform vec3 u_basis2; // Second basis vector spanning the slice plane
     uniform int u_numReflections;
     uniform sampler2D u_reflectionData;
     uniform float u_dataSize;
@@ -157,10 +159,12 @@ const FRAGMENT_SHADER = `
     }
 
     void main() {
-        // Map texture coords to crystal coords based on slice axis
-        // u_sliceAxis: 0=x (slice shows yz), 1=y (slice shows xz), 2=z (slice shows xy)
-        float coord1 = v_texCoord.x;
-        float coord2 = v_texCoord.y;
+        // Map texture coords to fractional crystal coords using zone axis and basis vectors
+        // The slice plane is perpendicular to u_zoneAxis, at position u_slicePos along that axis
+        // u_basis1 and u_basis2 span the plane
+
+        // Position in fractional coordinates
+        vec3 pos = u_slicePos * u_zoneAxis + (v_texCoord.x - 0.5) * u_basis1 + (v_texCoord.y - 0.5) * u_basis2;
 
         float densityRe = 0.0;
         float densityIm = 0.0;
@@ -177,18 +181,9 @@ const FRAGMENT_SHADER = `
             float s2 = hklData.r * hklData.r + hklData.g * hklData.g + hklData.b * hklData.b;
             float damping = exp(-s2 / sigma2);
 
-            // Calculate phase based on slice axis
-            float phase;
-            if (u_sliceAxis == 0) {
-                // x-slice: fixed x=slicePos, show (y, z) plane
-                phase = -TWO_PI * (hklData.r * u_slicePos + hklData.g * coord1 + hklData.b * coord2);
-            } else if (u_sliceAxis == 1) {
-                // y-slice: fixed y=slicePos, show (x, z) plane
-                phase = -TWO_PI * (hklData.r * coord1 + hklData.g * u_slicePos + hklData.b * coord2);
-            } else {
-                // z-slice: fixed z=slicePos, show (x, y) plane
-                phase = -TWO_PI * (hklData.r * coord1 + hklData.g * coord2 + hklData.b * u_slicePos);
-            }
+            // Phase = -2π(h·x + k·y + l·z) where (x,y,z) = pos
+            float phase = -TWO_PI * (hklData.r * pos.x + hklData.g * pos.y + hklData.b * pos.z);
+
             // Complex multiplication: F * exp(-i*phase)
             float c = cos(phase);
             float s = sin(phase);
@@ -226,7 +221,9 @@ interface GLState {
     program: WebGLProgram;
     texture: WebGLTexture;
     slicePosLoc: WebGLUniformLocation | null;
-    sliceAxisLoc: WebGLUniformLocation | null;
+    zoneAxisLoc: WebGLUniformLocation | null;
+    basis1Loc: WebGLUniformLocation | null;
+    basis2Loc: WebGLUniformLocation | null;
     numReflectionsLoc: WebGLUniformLocation | null;
     dataSizeLoc: WebGLUniformLocation | null;
     sigmaLoc: WebGLUniformLocation | null;
@@ -234,13 +231,28 @@ interface GLState {
     normScaleLoc: WebGLUniformLocation | null;
 }
 
-// Element colors for atom visualization
+// Element colors for atom visualization - vibrant, distinguishable palette
 const ELEMENT_COLORS: Record<string, string> = {
-    H: '#FFFFFF', C: '#909090', N: '#3050F8', O: '#FF0D0D',
-    Na: '#AB5CF2', Cl: '#1FF01F', Si: '#F0C8A0', Fe: '#E06633',
-    Ca: '#3DFF00', Ti: '#BFC2C7', Cs: '#57178F', Ba: '#00C900',
-    K: '#8F40D4', I: '#940094', S: '#FFFF30', P: '#FF8000',
-    Mg: '#8AFF00', Al: '#BFA6A6', Zn: '#7D80B0', Cu: '#C88033',
+    H: '#e8e8e8',   // light gray (visible on both light/dark)
+    C: '#505050',   // dark gray
+    N: '#3b82f6',   // blue
+    O: '#ef4444',   // red
+    Na: '#a855f7',  // purple
+    Cl: '#22c55e',  // green
+    Si: '#f59e0b',  // amber
+    Fe: '#dc2626',  // darker red
+    Ca: '#84cc16',  // lime
+    Ti: '#64748b',  // slate
+    Cs: '#7c3aed',  // violet
+    Ba: '#16a34a',  // dark green
+    K: '#c084fc',   // light purple
+    I: '#be185d',   // pink
+    S: '#eab308',   // yellow
+    P: '#f97316',   // orange
+    Mg: '#4ade80',  // light green
+    Al: '#94a3b8',  // gray
+    Zn: '#6366f1',  // indigo
+    Cu: '#b45309',  // brown/copper
 };
 
 export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
@@ -249,8 +261,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     structure,
     wavelength,
     slicePosition,
-    sliceAxis = 'z',
-    resolution,
+    zoneAxis = [0, 0, 1],
     showContours,
     maxHKL,
     theme,
@@ -270,7 +281,66 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     const plotWidth = width - 2 * margin;
     const plotHeight = height - 2 * margin;
 
+    // Compute zone axis and basis vectors for slice plane
+    const [u, v, w] = zoneAxis;
+    const zoneAxisData = useMemo(() => {
+        // Normalize zone axis
+        const len = Math.sqrt(u * u + v * v + w * w);
+        if (len === 0) {
+            // Default to z-axis if invalid
+            return {
+                norm: [0, 0, 1] as [number, number, number],
+                basis1: [1, 0, 0] as [number, number, number],
+                basis2: [0, 1, 0] as [number, number, number],
+                label: '[001]',
+            };
+        }
+        const norm: [number, number, number] = [u / len, v / len, w / len];
+
+        // Find two orthogonal vectors perpendicular to zone axis using cross products
+        let b1x: number, b1y: number, b1z: number;
+        if (Math.abs(u) <= Math.abs(v) && Math.abs(u) <= Math.abs(w)) {
+            // u is smallest, use [1,0,0] × [u,v,w]
+            b1x = 0; b1y = -w; b1z = v;
+        } else if (Math.abs(v) <= Math.abs(w)) {
+            // v is smallest, use [0,1,0] × [u,v,w]
+            b1x = w; b1y = 0; b1z = -u;
+        } else {
+            // w is smallest, use [0,0,1] × [u,v,w]
+            b1x = -v; b1y = u; b1z = 0;
+        }
+
+        // Normalize b1
+        const b1Len = Math.sqrt(b1x * b1x + b1y * b1y + b1z * b1z);
+        if (b1Len > 0) {
+            b1x /= b1Len; b1y /= b1Len; b1z /= b1Len;
+        }
+
+        // Second basis vector: [u,v,w] × b1 (already perpendicular to both)
+        const b2x = norm[1] * b1z - norm[2] * b1y;
+        const b2y = norm[2] * b1x - norm[0] * b1z;
+        const b2z = norm[0] * b1y - norm[1] * b1x;
+
+        // Normalize b2
+        const b2Len = Math.sqrt(b2x * b2x + b2y * b2y + b2z * b2z);
+
+        // Scale basis vectors to span approximately one unit cell
+        // Use 1.5x to ensure we cover the cell with some margin for non-principal axes
+        const scale = 1.5;
+        const basis1: [number, number, number] = [b1x * scale, b1y * scale, b1z * scale];
+        const basis2: [number, number, number] = [b2x / b2Len * scale, b2y / b2Len * scale, b2z / b2Len * scale];
+
+        const label = `[${u}${v}${w}]`;
+
+        return { norm, basis1, basis2, label };
+    }, [u, v, w]);
+
     // Pre-compute structure factors - depends on wavelength via atomic form factors
+    // Dynamically limit reflections: keep strongest until 99.5% of total intensity captured
+    // Also cap at 2000 due to shader loop limit
+    const MAX_REFLECTIONS = 2000;
+    const INTENSITY_THRESHOLD = 0.995;
+
     const reflections = useMemo(() => {
         // Seeded random for consistent noise at same level
         const seededRandom = (seed: number) => {
@@ -279,7 +349,8 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
         };
 
         const data: ReflectionData[] = [];
-        let index = 0;
+        let totalIntensity = 0;
+
         for (let h = -maxHKL; h <= maxHKL; h++) {
             for (let k = -maxHKL; k <= maxHKL; k++) {
                 for (let l = -maxHKL; l <= maxHKL; l++) {
@@ -287,28 +358,51 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                     if (!isAllowedReflection(Math.abs(h), Math.abs(k), Math.abs(l), structure)) continue;
                     const F = calculateStructureFactorCustom(h, k, l, structure, wavelength, formFactors, bFactor);
                     if (F && (Math.abs(F.re) > 0.01 || Math.abs(F.im) > 0.01)) {
-                        let fRe = F.re;
-                        let fIm = F.im;
-
-                        // Apply noise to structure factor amplitude
-                        if (noise > 0) {
-                            const amplitude = Math.sqrt(fRe * fRe + fIm * fIm);
-                            const phase = Math.atan2(fIm, fRe);
-                            // Poisson-like noise: proportional to sqrt(|F|²) = |F|
-                            const noiseScale = amplitude * noise * 0.3;
-                            const randomVal = (seededRandom(index * 1000 + noise * 10000) - 0.5) * 2;
-                            const noisyAmplitude = Math.max(0, amplitude + randomVal * noiseScale);
-                            fRe = noisyAmplitude * Math.cos(phase);
-                            fIm = noisyAmplitude * Math.sin(phase);
-                        }
-
-                        data.push({ h, k, l, fRe, fIm });
-                        index++;
+                        const intensity = F.re * F.re + F.im * F.im;
+                        totalIntensity += intensity;
+                        data.push({ h, k, l, fRe: F.re, fIm: F.im });
                     }
                 }
             }
         }
-        return data;
+
+        // Sort by intensity (|F|²) descending to keep strongest reflections
+        data.sort((a, b) => {
+            const intA = a.fRe * a.fRe + a.fIm * a.fIm;
+            const intB = b.fRe * b.fRe + b.fIm * b.fIm;
+            return intB - intA;
+        });
+
+        // Keep reflections until we capture INTENSITY_THRESHOLD of total, capped at MAX_REFLECTIONS
+        let cumulative = 0;
+        let cutoff = data.length;
+        for (let i = 0; i < data.length; i++) {
+            const r = data[i];
+            cumulative += r.fRe * r.fRe + r.fIm * r.fIm;
+            if (cumulative >= totalIntensity * INTENSITY_THRESHOLD || i >= MAX_REFLECTIONS - 1) {
+                cutoff = i + 1;
+                break;
+            }
+        }
+
+        const limited = data.slice(0, cutoff);
+
+        // Apply noise after sorting/limiting (noise is seeded by index for reproducibility)
+        if (noise > 0) {
+            for (let index = 0; index < limited.length; index++) {
+                const r = limited[index];
+                const amplitude = Math.sqrt(r.fRe * r.fRe + r.fIm * r.fIm);
+                const phase = Math.atan2(r.fIm, r.fRe);
+                // Poisson-like noise: proportional to sqrt(|F|²) = |F|
+                const noiseScale = amplitude * noise * 0.3;
+                const randomVal = (seededRandom(index * 1000 + noise * 10000) - 0.5) * 2;
+                const noisyAmplitude = Math.max(0, amplitude + randomVal * noiseScale);
+                r.fRe = noisyAmplitude * Math.cos(phase);
+                r.fIm = noisyAmplitude * Math.sin(phase);
+            }
+        }
+
+        return limited;
     }, [structure, maxHKL, wavelength, formFactors, bFactor, noise]);
 
     // Initialize WebGL once
@@ -354,7 +448,9 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
             program,
             texture,
             slicePosLoc: gl.getUniformLocation(program, 'u_slicePos'),
-            sliceAxisLoc: gl.getUniformLocation(program, 'u_sliceAxis'),
+            zoneAxisLoc: gl.getUniformLocation(program, 'u_zoneAxis'),
+            basis1Loc: gl.getUniformLocation(program, 'u_basis1'),
+            basis2Loc: gl.getUniformLocation(program, 'u_basis2'),
             displayModeLoc: gl.getUniformLocation(program, 'u_displayMode'),
             numReflectionsLoc: gl.getUniformLocation(program, 'u_numReflections'),
             dataSizeLoc: gl.getUniformLocation(program, 'u_dataSize'),
@@ -408,7 +504,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
         }
 
         animFrameRef.current = requestAnimationFrame(() => {
-            const { gl, program, texture, slicePosLoc, sliceAxisLoc, displayModeLoc, numReflectionsLoc, dataSizeLoc, sigmaLoc, normScaleLoc } = state;
+            const { gl, program, texture, slicePosLoc, zoneAxisLoc, basis1Loc, basis2Loc, displayModeLoc, numReflectionsLoc, dataSizeLoc, sigmaLoc, normScaleLoc } = state;
 
             // Resize canvas if needed
             if (canvas.width !== plotWidth || canvas.height !== plotHeight) {
@@ -416,26 +512,28 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 canvas.height = plotHeight;
             }
 
-            // Convert axis to int: x=0, y=1, z=2
-            const axisInt = sliceAxis === 'x' ? 0 : sliceAxis === 'y' ? 1 : 2;
             // Convert display mode: magnitude=0, signed=1
             const displayModeInt = displayMode === 'magnitude' ? 0 : 1;
 
-            // Compute normalization scale from structure factors
-            // Max density occurs when all F add constructively: ρ_max ≈ Σ|F|
-            // Use this as the normalization scale for good contrast
-            let sumF = 0;
-            for (const r of reflections) {
-                sumF += Math.sqrt(r.fRe * r.fRe + r.fIm * r.fIm);
+            // Compute normalization based on average electron density
+            // Shader computes Σ F*exp(...) which equals V * ρ(r)
+            // At average density: V * ρ_avg = V * (ΣZ/V) = ΣZ = totalElectrons
+            let totalElectrons = 0;
+            for (const atom of structure.atoms) {
+                totalElectrons += atom.atomicNumber || 6; // default to C if not specified
             }
-            // Use ~80% of theoretical max for better contrast
-            const normScale = 1000.0; // Math.max(sumF * 0.8, 1);
+
+            // Scale so average density maps to ~0.3, giving room for peaks
+            // normScale is what maps to 1.0 in the shader
+            const normScale = Math.max(totalElectrons * 3.0, 1);
 
             // WebGL render
             gl.viewport(0, 0, plotWidth, plotHeight);
             gl.useProgram(program);
             gl.uniform1f(slicePosLoc, slicePosition);
-            gl.uniform1i(sliceAxisLoc, axisInt);
+            gl.uniform3f(zoneAxisLoc, zoneAxisData.norm[0], zoneAxisData.norm[1], zoneAxisData.norm[2]);
+            gl.uniform3f(basis1Loc, zoneAxisData.basis1[0], zoneAxisData.basis1[1], zoneAxisData.basis1[2]);
+            gl.uniform3f(basis2Loc, zoneAxisData.basis2[0], zoneAxisData.basis2[1], zoneAxisData.basis2[2]);
             gl.uniform1i(displayModeLoc, displayModeInt);
             gl.uniform1i(numReflectionsLoc, reflections.length);
             gl.uniform1f(dataSizeLoc, Math.max(4, reflections.length * 2));
@@ -470,67 +568,97 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
             ctx.lineWidth = 1;
             ctx.strokeRect(margin, margin, plotWidth, plotHeight);
 
-            // Atoms - show atoms near the slice plane
+            // Atoms - show atoms near the slice plane, tiled across the entire view
             if (showAtoms) {
-                for (const atom of structure.atoms) {
-                    const [fx, fy, fz] = atom.position;
-                    // Get the coordinate along slice axis and the two perpendicular coords
-                    let sliceCoord: number, coord1: number, coord2: number;
-                    if (sliceAxis === 'x') {
-                        sliceCoord = fx; coord1 = fy; coord2 = fz;
-                    } else if (sliceAxis === 'y') {
-                        sliceCoord = fy; coord1 = fx; coord2 = fz;
-                    } else {
-                        sliceCoord = fz; coord1 = fx; coord2 = fy;
-                    }
+                const { norm, basis1, basis2 } = zoneAxisData;
 
-                    // Distance from slice plane determines opacity
-                    const dist = Math.abs(sliceCoord - slicePosition);
-                    if (dist < 0.15) {
-                        const ax = margin + coord1 * plotWidth;
-                        const ay = margin + (1 - coord2) * plotHeight;
-                        const opacity = 1 - dist / 0.15;
-                        const radius = 12 - dist * 30; // Larger when closer to plane
+                // Tile across enough unit cells to cover the visible area
+                // The basis vectors have scale 1.5, so we need ~2 cells in each direction
+                const tileRange = 2;
 
-                        // Element color
-                        const elemColor = ELEMENT_COLORS[atom.element] || '#808080';
+                for (let ti = -tileRange; ti <= tileRange; ti++) {
+                    for (let tj = -tileRange; tj <= tileRange; tj++) {
+                        for (let tk = -tileRange; tk <= tileRange; tk++) {
+                            for (const atom of structure.atoms) {
+                                // Atom position with periodic offset
+                                const fx = atom.position[0] + ti;
+                                const fy = atom.position[1] + tj;
+                                const fz = atom.position[2] + tk;
 
-                        // Filled circle with element color
-                        ctx.beginPath();
-                        ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
-                        ctx.fillStyle = elemColor;
-                        ctx.globalAlpha = opacity * 0.85;
-                        ctx.fill();
+                                // Distance from slice plane = (pos - slicePos*norm) · norm
+                                const distFromPlane = (fx - slicePosition * norm[0]) * norm[0]
+                                                    + (fy - slicePosition * norm[1]) * norm[1]
+                                                    + (fz - slicePosition * norm[2]) * norm[2];
 
-                        // Border for contrast
-                        ctx.globalAlpha = opacity;
-                        ctx.strokeStyle = isDark ? '#fff' : '#000';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
+                                // Only show atoms close to the slice plane
+                                const dist = Math.abs(distFromPlane);
+                                if (dist >= 0.12) continue;
 
-                        // Element label
-                        ctx.globalAlpha = opacity;
-                        ctx.fillStyle = isDark ? '#fff' : '#000';
-                        ctx.font = 'bold 11px sans-serif';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(atom.element, ax, ay);
+                                // Project to 2D using basis vectors
+                                // Shader: pos = slicePos*zoneAxis + (texCoord.x-0.5)*basis1 + (texCoord.y-0.5)*basis2
+                                // To invert, we project the relative position onto each basis:
+                                // texCoord.x - 0.5 = dot(rel, basis1) / |basis1|²
+                                // texCoord.y - 0.5 = dot(rel, basis2) / |basis2|²
+                                // Since |basis| = 1.5, |basis|² = 2.25
+                                const relX = fx - slicePosition * norm[0];
+                                const relY = fy - slicePosition * norm[1];
+                                const relZ = fz - slicePosition * norm[2];
 
-                        ctx.globalAlpha = 1;
+                                const dot1 = relX * basis1[0] + relY * basis1[1] + relZ * basis1[2];
+                                const dot2 = relX * basis2[0] + relY * basis2[1] + relZ * basis2[2];
+                                // texCoord.x corresponds to basis1, texCoord.y corresponds to basis2
+                                const texCoordX = dot1 / 2.25 + 0.5;
+                                const texCoordY = dot2 / 2.25 + 0.5;
+
+                                // Skip if outside visible area
+                                if (texCoordX < -0.05 || texCoordX > 1.05 || texCoordY < -0.05 || texCoordY > 1.05) continue;
+
+                                // Map to screen coordinates
+                                // WebGL has y-up, Canvas 2D has y-down, so flip y
+                                const ax = margin + texCoordX * plotWidth;
+                                const ay = margin + (1 - texCoordY) * plotHeight;
+
+                                // Element color - use nicer saturated colors
+                                const elemColor = ELEMENT_COLORS[atom.element] || '#808080';
+
+                                // Opacity based on distance from plane
+                                const opacity = 1 - dist / 0.12;
+
+                                // Simple colored spot
+                                const radius = 5;
+                                ctx.beginPath();
+                                ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
+                                ctx.fillStyle = elemColor;
+                                ctx.globalAlpha = opacity * 0.9;
+                                ctx.fill();
+
+                                // Thin border for contrast
+                                ctx.globalAlpha = opacity * 0.7;
+                                ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
+                                ctx.lineWidth = 1;
+                                ctx.stroke();
+
+                                ctx.globalAlpha = 1;
+                            }
+                        }
                     }
                 }
             }
 
-            // Title
-            ctx.fillStyle = theme.text;
-            ctx.font = 'bold 11px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(`Electron Density (${sliceAxis} = ${slicePosition.toFixed(2)})`, 10, 15);
-
-            // Axis labels - depend on slice axis
-            const axisLabels = sliceAxis === 'x' ? ['y/b', 'z/c']
-                : sliceAxis === 'y' ? ['x/a', 'z/c']
-                    : ['x/a', 'y/b'];
+            // For non-principal axes, show generic labels; for principal axes, show standard labels
+            const isPrincipal = (zoneAxis[0] === 0 && zoneAxis[1] === 0) ||
+                               (zoneAxis[0] === 0 && zoneAxis[2] === 0) ||
+                               (zoneAxis[1] === 0 && zoneAxis[2] === 0);
+            let axisLabels: [string, string];
+            if (zoneAxis[0] === 0 && zoneAxis[1] === 0 && zoneAxis[2] !== 0) {
+                axisLabels = ['x/a', 'y/b']; // z-axis: xy plane
+            } else if (zoneAxis[0] === 0 && zoneAxis[2] === 0 && zoneAxis[1] !== 0) {
+                axisLabels = ['x/a', 'z/c']; // y-axis: xz plane
+            } else if (zoneAxis[1] === 0 && zoneAxis[2] === 0 && zoneAxis[0] !== 0) {
+                axisLabels = ['y/b', 'z/c']; // x-axis: yz plane
+            } else {
+                axisLabels = ['⊥₁', '⊥₂']; // Generic for non-principal axes
+            }
             ctx.font = '10px sans-serif';
             ctx.fillStyle = theme.textMuted;
             ctx.textAlign = 'center';
@@ -607,7 +735,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 cancelAnimationFrame(animFrameRef.current);
             }
         };
-    }, [slicePosition, sliceAxis, displayMode, showAtoms, width, height, plotWidth, plotHeight, structure, reflections, theme, maxHKL]);
+    }, [slicePosition, zoneAxis, zoneAxisData, displayMode, showAtoms, width, height, plotWidth, plotHeight, structure, reflections, theme, maxHKL]);
 
     return (
         <div

@@ -176,7 +176,9 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                         zIndex: 10,
                     }}
                 >
-                    {slicePlane.axis} = {slicePlane.position.toFixed(2)}
+                    {slicePlane.zoneAxis
+                        ? `[${slicePlane.zoneAxis.join('')}] = ${slicePlane.position.toFixed(2)}`
+                        : `${slicePlane.axis} = ${slicePlane.position.toFixed(2)}`}
                 </div>
             )}
 

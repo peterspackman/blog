@@ -35,7 +35,6 @@ export {
 
 export {
     NaCl,
-    CsCl,
     Diamond,
     Benzene,
     STRUCTURES,

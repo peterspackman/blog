@@ -390,6 +390,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                 }
 
                 if (!slicePlane || !structure) return;
+                if (slicePlane.showPlane === false) return;  // Explicitly disabled
 
                 const { a, b = a, c = a } = structure;
                 const shape: NGLShape = new NGL.Shape('sliceplane');
@@ -399,37 +400,81 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
 
                 let corners: [number, number, number][];
 
-                switch (slicePlane.axis) {
-                    case 'x': {
-                        const xPos = slicePlane.position * a;
-                        corners = [
-                            [xPos, 0, 0],
-                            [xPos, b, 0],
-                            [xPos, b, c],
-                            [xPos, 0, c],
-                        ];
-                        break;
+                // Check if using zone axis or legacy axis
+                if (slicePlane.zoneAxis) {
+                    const [u, v, w] = slicePlane.zoneAxis;
+                    const len = Math.sqrt(u * u + v * v + w * w);
+                    if (len === 0) return;
+
+                    // Normalize zone axis
+                    const nx = u / len, ny = v / len, nz = w / len;
+
+                    // Find two perpendicular basis vectors in the plane
+                    let b1x: number, b1y: number, b1z: number;
+                    if (Math.abs(u) <= Math.abs(v) && Math.abs(u) <= Math.abs(w)) {
+                        b1x = 0; b1y = -w; b1z = v;
+                    } else if (Math.abs(v) <= Math.abs(w)) {
+                        b1x = w; b1y = 0; b1z = -u;
+                    } else {
+                        b1x = -v; b1y = u; b1z = 0;
                     }
-                    case 'y': {
-                        const yPos = slicePlane.position * b;
-                        corners = [
-                            [0, yPos, 0],
-                            [a, yPos, 0],
-                            [a, yPos, c],
-                            [0, yPos, c],
-                        ];
-                        break;
-                    }
-                    case 'z':
-                    default: {
-                        const zPos = slicePlane.position * c;
-                        corners = [
-                            [0, 0, zPos],
-                            [a, 0, zPos],
-                            [a, b, zPos],
-                            [0, b, zPos],
-                        ];
-                        break;
+                    const b1Len = Math.sqrt(b1x * b1x + b1y * b1y + b1z * b1z);
+                    b1x /= b1Len; b1y /= b1Len; b1z /= b1Len;
+
+                    // Second basis: n × b1
+                    const b2x = ny * b1z - nz * b1y;
+                    const b2y = nz * b1x - nx * b1z;
+                    const b2z = nx * b1y - ny * b1x;
+
+                    // Center of plane in Cartesian coordinates
+                    // Position along zone axis in fractional coords, scaled by lattice params
+                    const centerX = slicePlane.position * nx * a;
+                    const centerY = slicePlane.position * ny * b;
+                    const centerZ = slicePlane.position * nz * c;
+
+                    // Scale basis vectors to roughly cover the unit cell
+                    const scale = Math.max(a, b, c) * 0.75;
+
+                    corners = [
+                        [centerX - b1x * scale - b2x * scale, centerY - b1y * scale - b2y * scale, centerZ - b1z * scale - b2z * scale],
+                        [centerX + b1x * scale - b2x * scale, centerY + b1y * scale - b2y * scale, centerZ + b1z * scale - b2z * scale],
+                        [centerX + b1x * scale + b2x * scale, centerY + b1y * scale + b2y * scale, centerZ + b1z * scale + b2z * scale],
+                        [centerX - b1x * scale + b2x * scale, centerY - b1y * scale + b2y * scale, centerZ - b1z * scale + b2z * scale],
+                    ];
+                } else {
+                    // Legacy axis-based slice plane
+                    switch (slicePlane.axis) {
+                        case 'x': {
+                            const xPos = slicePlane.position * a;
+                            corners = [
+                                [xPos, 0, 0],
+                                [xPos, b, 0],
+                                [xPos, b, c],
+                                [xPos, 0, c],
+                            ];
+                            break;
+                        }
+                        case 'y': {
+                            const yPos = slicePlane.position * b;
+                            corners = [
+                                [0, yPos, 0],
+                                [a, yPos, 0],
+                                [a, yPos, c],
+                                [0, yPos, c],
+                            ];
+                            break;
+                        }
+                        case 'z':
+                        default: {
+                            const zPos = slicePlane.position * c;
+                            corners = [
+                                [0, 0, zPos],
+                                [a, 0, zPos],
+                                [a, b, zPos],
+                                [0, b, zPos],
+                            ];
+                            break;
+                        }
                     }
                 }
 

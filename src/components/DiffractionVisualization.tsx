@@ -27,14 +27,6 @@ const CROMER_MANN_COEFFS: Record<string, number[]> = {
     O: [3.0485, 13.2771, 2.2868, 5.7011, 1.5463, 0.3239, 0.867, 32.9089, 0.2508],
     Na: [4.7626, 3.285, 3.1736, 8.8422, 1.2674, 0.3136, 1.1128, 129.424, 0.676],
     Cl: [11.4604, 0.0104, 7.1964, 1.1662, 6.2556, 18.5194, 1.6455, 47.7784, -9.5574],
-    Si: [6.2915, 2.4386, 3.0353, 32.3337, 1.9891, 0.6785, 1.541, 81.6937, 1.1407],
-    Fe: [11.7695, 4.7611, 7.3573, 0.3072, 3.5222, 15.3535, 2.3045, 76.8805, 1.0369],
-    Ca: [8.6266, 10.4421, 7.3873, 0.6599, 1.5899, 85.7484, 1.0211, 178.437, 1.3751],
-    Ti: [9.7595, 7.8508, 7.3558, 0.5, 1.6991, 35.6338, 1.9021, 116.105, 1.2807],
-    Cs: [20.3892, 3.569, 19.1062, 0.3107, 10.662, 24.3879, 1.4953, 213.904, 3.3352],
-    Ba: [20.1807, 3.21, 19.1136, 0.2855, 10.9054, 20.0558, 0.7763, 51.746, 3.029],
-    K: [8.2186, 12.7949, 7.4398, 0.7748, 1.0519, 213.187, 0.8659, 41.6841, 1.4228],
-    I: [20.1472, 4.347, 18.9949, 0.3814, 7.5138, 27.766, 2.2735, 66.8776, 4.0712],
 };
 
 function generateFormFactorPoints(element: string, numPoints = 8): ControlPoint[] {
@@ -106,17 +98,16 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     // State
     const [structureId, setStructureId] = useState('NaCl');
     const [wavelength, setWavelength] = useState(CU_K_ALPHA);
-    const [twoThetaMax, setTwoThetaMax] = useState(140);
+    const [twoThetaMax, setTwoThetaMax] = useState(120);
     const [peakWidth, setPeakWidth] = useState(0.8);
-    const [showPeakLabels, setShowPeakLabels] = useState(true);
-    const [reciprocalPlane, setReciprocalPlane] = useState<'hk0' | 'h0l' | '0kl'>('hk0');
+    const [showPeakMarkers, setShowPeakMarkers] = useState(true);
+    const [zoneAxis, setZoneAxis] = useState<[number, number, number]>([0, 0, 1]);
     const [maxIndex, setMaxIndex] = useState(8);
     const [showAbsences, setShowAbsences] = useState(true);
     const [oscillationRange, setOscillationRange] = useState(5);
     const [detectorDistance, setDetectorDistance] = useState(100);
+    const [showIndexingCircles, setShowIndexingCircles] = useState(false);
     const [slicePosition, setSlicePosition] = useState(0);
-    const [sliceAxis, setSliceAxis] = useState<'x' | 'y' | 'z'>('z');
-    const [densityResolution, setDensityResolution] = useState(64);
     const [showContours, setShowContours] = useState(true);
     const [noise, setNoise] = useState(0);
     const [bFactor, setBFactor] = useState(1.5);
@@ -124,7 +115,6 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     const [showAtomsOnSlice, setShowAtomsOnSlice] = useState(true);
     const [showBonds, setShowBonds] = useState(true);
     const [showLabels, setShowLabels] = useState(true);
-    const [supercell, setSupercell] = useState<[number, number, number]>([1, 1, 1]);
     const [selectedReflection, setSelectedReflection] = useState<[number, number, number] | null>(null);
     const [formFactors, setFormFactors] = useState<Record<string, ControlPoint[]>>({});
 
@@ -201,8 +191,16 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     const densityViewSize = Math.min(realSpaceSize.width - 16, realSpaceSize.height - 16);
 
     // Calculate reciprocal view sizes
-    const reciprocalViewWidth = reciprocalSize.width - 16;
-    const reciprocalViewHeight = reciprocalSize.height - 16;
+    // PXRD uses 4:3 aspect ratio, reciprocal lattice uses square
+    // For lattice/detector views, use square (min of width/height)
+    // For PXRD, use full width with 4:3 aspect ratio
+    const reciprocalSquareSize = Math.min(reciprocalSize.width - 16, reciprocalSize.height - 16);
+    const reciprocalViewWidth = reciprocalView === 'pxrd'
+        ? reciprocalSize.width - 16
+        : reciprocalSquareSize;
+    const reciprocalViewHeight = reciprocalView === 'pxrd'
+        ? Math.min(reciprocalSize.height - 16, Math.round((reciprocalSize.width - 16) * 0.75))
+        : reciprocalSquareSize;
 
     return (
         <div className={`${styles.container} ${className || ''}`}>
@@ -213,7 +211,14 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                 {/* LEFT: Real Space Panel (tabbed: 3D / Density) */}
                 <div className={styles.realSpacePanel}>
                     <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>Real Space</h3>
+                        <h3 className={styles.panelTitle}>
+                            Real Space
+                            {realSpaceView === 'density' && (
+                                <span style={{ fontWeight: 400, fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7 }}>
+                                    [{zoneAxis.join('')}] d={slicePosition.toFixed(2)}
+                                </span>
+                            )}
+                        </h3>
                         <div className={styles.viewTabs}>
                             <button
                                 className={`${styles.viewTab} ${realSpaceView === '3d' ? styles.viewTabActive : ''}`}
@@ -240,7 +245,11 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                         representation={showBonds ? 'ball+stick' : 'spacefill'}
                                         showUnitCell={true}
                                         showAxes={showLabels}
-                                        supercell={supercell}
+                                        slicePlane={{
+                                            zoneAxis: zoneAxis,
+                                            position: slicePosition,
+                                            showPlane: true,
+                                        }}
                                         autoRotate={true}
                                         theme={theme}
                                     />
@@ -253,8 +262,7 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                         structure={structure}
                                         wavelength={wavelength}
                                         slicePosition={slicePosition}
-                                        sliceAxis={sliceAxis}
-                                        resolution={densityResolution}
+                                        zoneAxis={zoneAxis}
                                         showContours={showContours}
                                         maxHKL={maxIndex}
                                         theme={theme}
@@ -268,10 +276,10 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                             )}
                         </div>
                     </div>
-                    {/* Slice controls - only show when density tab is active */}
+                    {/* Slice controls - outside panelContent so always visible */}
                     {realSpaceView === 'density' && (
                         <div className={styles.sliceControls}>
-                            <span className={styles.sliceLabel}>{sliceAxis}-slice:</span>
+                            <span className={styles.sliceLabel}>[{zoneAxis.join('')}] slice:</span>
                             <input
                                 type="range"
                                 className={styles.sliceSlider}
@@ -334,7 +342,14 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                 {/* RIGHT: Reciprocal Space Panel (tabbed) */}
                 <div className={styles.reciprocalPanel}>
                     <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>Reciprocal Space</h3>
+                        <h3 className={styles.panelTitle}>
+                            Reciprocal Space
+                            {reciprocalView !== 'pxrd' && (
+                                <span style={{ fontWeight: 400, fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7 }}>
+                                    [{zoneAxis.join('')}]
+                                </span>
+                            )}
+                        </h3>
                         <div className={styles.viewTabs}>
                             <button
                                 className={`${styles.viewTab} ${reciprocalView === 'lattice' ? styles.viewTabActive : ''}`}
@@ -357,39 +372,43 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                         </div>
                     </div>
                     <div className={styles.panelContent} ref={reciprocalContentRef}>
-                        {reciprocalView === 'pxrd' ? (
-                            <PowderPattern
-                                width={reciprocalViewWidth}
-                                height={reciprocalViewHeight}
-                                reflections={reflections}
-                                wavelength={wavelength}
-                                peakWidth={peakWidth}
-                                showLabels={showPeakLabels}
-                                twoThetaRange={[5, twoThetaMax]}
-                                selectedReflection={selectedReflection}
-                                onSelectReflection={setSelectedReflection}
-                                theme={theme}
-                            />
-                        ) : (
-                            <ReciprocalLattice
-                                width={reciprocalViewWidth}
-                                height={reciprocalViewHeight}
-                                structure={structure}
-                                reflections={reflections}
-                                plane={reciprocalPlane}
-                                maxIndex={maxIndex}
-                                showAbsences={showAbsences}
-                                selectedReflection={selectedReflection}
-                                onSelectReflection={setSelectedReflection}
-                                theme={theme}
-                                viewMode={reciprocalView === 'detector' ? 'detector' : 'reciprocal'}
-                                wavelength={wavelength}
-                                oscillationRange={oscillationRange}
-                                detectorDistance={detectorDistance}
-                                twoThetaMax={twoThetaMax}
-                                bFactor={bFactor}
-                            />
-                        )}
+                        <div className={styles.viewerContainer}>
+                            {reciprocalView === 'pxrd' ? (
+                                <PowderPattern
+                                    width={reciprocalViewWidth}
+                                    height={reciprocalViewHeight}
+                                    reflections={reflections}
+                                    wavelength={wavelength}
+                                    peakWidth={peakWidth}
+                                    twoThetaRange={[5, twoThetaMax]}
+                                    selectedReflection={selectedReflection}
+                                    onSelectReflection={setSelectedReflection}
+                                    showMarkers={showPeakMarkers}
+                                    theme={theme}
+                                />
+                            ) : (
+                                <ReciprocalLattice
+                                    width={reciprocalViewWidth}
+                                    height={reciprocalViewHeight}
+                                    structure={structure}
+                                    reflections={reflections}
+                                    zoneAxis={zoneAxis}
+                                    maxIndex={maxIndex}
+                                    showAbsences={showAbsences}
+                                    selectedReflection={selectedReflection}
+                                    onSelectReflection={setSelectedReflection}
+                                    theme={theme}
+                                    viewMode={reciprocalView === 'detector' ? 'detector' : 'reciprocal'}
+                                    wavelength={wavelength}
+                                    oscillationRange={oscillationRange}
+                                    detectorDistance={detectorDistance}
+                                    twoThetaMax={twoThetaMax}
+                                    bFactor={bFactor}
+                                    showIndexingCircles={showIndexingCircles}
+                                    onShowIndexingCirclesChange={setShowIndexingCircles}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -405,10 +424,10 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                         onTwoThetaMaxChange={setTwoThetaMax}
                         peakWidth={peakWidth}
                         onPeakWidthChange={setPeakWidth}
-                        showPeakLabels={showPeakLabels}
-                        onShowPeakLabelsChange={setShowPeakLabels}
-                        reciprocalPlane={reciprocalPlane}
-                        onReciprocalPlaneChange={setReciprocalPlane}
+                        showPeakMarkers={showPeakMarkers}
+                        onShowPeakMarkersChange={setShowPeakMarkers}
+                        zoneAxis={zoneAxis}
+                        onZoneAxisChange={setZoneAxis}
                         maxIndex={maxIndex}
                         onMaxIndexChange={setMaxIndex}
                         showAbsences={showAbsences}
@@ -418,12 +437,8 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                         onOscillationRangeChange={setOscillationRange}
                         detectorDistance={detectorDistance}
                         onDetectorDistanceChange={setDetectorDistance}
-                        slicePosition={slicePosition}
-                        onSlicePositionChange={setSlicePosition}
-                        sliceAxis={sliceAxis}
-                        onSliceAxisChange={setSliceAxis}
-                        densityResolution={densityResolution}
-                        onDensityResolutionChange={setDensityResolution}
+                        showIndexingCircles={showIndexingCircles}
+                        onShowIndexingCirclesChange={setShowIndexingCircles}
                         showContours={showContours}
                         onShowContoursChange={setShowContours}
                         noise={noise}
@@ -434,8 +449,6 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                         onShowBondsChange={setShowBonds}
                         showLabels={showLabels}
                         onShowLabelsChange={setShowLabels}
-                        supercell={supercell}
-                        onSupercellChange={setSupercell}
                         formFactors={formFactors}
                         onFormFactorsChange={setFormFactors}
                         theme={theme}
@@ -487,9 +500,9 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                 </p>
 
                 <div className={styles.explanationNote}>
-                    <strong>Try it:</strong> Compare NaCl (FCC) with CsCl (simple cubic) to
-                    see different systematic absence patterns. Use the Density tab to see
-                    electron density at different z-planes through the unit cell.
+                    <strong>Try it:</strong> Compare NaCl (FCC) with Diamond to see
+                    different systematic absence patterns. Use the Density tab to explore
+                    electron density at different planes through the unit cell.
                 </div>
             </div>
         </div>

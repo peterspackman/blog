@@ -70,23 +70,6 @@ export const NaCl: CrystalStructure = {
 };
 
 /**
- * CsCl (Cesium chloride structure)
- * Simple cubic with Cs at (0,0,0) and Cl at (0.5,0.5,0.5)
- * Space group: Pm-3m (221)
- * a = 4.11 Å
- */
-export const CsCl: CrystalStructure = {
-    name: 'Cesium Chloride (CsCl)',
-    spaceGroup: 'Pm-3m',
-    latticeType: 'cubic',
-    a: 4.11,
-    atoms: [
-        { element: 'Cs', position: [0, 0, 0], atomicNumber: 55 },
-        { element: 'Cl', position: [0.5, 0.5, 0.5], atomicNumber: 17 },
-    ],
-};
-
-/**
  * Diamond (Carbon)
  * FCC with basis at (0,0,0) and (0.25,0.25,0.25)
  * Space group: Fd-3m (227)
@@ -180,7 +163,6 @@ export const Benzene: CrystalStructure = {
 
 export const STRUCTURES: Record<string, CrystalStructure> = {
     NaCl,
-    CsCl,
     Diamond,
     Benzene,
 };

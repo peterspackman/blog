@@ -498,6 +498,64 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
   // Count errors for badge
   const errorCount = output.filter(line => line.isError).length;
 
+  // Extract progress from CPU/CPULeft columns in thermo output
+  const progress = useMemo(() => {
+    let headerFound = false;
+    let cpuIdx = -1;
+    let cpuLeftIdx = -1;
+    let lastCpu = -1;
+    let lastCpuLeft = -1;
+
+    for (const line of output) {
+      if (line.isError) continue;
+      const text = line.text.trim();
+      const words = text.split(/\s+/);
+
+      if (words.length >= 2 && words.some(w => w === 'Step')) {
+        headerFound = true;
+        cpuIdx = words.findIndex(w => w === 'CPU');
+        cpuLeftIdx = words.findIndex(w => w === 'CPULeft');
+        continue;
+      }
+
+      // Stop at "Loop time of ..." — simulation finished, no progress to show
+      if (headerFound && text.startsWith('Loop')) {
+        headerFound = false;
+        lastCpu = -1;
+        lastCpuLeft = -1;
+        continue;
+      }
+
+      if (headerFound && cpuIdx >= 0 && cpuLeftIdx >= 0) {
+        if (words.length > Math.max(cpuIdx, cpuLeftIdx) && /^-?\d+$/.test(words[0])) {
+          const cpu = parseFloat(words[cpuIdx]);
+          const cpuLeft = parseFloat(words[cpuLeftIdx]);
+          if (!isNaN(cpu) && !isNaN(cpuLeft)) {
+            lastCpu = cpu;
+            lastCpuLeft = cpuLeft;
+          }
+        }
+      }
+    }
+
+    if (lastCpu < 0 || lastCpuLeft < 0) return null;
+    const total = lastCpu + lastCpuLeft;
+    if (total <= 0) return null;
+    return { fraction: lastCpu / total, remainingSeconds: lastCpuLeft };
+  }, [output]);
+
+  const formatTime = (seconds: number): string => {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.round(seconds % 60);
+      return `${m}m ${s}s`;
+    }
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
   return (
     <div className={styles.container}>
       {/* Tab bar */}
@@ -586,6 +644,17 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
           />
         )}
       </div>
+
+      {/* Progress bar - visible across all tabs while running */}
+      {isRunning && progress && (
+        <div className={styles.progressBar}>
+          <div className={styles.progressFill} style={{ width: `${Math.min(progress.fraction * 100, 100)}%` }} />
+          <span className={styles.progressLabel}>
+            {Math.round(progress.fraction * 100)}%
+            {progress.remainingSeconds > 0 && ` \u2014 ~${formatTime(progress.remainingSeconds)} remaining`}
+          </span>
+        </div>
+      )}
     </div>
   );
 };

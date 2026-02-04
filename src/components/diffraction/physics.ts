@@ -23,11 +23,68 @@ export interface Atom {
 export interface CrystalStructure {
     name: string;
     spaceGroup: string;
-    latticeType: 'cubic' | 'tetragonal' | 'orthorhombic' | 'fcc' | 'bcc';
+    latticeType: 'cubic' | 'tetragonal' | 'orthorhombic' | 'hexagonal' | 'monoclinic' | 'triclinic' | 'fcc' | 'bcc';
     a: number; // Lattice parameter in Å
     b?: number;
     c?: number;
+    alpha?: number; // Angle between b and c in degrees (default 90)
+    beta?: number;  // Angle between a and c in degrees (default 90)
+    gamma?: number; // Angle between a and b in degrees (default 90)
     atoms: Atom[]; // Atoms in the unit cell (all positions, not just asymmetric unit)
+}
+
+/**
+ * Reciprocal lattice parameters
+ */
+export interface ReciprocalLattice {
+    astar: number; // |a*| in Å⁻¹
+    bstar: number; // |b*| in Å⁻¹
+    cstar: number; // |c*| in Å⁻¹
+    alphaStar: number; // Angle between b* and c* in degrees
+    betaStar: number;  // Angle between a* and c* in degrees
+    gammaStar: number; // Angle between a* and b* in degrees
+    volume: number; // Unit cell volume in Å³
+}
+
+/**
+ * Calculate reciprocal lattice parameters from real space lattice
+ */
+export function calculateReciprocalLattice(structure: CrystalStructure): ReciprocalLattice {
+    const a = structure.a;
+    const b = structure.b ?? structure.a;
+    const c = structure.c ?? structure.a;
+    const alpha = (structure.alpha ?? 90) * Math.PI / 180;
+    const beta = (structure.beta ?? 90) * Math.PI / 180;
+    const gamma = (structure.gamma ?? 90) * Math.PI / 180;
+
+    const cosAlpha = Math.cos(alpha);
+    const cosBeta = Math.cos(beta);
+    const cosGamma = Math.cos(gamma);
+    const sinAlpha = Math.sin(alpha);
+    const sinBeta = Math.sin(beta);
+    const sinGamma = Math.sin(gamma);
+
+    // Unit cell volume
+    const volume = a * b * c * Math.sqrt(
+        1 - cosAlpha * cosAlpha - cosBeta * cosBeta - cosGamma * cosGamma +
+        2 * cosAlpha * cosBeta * cosGamma
+    );
+
+    // Reciprocal lattice parameters
+    const astar = b * c * sinAlpha / volume;
+    const bstar = a * c * sinBeta / volume;
+    const cstar = a * b * sinGamma / volume;
+
+    // Reciprocal angles
+    const cosAlphaStar = (cosBeta * cosGamma - cosAlpha) / (sinBeta * sinGamma);
+    const cosBetaStar = (cosAlpha * cosGamma - cosBeta) / (sinAlpha * sinGamma);
+    const cosGammaStar = (cosAlpha * cosBeta - cosGamma) / (sinAlpha * sinBeta);
+
+    const alphaStar = Math.acos(Math.max(-1, Math.min(1, cosAlphaStar))) * 180 / Math.PI;
+    const betaStar = Math.acos(Math.max(-1, Math.min(1, cosBetaStar))) * 180 / Math.PI;
+    const gammaStar = Math.acos(Math.max(-1, Math.min(1, cosGammaStar))) * 180 / Math.PI;
+
+    return { astar, bstar, cstar, alphaStar, betaStar, gammaStar, volume };
 }
 
 export interface Complex {
@@ -65,6 +122,7 @@ export const MO_K_ALPHA = 0.7107; // Mo Kα wavelength in Å
 // f(s) = Σᵢ aᵢ·exp(-bᵢ·s²) + c, where s = sin(θ)/λ
 // Format: [a1, b1, a2, b2, a3, b3, a4, b4, c]
 const FORM_FACTOR_COEFFS: Record<string, number[]> = {
+    H: [0.489918, 20.6593, 0.262003, 7.74039, 0.196767, 49.5519, 0.049879, 2.20159, 0.001305],
     Na: [
         4.7626, 3.285, 3.1736, 8.8422, 1.2674, 0.3136, 1.1128, 129.424, 0.676,
     ],
@@ -73,6 +131,7 @@ const FORM_FACTOR_COEFFS: Record<string, number[]> = {
         -9.5574,
     ],
     C: [2.31, 20.8439, 1.02, 10.2075, 1.5886, 0.5687, 0.865, 51.6512, 0.2156],
+    N: [12.2126, 0.0057, 3.1322, 9.8933, 2.0125, 28.9975, 1.1663, 0.5826, -11.529],
     O: [3.0485, 13.2771, 2.2868, 5.7011, 1.5463, 0.3239, 0.867, 32.9089, 0.2508],
     Fe: [
         11.7695, 4.7611, 7.3573, 0.3072, 3.5222, 15.3535, 2.3045, 76.8805,
@@ -177,6 +236,13 @@ export function calculateDSpacing(
             return 1 / Math.sqrt(
                 (h * h) / (a * a) + (k * k) / (bVal * bVal) + (l * l) / (cVal2 * cVal2)
             );
+
+        case 'hexagonal':
+            // For hexagonal: 1/d² = (4/3)(h² + hk + k²)/a² + l²/c²
+            const cHex = c || a;
+            const hexTerm = (4 / 3) * (h * h + h * k + k * k) / (a * a);
+            const lTerm = (l * l) / (cHex * cHex);
+            return 1 / Math.sqrt(hexTerm + lTerm);
 
         default:
             return a / Math.sqrt(hkl2);
@@ -382,46 +448,80 @@ export function calculatePowderPattern(params: DiffractionParams): Reflection[] 
     const reflections: Reflection[] = [];
     const seen = new Set<string>();
 
-    // Generate all unique (hkl) combinations
-    for (let h = 0; h <= maxHKL; h++) {
-        for (let k = 0; k <= h; k++) {
-            for (let l = 0; l <= k; l++) {
-                // Skip (0,0,0)
-                if (h === 0 && k === 0 && l === 0) continue;
+    const isCubic = structure.latticeType === 'cubic' ||
+        structure.latticeType === 'fcc' ||
+        structure.latticeType === 'bcc';
 
-                // Check systematic absences
-                if (!isAllowedReflection(h, k, l, structure)) continue;
+    // For cubic systems, h >= k >= l is sufficient due to symmetry
+    // For non-cubic systems, we need all independent (h,k,l) combinations
+    if (isCubic) {
+        // Cubic: iterate h >= k >= l (d-spacing is symmetric in h,k,l)
+        for (let h = 0; h <= maxHKL; h++) {
+            for (let k = 0; k <= h; k++) {
+                for (let l = 0; l <= k; l++) {
+                    if (h === 0 && k === 0 && l === 0) continue;
+                    if (!isAllowedReflection(h, k, l, structure)) continue;
 
-                const d = calculateDSpacing(h, k, l, structure);
-                const twoTheta = calculateTwoTheta(d, wavelength);
+                    const d = calculateDSpacing(h, k, l, structure);
+                    const twoTheta = calculateTwoTheta(d, wavelength);
+                    if (isNaN(twoTheta) || twoTheta > twoThetaMax) continue;
 
-                // Skip if beyond range
-                if (isNaN(twoTheta) || twoTheta > twoThetaMax) continue;
+                    const key = d.toFixed(6);
+                    if (seen.has(key)) continue;
+                    seen.add(key);
 
-                // Use d-spacing as key to merge equivalent reflections
-                const key = d.toFixed(6);
-                if (seen.has(key)) continue;
-                seen.add(key);
+                    const F = calculateStructureFactor(h, k, l, structure, wavelength, bFactor);
+                    const intensity = complexMagnitudeSquared(F);
+                    if (intensity < 0.001) continue;
 
-                // Calculate structure factor (with B-factor if provided)
-                const F = calculateStructureFactor(h, k, l, structure, wavelength, bFactor);
-                const intensity = complexMagnitudeSquared(F);
+                    const multiplicity = calculateMultiplicity(h, k, l);
 
-                // Skip very weak reflections
-                if (intensity < 0.001) continue;
+                    reflections.push({
+                        h, k, l,
+                        dSpacing: d,
+                        twoTheta,
+                        intensity: intensity * multiplicity,
+                        structureFactor: F,
+                        multiplicity,
+                    });
+                }
+            }
+        }
+    } else {
+        // Non-cubic: iterate all h, k, l >= 0 (d-spacing differs for permutations)
+        for (let h = 0; h <= maxHKL; h++) {
+            for (let k = 0; k <= maxHKL; k++) {
+                for (let l = 0; l <= maxHKL; l++) {
+                    if (h === 0 && k === 0 && l === 0) continue;
+                    if (!isAllowedReflection(h, k, l, structure)) continue;
 
-                const multiplicity = calculateMultiplicity(h, k, l);
+                    const d = calculateDSpacing(h, k, l, structure);
+                    const twoTheta = calculateTwoTheta(d, wavelength);
+                    if (isNaN(twoTheta) || twoTheta > twoThetaMax) continue;
 
-                reflections.push({
-                    h,
-                    k,
-                    l,
-                    dSpacing: d,
-                    twoTheta,
-                    intensity: intensity * multiplicity,
-                    structureFactor: F,
-                    multiplicity,
-                });
+                    // Use d-spacing as key to merge truly equivalent reflections
+                    const key = d.toFixed(5);
+                    if (seen.has(key)) continue;
+                    seen.add(key);
+
+                    const F = calculateStructureFactor(h, k, l, structure, wavelength, bFactor);
+                    const intensity = complexMagnitudeSquared(F);
+                    if (intensity < 0.001) continue;
+
+                    // For non-cubic, multiplicity is simpler (just ±h, ±k, ±l variants)
+                    // Count non-zero indices for sign permutations
+                    const nonZero = (h !== 0 ? 1 : 0) + (k !== 0 ? 1 : 0) + (l !== 0 ? 1 : 0);
+                    const multiplicity = Math.pow(2, nonZero);
+
+                    reflections.push({
+                        h, k, l,
+                        dSpacing: d,
+                        twoTheta,
+                        intensity: intensity * multiplicity,
+                        structureFactor: F,
+                        multiplicity,
+                    });
+                }
             }
         }
     }
@@ -437,7 +537,9 @@ export function calculatePowderPattern(params: DiffractionParams): Reflection[] 
         }
     }
 
-    return reflections;
+    // Filter out very weak reflections (< 0.5% of max) to reduce clutter
+    // This is especially important for molecular crystals with many overlapping peaks
+    return reflections.filter(r => r.intensity >= 0.5);
 }
 
 // ============================================================================

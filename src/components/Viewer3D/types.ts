@@ -21,9 +21,11 @@ export interface VolumeGrid {
 }
 
 export interface SlicePlaneConfig {
-    axis: 'x' | 'y' | 'z';
-    position: number;  // 0-1 fractional coordinate
+    axis?: 'x' | 'y' | 'z';  // Simple axis (deprecated, use zoneAxis)
+    zoneAxis?: [number, number, number];  // Zone axis [uvw] - plane is perpendicular to this
+    position: number;  // 0-1 fractional coordinate along zone axis
     showTexture?: boolean;
+    showPlane?: boolean;  // Show a semi-transparent plane outline
     colorScale?: 'viridis' | 'thermal' | 'bluered';
 }
 

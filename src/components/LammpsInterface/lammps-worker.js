@@ -13,9 +13,79 @@ let isRunning = false;
 const SIMULATION_DIR = '/sim';
 const DEFAULT_INPUT_FILE = 'input.lmp';
 
+// Live trajectory piggyback state
+let stdoutLineCount = 0;
+const TRAJECTORY_CHECK_INTERVAL = 50; // check every N stdout lines
+const trajectoryLastSize = {}; // filename -> last sent byte size
+const trajectoryPatterns = [
+    /trajectory\.xyz$/i,
+    /\.xyz$/i,
+    /\.dcd$/i,
+    /\.lammpstrj$/i,
+];
+
+/**
+ * Check for trajectory file updates during simulation (called from stdout handler).
+ * Reads trajectory files from the VFS and posts updates to the main thread
+ * when file sizes have grown since the last check.
+ */
+function checkTrajectoryFiles() {
+    if (!lammpsModule) return;
+    try {
+        const files = lammpsModule.FS.readdir(SIMULATION_DIR)
+            .filter(name => name !== '.' && name !== '..');
+
+        const trajFiles = [];
+
+        for (const filename of files) {
+            const isTrajectory = trajectoryPatterns.some(p => p.test(filename));
+            if (!isTrajectory) continue;
+
+            const fullPath = getFullPath(filename);
+            try {
+                const stat = lammpsModule.FS.stat(fullPath);
+                const prevSize = trajectoryLastSize[filename] || 0;
+
+                let format = 'xyz';
+                if (/\.dcd$/i.test(filename)) format = 'dcd';
+                else if (/\.lammpstrj$/i.test(filename)) format = 'lammpstrj';
+
+                trajFiles.push({ filename, size: stat.size, path: fullPath, format });
+
+                if (stat.size > prevSize) {
+                    // File has grown — read and send content
+                    const content = lammpsModule.FS.readFile(fullPath);
+                    trajectoryLastSize[filename] = stat.size;
+                    postMessage({
+                        type: 'trajectory-content',
+                        data: { filename, content, size: content.length },
+                    });
+                }
+            } catch (_) {
+                // Skip files that can't be read during execution
+            }
+        }
+
+        if (trajFiles.length > 0) {
+            postMessage({ type: 'trajectory-files', data: trajFiles });
+        }
+    } catch (_) {
+        // VFS access during execution can fail — silently ignore
+    }
+}
+
 // Set up Module configuration before importing the script
 self.Module = {
-    print: (text) => postMessage({ type: 'stdout', data: text }),
+    print: (text) => {
+        postMessage({ type: 'stdout', data: text });
+        // Piggyback trajectory reads on stdout during simulation
+        if (isRunning) {
+            stdoutLineCount++;
+            if (stdoutLineCount % TRAJECTORY_CHECK_INTERVAL === 0) {
+                checkTrajectoryFiles();
+            }
+        }
+    },
     printErr: (text) => postMessage({ type: 'stderr', data: text }),
     locateFile: (path, scriptDirectory) => {
         // Ensure WASM file is loaded from the correct location
@@ -273,7 +343,13 @@ async function runLAMMPS(runData, id) {
     
     try {
         isRunning = true;
-        
+
+        // Reset live trajectory state for this run
+        stdoutLineCount = 0;
+        for (const key of Object.keys(trajectoryLastSize)) {
+            delete trajectoryLastSize[key];
+        }
+
         postMessage({
             type: 'stdout',
             data: '=== Starting LAMMPS Simulation ==='
@@ -314,7 +390,10 @@ async function runLAMMPS(runData, id) {
         const exitCode = lammpsModule.callMain ? lammpsModule.callMain(args) : 0;
         
         isRunning = false;
-        
+
+        // Final trajectory check to catch any remaining data
+        checkTrajectoryFiles();
+
         postMessage({
             type: 'completed',
             data: {
