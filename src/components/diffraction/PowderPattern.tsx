@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import * as echarts from 'echarts';
 import type { Reflection } from './physics';
 import { formatHKL } from './physics';
@@ -62,11 +62,54 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
     theme,
 }) => {
     const chartRef = useRef<HTMLDivElement>(null);
+    const chartInstanceRef = useRef<echarts.ECharts | null>(null);
+    const onSelectRef = useRef(onSelectReflection);
+    onSelectRef.current = onSelectReflection;
+    const reflectionsRef = useRef(reflections);
+    reflectionsRef.current = reflections;
 
+    // Initialize chart once on mount
     useEffect(() => {
         if (!chartRef.current) return;
 
         const chart = echarts.init(chartRef.current);
+        chartInstanceRef.current = chart;
+
+        chart.on('click', (params: any) => {
+            if (params.seriesName === 'Peak positions' && onSelectRef.current) {
+                const twoTheta = params.value[0];
+                const r = reflectionsRef.current.find(
+                    (ref) => Math.abs(ref.twoTheta - twoTheta) < 0.01
+                );
+                if (r) {
+                    onSelectRef.current([r.h, r.k, r.l]);
+                }
+            }
+        });
+
+        const handleResize = () => chart.resize();
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            chart.off('click');
+            chart.dispose();
+            chartInstanceRef.current = null;
+        };
+    }, []);
+
+    // Resize chart when dimensions change
+    useEffect(() => {
+        const chart = chartInstanceRef.current;
+        if (chart) {
+            chart.resize({ width, height });
+        }
+    }, [width, height]);
+
+    // Update chart options when data or theme changes
+    useEffect(() => {
+        const chart = chartInstanceRef.current;
+        if (!chart) return;
 
         const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
 
@@ -123,7 +166,6 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                             borderColor: isDark ? '#fff' : '#333',
                             borderWidth: 1,
                         },
-                        // Store reflection data for click handler
                         h: r.h, k: r.k, l: r.l,
                     };
                 });
@@ -132,7 +174,7 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                 name: 'Peak positions',
                 type: 'scatter',
                 data: peakPoints,
-                z: 10, // Ensure scatter is on top of line
+                z: 10,
                 animation: false,
             });
         }
@@ -163,8 +205,6 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                     }
                     if (params.seriesName === 'Peak positions') {
                         const twoTheta = params.value[0];
-                        const intensity = params.value[1];
-                        // Find matching reflection
                         const r = reflections.find(
                             (ref) => Math.abs(ref.twoTheta - twoTheta) < 0.01
                         );
@@ -238,38 +278,13 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
             series,
         };
 
-        chart.setOption(option);
-
-        // Handle click events
-        chart.on('click', (params: any) => {
-            if (params.seriesName === 'Peak positions' && onSelectReflection) {
-                const twoTheta = params.value[0];
-                const r = reflections.find(
-                    (ref) => Math.abs(ref.twoTheta - twoTheta) < 0.01
-                );
-                if (r) {
-                    onSelectReflection([r.h, r.k, r.l]);
-                }
-            }
-        });
-
-        const handleResize = () => chart.resize();
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-            window.removeEventListener('resize', handleResize);
-            chart.off('click');
-            chart.dispose();
-        };
+        chart.setOption(option, true);
     }, [
-        width,
-        height,
         reflections,
         wavelength,
         peakWidth,
         twoThetaRange,
         selectedReflection,
-        onSelectReflection,
         showMarkers,
         theme,
     ]);

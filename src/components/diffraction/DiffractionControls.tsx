@@ -5,15 +5,10 @@ import {
     ToggleSwitch,
     type ControlTheme,
 } from '../shared/controls';
-import type { CrystalStructure } from './physics';
+import type { CrystalStructure, ControlPoint } from './physics';
 import { CU_K_ALPHA, MO_K_ALPHA } from './physics';
 import { STRUCTURE_LIST } from './structures';
 import { FormFactorEditor } from './FormFactorEditor';
-
-interface ControlPoint {
-    s: number;
-    f: number;
-}
 
 export interface DiffractionControlsProps {
     // Structure
@@ -35,8 +30,6 @@ export interface DiffractionControlsProps {
     showAbsences: boolean;
     onShowAbsencesChange: (show: boolean) => void;
     reciprocalView: 'lattice' | 'detector' | 'pxrd';
-    oscillationRange: number;
-    onOscillationRangeChange: (range: number) => void;
     detectorDistance: number;
     onDetectorDistanceChange: (dist: number) => void;
     showIndexingCircles: boolean;
@@ -57,8 +50,6 @@ export interface DiffractionControlsProps {
     onNoiseChange: (noise: number) => void;
     bFactor: number;
     onBFactorChange: (b: number) => void;
-    showContours: boolean;
-    onShowContoursChange: (show: boolean) => void;
 
     // Custom form factors
     formFactors: Record<string, ControlPoint[]>;
@@ -83,8 +74,6 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
     showAbsences,
     onShowAbsencesChange,
     reciprocalView,
-    oscillationRange,
-    onOscillationRangeChange,
     detectorDistance,
     onDetectorDistanceChange,
     showIndexingCircles,
@@ -101,8 +90,6 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
     onNoiseChange,
     bFactor,
     onBFactorChange,
-    showContours,
-    onShowContoursChange,
     formFactors,
     onFormFactorsChange,
     theme,
@@ -175,6 +162,12 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                 >
                     <div>Space group: {structure.spaceGroup}</div>
                     <div>a = {structure.a.toFixed(3)} Å</div>
+                    {structure.b && structure.b !== structure.a && (
+                        <div>b = {structure.b.toFixed(3)} Å</div>
+                    )}
+                    {structure.c && structure.c !== structure.a && (
+                        <div>c = {structure.c.toFixed(3)} Å</div>
+                    )}
                     <div>Atoms: {structure.atoms.length}</div>
                 </div>
             </CollapsibleSection>
@@ -304,17 +297,6 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                 {reciprocalView === 'detector' && (
                     <>
                         <SliderWithInput
-                            label="Oscillation"
-                            value={oscillationRange}
-                            onChange={onOscillationRangeChange}
-                            min={0.5}
-                            max={30}
-                            step={0.5}
-                            decimals={1}
-                            unit="°"
-                            theme={theme}
-                        />
-                        <SliderWithInput
                             label="Detector dist."
                             value={detectorDistance}
                             onChange={onDetectorDistanceChange}
@@ -398,12 +380,6 @@ export const DiffractionControls: React.FC<DiffractionControlsProps> = ({
                     step={0.5}
                     decimals={1}
                     unit="Ų"
-                    theme={theme}
-                />
-                <ToggleSwitch
-                    label="Show contours"
-                    checked={showContours}
-                    onChange={onShowContoursChange}
                     theme={theme}
                 />
                 <div

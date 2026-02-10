@@ -7,30 +7,15 @@ import { PowderPattern } from './diffraction/PowderPattern';
 import { ReciprocalLattice } from './diffraction/ReciprocalLattice';
 import { ElectronDensity } from './diffraction/ElectronDensity';
 import { DiffractionControls } from './diffraction/DiffractionControls';
-import { calculatePowderPattern, CU_K_ALPHA } from './diffraction/physics';
+import { calculatePowderPattern, CU_K_ALPHA, FORM_FACTOR_COEFFS } from './diffraction/physics';
+import type { ControlPoint } from './diffraction/physics';
 import { Viewer3D } from './Viewer3D';
 import { STRUCTURES } from './diffraction/structures';
 import type { ControlTheme } from './shared/controls';
 import MathFormula from './MathFormula';
 
-// Type for control points in form factor editor
-interface ControlPoint {
-    s: number;
-    f: number;
-}
-
-// Cromer-Mann coefficients for generating initial form factors
-const CROMER_MANN_COEFFS: Record<string, number[]> = {
-    H: [0.489918, 20.6593, 0.262003, 7.74039, 0.196767, 49.5519, 0.049879, 2.20159, 0.001305],
-    C: [2.31, 20.8439, 1.02, 10.2075, 1.5886, 0.5687, 0.865, 51.6512, 0.2156],
-    N: [12.2126, 0.0057, 3.1322, 9.8933, 2.0125, 28.9975, 1.1663, 0.5826, -11.529],
-    O: [3.0485, 13.2771, 2.2868, 5.7011, 1.5463, 0.3239, 0.867, 32.9089, 0.2508],
-    Na: [4.7626, 3.285, 3.1736, 8.8422, 1.2674, 0.3136, 1.1128, 129.424, 0.676],
-    Cl: [11.4604, 0.0104, 7.1964, 1.1662, 6.2556, 18.5194, 1.6455, 47.7784, -9.5574],
-};
-
 function generateFormFactorPoints(element: string, numPoints = 8): ControlPoint[] {
-    const coeffs = CROMER_MANN_COEFFS[element] || CROMER_MANN_COEFFS.C;
+    const coeffs = FORM_FACTOR_COEFFS[element] || FORM_FACTOR_COEFFS.C;
     const sMax = 1.5;
     const points: ControlPoint[] = [];
     for (let i = 0; i < numPoints; i++) {
@@ -104,15 +89,14 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     const [zoneAxis, setZoneAxis] = useState<[number, number, number]>([0, 0, 1]);
     const [maxIndex, setMaxIndex] = useState(8);
     const [showAbsences, setShowAbsences] = useState(true);
-    const [oscillationRange, setOscillationRange] = useState(5);
     const [detectorDistance, setDetectorDistance] = useState(100);
     const [showIndexingCircles, setShowIndexingCircles] = useState(false);
     const [slicePosition, setSlicePosition] = useState(0);
-    const [showContours, setShowContours] = useState(true);
     const [noise, setNoise] = useState(0);
     const [bFactor, setBFactor] = useState(1.5);
     const [densityDisplayMode, setDensityDisplayMode] = useState<'magnitude' | 'signed'>('magnitude');
     const [showAtomsOnSlice, setShowAtomsOnSlice] = useState(true);
+    const [detectorLimited, setDetectorLimited] = useState(false);
     const [showBonds, setShowBonds] = useState(true);
     const [showLabels, setShowLabels] = useState(true);
     const [selectedReflection, setSelectedReflection] = useState<[number, number, number] | null>(null);
@@ -245,11 +229,17 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                         representation={showBonds ? 'ball+stick' : 'spacefill'}
                                         showUnitCell={true}
                                         showAxes={showLabels}
+                                        supercell={[2, 2, 2]}
+                                        supercellOrigin={[-1, -1, -1]}
                                         slicePlane={{
                                             zoneAxis: zoneAxis,
                                             position: slicePosition,
                                             showPlane: true,
                                         }}
+                                        millerPlanes={selectedReflection ? {
+                                            hkl: selectedReflection,
+                                            structure: structure,
+                                        } : undefined}
                                         autoRotate={true}
                                         theme={theme}
                                     />
@@ -263,8 +253,9 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                         wavelength={wavelength}
                                         slicePosition={slicePosition}
                                         zoneAxis={zoneAxis}
-                                        showContours={showContours}
                                         maxHKL={maxIndex}
+                                        twoThetaMax={twoThetaMax}
+                                        detectorLimited={detectorLimited}
                                         theme={theme}
                                         formFactors={formFactors}
                                         bFactor={bFactor}
@@ -275,68 +266,78 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                 )
                             )}
                         </div>
+                        {/* Slice controls - inside panelContent, right below canvas */}
+                        {realSpaceView === 'density' && (
+                            <div className={styles.sliceControls}>
+                                <span className={styles.sliceLabel}>[{zoneAxis.join('')}] slice:</span>
+                                <input
+                                    type="range"
+                                    className={styles.sliceSlider}
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    value={slicePosition}
+                                    onChange={(e) => setSlicePosition(parseFloat(e.target.value))}
+                                />
+                                <span className={styles.sliceValue}>{slicePosition.toFixed(2)}</span>
+                                <div className={styles.sliceButtons}>
+                                    <button
+                                        className={`${styles.sliceButton} ${slicePosition === 0 ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setSlicePosition(0)}
+                                    >
+                                        0
+                                    </button>
+                                    <button
+                                        className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.25) < 0.01 ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setSlicePosition(0.25)}
+                                    >
+                                        1/4
+                                    </button>
+                                    <button
+                                        className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.5) < 0.01 ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setSlicePosition(0.5)}
+                                    >
+                                        1/2
+                                    </button>
+                                </div>
+                                <div className={styles.displayModeToggle}>
+                                    <button
+                                        className={`${styles.sliceButton} ${densityDisplayMode === 'magnitude' ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setDensityDisplayMode('magnitude')}
+                                        title="Show |ρ|"
+                                    >
+                                        |ρ|
+                                    </button>
+                                    <button
+                                        className={`${styles.sliceButton} ${densityDisplayMode === 'signed' ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setDensityDisplayMode('signed')}
+                                        title="Show ρ (signed)"
+                                    >
+                                        ±ρ
+                                    </button>
+                                </div>
+                                <div className={styles.displayModeToggle}>
+                                    <button
+                                        className={`${styles.sliceButton} ${showAtomsOnSlice ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setShowAtomsOnSlice(!showAtomsOnSlice)}
+                                        title="Show atom positions"
+                                    >
+                                        Atoms
+                                    </button>
+                                    <button
+                                        className={`${styles.sliceButton} ${detectorLimited ? styles.sliceButtonActive : ''}`}
+                                        onClick={() => setDetectorLimited(!detectorLimited)}
+                                        title={detectorLimited
+                                            ? `Only using reflections within 2θ≤${twoThetaMax}° (as measured by detector)`
+                                            : 'Using all reflections up to max index (ideal)'
+                                        }
+                                    >
+                                        {detectorLimited ? `2θ≤${twoThetaMax}°` : 'Ideal'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    {/* Slice controls - outside panelContent so always visible */}
-                    {realSpaceView === 'density' && (
-                        <div className={styles.sliceControls}>
-                            <span className={styles.sliceLabel}>[{zoneAxis.join('')}] slice:</span>
-                            <input
-                                type="range"
-                                className={styles.sliceSlider}
-                                min={0}
-                                max={1}
-                                step={0.01}
-                                value={slicePosition}
-                                onChange={(e) => setSlicePosition(parseFloat(e.target.value))}
-                            />
-                            <span className={styles.sliceValue}>{slicePosition.toFixed(2)}</span>
-                            <div className={styles.sliceButtons}>
-                                <button
-                                    className={`${styles.sliceButton} ${slicePosition === 0 ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setSlicePosition(0)}
-                                >
-                                    0
-                                </button>
-                                <button
-                                    className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.25) < 0.01 ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setSlicePosition(0.25)}
-                                >
-                                    1/4
-                                </button>
-                                <button
-                                    className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.5) < 0.01 ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setSlicePosition(0.5)}
-                                >
-                                    1/2
-                                </button>
-                            </div>
-                            <div className={styles.displayModeToggle}>
-                                <button
-                                    className={`${styles.sliceButton} ${densityDisplayMode === 'magnitude' ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setDensityDisplayMode('magnitude')}
-                                    title="Show |ρ|"
-                                >
-                                    |ρ|
-                                </button>
-                                <button
-                                    className={`${styles.sliceButton} ${densityDisplayMode === 'signed' ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setDensityDisplayMode('signed')}
-                                    title="Show ρ (signed)"
-                                >
-                                    ±ρ
-                                </button>
-                            </div>
-                            <div className={styles.displayModeToggle}>
-                                <button
-                                    className={`${styles.sliceButton} ${showAtomsOnSlice ? styles.sliceButtonActive : ''}`}
-                                    onClick={() => setShowAtomsOnSlice(!showAtomsOnSlice)}
-                                    title="Show atom positions"
-                                >
-                                    Atoms
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* RIGHT: Reciprocal Space Panel (tabbed) */}
@@ -400,7 +401,6 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                                     theme={theme}
                                     viewMode={reciprocalView === 'detector' ? 'detector' : 'reciprocal'}
                                     wavelength={wavelength}
-                                    oscillationRange={oscillationRange}
                                     detectorDistance={detectorDistance}
                                     twoThetaMax={twoThetaMax}
                                     bFactor={bFactor}
@@ -433,14 +433,10 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
                         showAbsences={showAbsences}
                         onShowAbsencesChange={setShowAbsences}
                         reciprocalView={reciprocalView}
-                        oscillationRange={oscillationRange}
-                        onOscillationRangeChange={setOscillationRange}
                         detectorDistance={detectorDistance}
                         onDetectorDistanceChange={setDetectorDistance}
                         showIndexingCircles={showIndexingCircles}
                         onShowIndexingCirclesChange={setShowIndexingCircles}
-                        showContours={showContours}
-                        onShowContoursChange={setShowContours}
                         noise={noise}
                         onNoiseChange={setNoise}
                         bFactor={bFactor}

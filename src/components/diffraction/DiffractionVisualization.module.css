@@ -15,8 +15,8 @@
 .mainGrid {
     display: grid;
     grid-template-columns: 1fr 1fr 260px;
-    grid-template-rows: minmax(400px, 60vh);
-    gap: 1rem;
+    grid-template-rows: minmax(400px, auto);
+    gap: 0.6rem;
 }
 
 /* Panels */
@@ -25,6 +25,7 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    max-height: 70vh;
     overflow: hidden;
     background: var(--ifm-background-surface-color, #fafafa);
     border-radius: 6px;
@@ -40,7 +41,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.5rem 0.75rem;
+    padding: 0.35rem 0.6rem;
     background: var(--ifm-color-emphasis-100, #f0f0f0);
     border-radius: 6px 6px 0 0;
 }
@@ -82,7 +83,7 @@
 .panelContent {
     flex: 1;
     overflow: auto;
-    padding: 0.5rem;
+    padding: 0.25rem;
 }
 
 /* Canvas wrapper */
@@ -98,11 +99,12 @@
 .sliceControls {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem;
+    gap: 0.35rem;
+    padding: 0.3rem 0.5rem;
     background: var(--ifm-color-emphasis-100);
-    border-radius: 0 0 6px 6px;
+    border-radius: 4px;
     flex-wrap: wrap;
+    margin-top: 0.25rem;
 }
 
 .sliceLabel {
@@ -147,19 +149,36 @@
     color: white;
 }
 
-/* Unused but keep for compatibility */
-.squareContainer {
-    display: contents;
+/* Detector overlay controls */
+.detectorOverlayControls {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
 }
 
-.stackedViews,
-.stackedView {
-    display: contents;
+.detectorOverlayButton {
+    padding: 3px 6px;
+    font-size: 9px;
+    font-weight: 500;
+    border: 1px solid var(--ifm-color-emphasis-300, #ccc);
+    border-radius: 3px;
+    background-color: var(--ifm-background-color, #fff);
+    color: var(--ifm-color-content, #333);
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.detectorOverlayButtonActive {
+    background-color: var(--ifm-color-primary);
+    color: white;
+    border-color: var(--ifm-color-primary);
 }
 
 /* Explanation section */
 .explanationContainer {
-    margin-top: 1.5rem;
+    margin-top: 0.75rem;
     padding: 1rem;
     background: var(--ifm-color-emphasis-100);
     border-radius: 6px;

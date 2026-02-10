@@ -25,7 +25,9 @@ import type {
     ColorScheme,
     SlicePlaneConfig,
     VolumeGrid,
+    MillerPlanesConfig,
 } from './types';
+import { calculateDSpacing } from '../diffraction/physics';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type NGLShape = any;
@@ -67,7 +69,11 @@ export interface NGLRendererProps {
     showAxes?: boolean;
     /** Generate supercell, e.g., [2, 2, 2] for 2x2x2 */
     supercell?: [number, number, number];
+    /** Starting cell offset for supercell */
+    supercellOrigin?: [number, number, number];
     slicePlane?: SlicePlaneConfig;
+    /** Miller planes for selected (hkl) reflection */
+    millerPlanes?: MillerPlanesConfig;
     /** Volume grid for textured slice plane */
     volumeGrid?: VolumeGrid;
     autoRotate?: boolean;
@@ -76,9 +82,14 @@ export interface NGLRendererProps {
 }
 
 // Generate PDB content from crystal structure with optional supercell
-function generatePDB(structure: CrystalStructure, supercell: [number, number, number] = [1, 1, 1]): string {
+function generatePDB(
+    structure: CrystalStructure,
+    supercell: [number, number, number] = [1, 1, 1],
+    origin: [number, number, number] = [0, 0, 0],
+): string {
     const { a, b = a, c = a, atoms } = structure;
     const [nx, ny, nz] = supercell;
+    const [ox, oy, oz] = origin;
     const lines: string[] = [];
 
     // CRYST1 record for expanded unit cell
@@ -94,10 +105,10 @@ function generatePDB(structure: CrystalStructure, supercell: [number, number, nu
     let atomNum = 1;
     const offsets = [0, 1];
 
-    // Loop over supercell repetitions
-    for (let ix = 0; ix < nx; ix++) {
-        for (let iy = 0; iy < ny; iy++) {
-            for (let iz = 0; iz < nz; iz++) {
+    // Loop over supercell repetitions (starting from origin offset)
+    for (let ix = ox; ix < ox + nx; ix++) {
+        for (let iy = oy; iy < oy + ny; iy++) {
+            for (let iz = oz; iz < oz + nz; iz++) {
                 for (const atom of atoms) {
                     const [fx, fy, fz] = atom.position;
 
@@ -113,16 +124,16 @@ function generatePDB(structure: CrystalStructure, supercell: [number, number, nu
                                     newFy >= 0 && newFy <= 1.001 &&
                                     newFz >= 0 && newFz <= 1.001
                                 ) {
-                                    // Position within supercell
+                                    // Position in Cartesian coordinates
                                     const x = (ix + newFx) * a;
                                     const y = (iy + newFy) * b;
                                     const z = (iz + newFz) * c;
 
                                     // Skip atoms on the boundary of adjacent cells (avoid duplicates)
                                     // Keep atoms at the outer boundary of the supercell
-                                    const onInnerBoundaryX = ix < nx - 1 && Math.abs(newFx - 1) < 0.001;
-                                    const onInnerBoundaryY = iy < ny - 1 && Math.abs(newFy - 1) < 0.001;
-                                    const onInnerBoundaryZ = iz < nz - 1 && Math.abs(newFz - 1) < 0.001;
+                                    const onInnerBoundaryX = ix < ox + nx - 1 && Math.abs(newFx - 1) < 0.001;
+                                    const onInnerBoundaryY = iy < oy + ny - 1 && Math.abs(newFy - 1) < 0.001;
+                                    const onInnerBoundaryZ = iz < oz + nz - 1 && Math.abs(newFz - 1) < 0.001;
                                     if (onInnerBoundaryX || onInnerBoundaryY || onInnerBoundaryZ) {
                                         continue;
                                     }
@@ -179,7 +190,9 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
             showUnitCell = true,
             showAxes = false,
             supercell = [1, 1, 1],
+            supercellOrigin = [0, 0, 0],
             slicePlane,
+            millerPlanes,
             volumeGrid,
             autoRotate = true,
             isDark,
@@ -193,6 +206,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
         const unitCellShapeRef = useRef<NGL.Component | null>(null);
         const axesShapeRef = useRef<NGL.Component | null>(null);
         const slicePlaneShapeRef = useRef<NGL.Component | null>(null);
+        const millerPlanesShapeRef = useRef<NGL.Component | null>(null);
         // Three.js mesh for textured slice (added to NGL's scene)
         const texturedSliceMeshRef = useRef<THREE.Mesh | null>(null);
         const sliceTextureRef = useRef<THREE.DataTexture | null>(null);
@@ -250,9 +264,11 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
 
                 const { a, b = a, c = a } = structure;
                 const [nx, ny, nz] = supercell;
-                const totalA = a * nx;
-                const totalB = b * ny;
-                const totalC = c * nz;
+                const [ox, oy, oz] = supercellOrigin;
+                // Cartesian bounds of the supercell
+                const minX = ox * a, minY = oy * b, minZ = oz * c;
+                const maxX = (ox + nx) * a, maxY = (oy + ny) * b, maxZ = (oz + nz) * c;
+
                 const shape: NGLShape = new NGL.Shape('unitcell');
                 const color: [number, number, number] = isDark
                     ? [0.5, 0.5, 0.5]
@@ -263,8 +279,8 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
 
                 // Draw outer supercell boundary
                 const corners = [
-                    [0, 0, 0], [totalA, 0, 0], [totalA, totalB, 0], [0, totalB, 0],
-                    [0, 0, totalC], [totalA, 0, totalC], [totalA, totalB, totalC], [0, totalB, totalC],
+                    [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ],
+                    [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ],
                 ];
 
                 const edges = [
@@ -284,28 +300,28 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                 // Draw inner unit cell boundaries (thinner lines)
                 if (nx > 1 || ny > 1 || nz > 1) {
                     // Inner x planes
-                    for (let ix = 1; ix < nx; ix++) {
+                    for (let ix = ox + 1; ix < ox + nx; ix++) {
                         const x = ix * a;
-                        shape.addWideline([x, 0, 0], [x, totalB, 0], innerColor);
-                        shape.addWideline([x, 0, totalC], [x, totalB, totalC], innerColor);
-                        shape.addWideline([x, 0, 0], [x, 0, totalC], innerColor);
-                        shape.addWideline([x, totalB, 0], [x, totalB, totalC], innerColor);
+                        shape.addWideline([x, minY, minZ], [x, maxY, minZ], innerColor);
+                        shape.addWideline([x, minY, maxZ], [x, maxY, maxZ], innerColor);
+                        shape.addWideline([x, minY, minZ], [x, minY, maxZ], innerColor);
+                        shape.addWideline([x, maxY, minZ], [x, maxY, maxZ], innerColor);
                     }
                     // Inner y planes
-                    for (let iy = 1; iy < ny; iy++) {
+                    for (let iy = oy + 1; iy < oy + ny; iy++) {
                         const y = iy * b;
-                        shape.addWideline([0, y, 0], [totalA, y, 0], innerColor);
-                        shape.addWideline([0, y, totalC], [totalA, y, totalC], innerColor);
-                        shape.addWideline([0, y, 0], [0, y, totalC], innerColor);
-                        shape.addWideline([totalA, y, 0], [totalA, y, totalC], innerColor);
+                        shape.addWideline([minX, y, minZ], [maxX, y, minZ], innerColor);
+                        shape.addWideline([minX, y, maxZ], [maxX, y, maxZ], innerColor);
+                        shape.addWideline([minX, y, minZ], [minX, y, maxZ], innerColor);
+                        shape.addWideline([maxX, y, minZ], [maxX, y, maxZ], innerColor);
                     }
                     // Inner z planes
-                    for (let iz = 1; iz < nz; iz++) {
+                    for (let iz = oz + 1; iz < oz + nz; iz++) {
                         const z = iz * c;
-                        shape.addWideline([0, 0, z], [totalA, 0, z], innerColor);
-                        shape.addWideline([0, totalB, z], [totalA, totalB, z], innerColor);
-                        shape.addWideline([0, 0, z], [0, totalB, z], innerColor);
-                        shape.addWideline([totalA, 0, z], [totalA, totalB, z], innerColor);
+                        shape.addWideline([minX, minY, z], [maxX, minY, z], innerColor);
+                        shape.addWideline([minX, maxY, z], [maxX, maxY, z], innerColor);
+                        shape.addWideline([minX, minY, z], [minX, maxY, z], innerColor);
+                        shape.addWideline([maxX, minY, z], [maxX, maxY, z], innerColor);
                     }
                 }
 
@@ -315,7 +331,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                     unitCellShapeRef.current = shapeComp;
                 }
             },
-            [structure, showUnitCell, isDark, supercell]
+            [structure, showUnitCell, isDark, supercell, supercellOrigin]
         );
 
         // Create axes labels
@@ -494,6 +510,125 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                 }
             },
             [slicePlane, structure, isDark]
+        );
+
+        // Create Miller planes for selected (hkl) reflection
+        // Uses NGL Shape: addMesh for filled quads + addWideline for edges
+        const createMillerPlanesShape = useCallback(
+            (stage: NGL.Stage) => {
+                if (millerPlanesShapeRef.current) {
+                    stage.removeComponent(millerPlanesShapeRef.current);
+                    millerPlanesShapeRef.current = null;
+                }
+
+                if (!millerPlanes) return;
+
+                const { hkl, structure: mpStructure } = millerPlanes;
+                const [h, k, l] = hkl;
+                if (h === 0 && k === 0 && l === 0) return;
+
+                const { a, b = a, c = a } = mpStructure;
+                const d = calculateDSpacing(h, k, l, mpStructure);
+                if (!isFinite(d) || d <= 0) return;
+
+                const shape: NGLShape = new NGL.Shape('millerplanes');
+                const edgeColor: [number, number, number] = isDark
+                    ? [1.0, 0.7, 0.26]
+                    : [0.85, 0.53, 0.1];
+                const fillColor: [number, number, number] = isDark
+                    ? [1.0, 0.7, 0.26]
+                    : [0.85, 0.53, 0.1];
+
+                // Plane normal in Cartesian coords (reciprocal lattice direction)
+                const nx = h / a;
+                const ny = k / b;
+                const nz = l / c;
+                const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                if (nLen === 0) return;
+                const nHat = [nx / nLen, ny / nLen, nz / nLen];
+
+                // Find two perpendicular basis vectors in the plane
+                let b1x: number, b1y: number, b1z: number;
+                if (Math.abs(nHat[0]) <= Math.abs(nHat[1]) && Math.abs(nHat[0]) <= Math.abs(nHat[2])) {
+                    b1x = 0; b1y = -nHat[2]; b1z = nHat[1];
+                } else if (Math.abs(nHat[1]) <= Math.abs(nHat[2])) {
+                    b1x = nHat[2]; b1y = 0; b1z = -nHat[0];
+                } else {
+                    b1x = -nHat[1]; b1y = nHat[0]; b1z = 0;
+                }
+                const b1Len = Math.sqrt(b1x * b1x + b1y * b1y + b1z * b1z);
+                b1x /= b1Len; b1y /= b1Len; b1z /= b1Len;
+
+                // Second basis: nHat x b1
+                const b2x = nHat[1] * b1z - nHat[2] * b1y;
+                const b2y = nHat[2] * b1x - nHat[0] * b1z;
+                const b2z = nHat[0] * b1y - nHat[1] * b1x;
+
+                // Scale to cover unit cell
+                const scale = Math.sqrt(a * a + b * b + c * c) * 0.6;
+
+                // Project all unit cell corners onto the normal to find
+                // which plane indices n actually intersect the cell
+                const cellCorners = [
+                    [0, 0, 0], [a, 0, 0], [0, b, 0], [0, 0, c],
+                    [a, b, 0], [a, 0, c], [0, b, c], [a, b, c],
+                ];
+                let minProj = Infinity, maxProj = -Infinity;
+                for (const corner of cellCorners) {
+                    const proj = corner[0] * nHat[0] + corner[1] * nHat[1] + corner[2] * nHat[2];
+                    minProj = Math.min(minProj, proj);
+                    maxProj = Math.max(maxProj, proj);
+                }
+                const nMin = Math.ceil(minProj / d - 0.01);
+                const nMax = Math.floor(maxProj / d + 0.01);
+
+                for (let n = nMin; n <= nMax; n++) {
+                    const px = n * d * nHat[0];
+                    const py = n * d * nHat[1];
+                    const pz = n * d * nHat[2];
+
+                    const corners: [number, number, number][] = [
+                        [px - b1x * scale - b2x * scale, py - b1y * scale - b2y * scale, pz - b1z * scale - b2z * scale],
+                        [px + b1x * scale - b2x * scale, py + b1y * scale - b2y * scale, pz + b1z * scale - b2z * scale],
+                        [px + b1x * scale + b2x * scale, py + b1y * scale + b2y * scale, pz + b1z * scale + b2z * scale],
+                        [px - b1x * scale + b2x * scale, py - b1y * scale + b2y * scale, pz - b1z * scale + b2z * scale],
+                    ];
+
+                    // Wireframe edges
+                    for (let i = 0; i < 4; i++) {
+                        const j = (i + 1) % 4;
+                        shape.addWideline(corners[i], corners[j], edgeColor);
+                    }
+
+                    // Filled quad via addMesh (two triangles)
+                    // Vertices: 4 corners, indices: [0,1,2] + [0,2,3]
+                    const position = new Float32Array([
+                        ...corners[0], ...corners[1], ...corners[2], ...corners[3],
+                    ]);
+                    // Per-vertex color (RGB for each of 4 vertices)
+                    const color = new Float32Array([
+                        ...fillColor, ...fillColor, ...fillColor, ...fillColor,
+                    ]);
+                    // Two triangles forming the quad
+                    const index = new Uint32Array([0, 1, 2, 0, 2, 3]);
+                    // Normal for each vertex (same normal for flat quad)
+                    const normal = new Float32Array([
+                        nHat[0], nHat[1], nHat[2],
+                        nHat[0], nHat[1], nHat[2],
+                        nHat[0], nHat[1], nHat[2],
+                        nHat[0], nHat[1], nHat[2],
+                    ]);
+
+                    shape.addMesh(position, color, index, normal, `plane_${n}`);
+                }
+
+                const shapeComp = stage.addComponentFromObject(shape);
+                if (shapeComp) {
+                    shapeComp.addRepresentation('buffer', { linewidth: 4 });
+                    millerPlanesShapeRef.current = shapeComp;
+                }
+            },
+            [millerPlanes, isDark]
         );
 
         // Create textured slice plane (added directly to NGL's Three.js scene)
@@ -689,7 +824,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                     file = new File([blob], 'structure.xyz');
                     loadParams.ext = 'xyz';
                 } else if (structure) {
-                    const pdbContent = generatePDB(structure, supercell);
+                    const pdbContent = generatePDB(structure, supercell, supercellOrigin);
                     const blob = new Blob([pdbContent], { type: 'text/plain' });
                     file = new File([blob], 'structure.pdb');
                     loadParams.name = 'structure.pdb';
@@ -748,7 +883,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                     console.error('Error loading structure:', error);
                 }
             },
-            [structure, pdbData, pdbUrl, xyzData, representation, colorScheme, showHydrogens, supercell]
+            [structure, pdbData, pdbUrl, xyzData, representation, colorScheme, showHydrogens, supercell, supercellOrigin]
         );
 
         // Initialize NGL Stage
@@ -763,11 +898,18 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
 
             stage.setSpin(autoRotate);
 
+            // Stop spin on user interaction
+            const stopSpin = () => stage.setSpin(false);
+            const el = containerRef.current;
+            el.addEventListener('mousedown', stopSpin);
+            el.addEventListener('touchstart', stopSpin);
+
             // Initial setup
             updateStructure(stage);
             createUnitCellShape(stage);
             createAxesShape(stage);
             createSlicePlaneShape(stage);
+            createMillerPlanesShape(stage);
             updateTexturedSlice(stage);
 
             return () => {
@@ -786,6 +928,8 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                     sliceTextureRef.current.dispose();
                     sliceTextureRef.current = null;
                 }
+                el.removeEventListener('mousedown', stopSpin);
+                el.removeEventListener('touchstart', stopSpin);
                 stage.dispose();
                 stageRef.current = null;
             };
@@ -820,6 +964,13 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
             }
         }, [slicePlane, createSlicePlaneShape]);
 
+        // Update Miller planes
+        useEffect(() => {
+            if (stageRef.current) {
+                createMillerPlanesShape(stageRef.current);
+            }
+        }, [millerPlanes, createMillerPlanesShape]);
+
         // Update textured slice plane
         useEffect(() => {
             if (stageRef.current) {
@@ -834,8 +985,9 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
                 createUnitCellShape(stageRef.current);
                 createAxesShape(stageRef.current);
                 createSlicePlaneShape(stageRef.current);
+                createMillerPlanesShape(stageRef.current);
             }
-        }, [isDark, getBackgroundColor, createUnitCellShape, createAxesShape, createSlicePlaneShape]);
+        }, [isDark, getBackgroundColor, createUnitCellShape, createAxesShape, createSlicePlaneShape, createMillerPlanesShape]);
 
         // Update auto-rotate
         useEffect(() => {

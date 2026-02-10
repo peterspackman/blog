@@ -8,7 +8,7 @@
  * The Two layers are overlaid with synchronized cameras.
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { NGLRenderer, type NGLRendererProps } from './NGLRenderer';
 import { VolumeRenderer, type VolumeRendererProps } from './VolumeRenderer';
 import type {
@@ -17,9 +17,10 @@ import type {
     NGLRendererRef,
     VolumeRendererRef,
 } from './types';
+import { calculateDSpacing } from '../diffraction/physics';
 
 export type { Viewer3DProps } from './types';
-export type { CrystalStructure, Atom, VolumeGrid, SlicePlaneConfig } from './types';
+export type { CrystalStructure, Atom, VolumeGrid, SlicePlaneConfig, MillerPlanesConfig } from './types';
 
 export const Viewer3D: React.FC<Viewer3DProps> = ({
     width,
@@ -42,10 +43,13 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
     showUnitCell = true,
     showAxes = false,
     supercell,
+    supercellOrigin,
     // Isosurface
     isosurface,
     // Slice plane
     slicePlane,
+    // Miller planes
+    millerPlanes,
     // Trajectory
     trajectory,
     // Interaction
@@ -61,6 +65,10 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
     const syncIntervalRef = useRef<number | null>(null);
 
     const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
+
+    // Overlay toggle state
+    const [showSlice, setShowSlice] = useState(true);
+    const [showMiller, setShowMiller] = useState(true);
 
     // Determine if we need each layer
     const hasStructure = !!(pdbUrl || pdbData || structure || xyzData);
@@ -120,7 +128,9 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                     showUnitCell={showUnitCell}
                     showAxes={showAxes}
                     supercell={supercell}
-                    slicePlane={slicePlane}
+                    supercellOrigin={supercellOrigin}
+                    slicePlane={showSlice ? slicePlane : undefined}
+                    millerPlanes={showMiller ? millerPlanes : undefined}
                     volumeGrid={volumeGrid}
                     autoRotate={autoRotate}
                     isDark={isDark}
@@ -163,22 +173,68 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                 </div>
             )}
 
-            {/* Slice position indicator */}
-            {slicePlane && (
+            {/* Overlay controls (top-right) */}
+            {(slicePlane || millerPlanes) && (
                 <div
                     style={{
                         position: 'absolute',
-                        bottom: 6,
-                        left: 8,
-                        color: isDark ? '#6b9eff' : '#2563eb',
-                        fontSize: '9px',
-                        pointerEvents: 'none',
+                        top: 6,
+                        right: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
                         zIndex: 10,
                     }}
                 >
-                    {slicePlane.zoneAxis
-                        ? `[${slicePlane.zoneAxis.join('')}] = ${slicePlane.position.toFixed(2)}`
-                        : `${slicePlane.axis} = ${slicePlane.position.toFixed(2)}`}
+                    {slicePlane && (
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '9px',
+                                color: isDark ? '#6b9eff' : '#2563eb',
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                            }}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={showSlice}
+                                onChange={() => setShowSlice(s => !s)}
+                                style={{ width: 10, height: 10, margin: 0, cursor: 'pointer' }}
+                            />
+                            Slice {slicePlane.zoneAxis
+                                ? `[${slicePlane.zoneAxis.join('')}] ${slicePlane.position.toFixed(2)}`
+                                : `${slicePlane.axis} ${slicePlane.position.toFixed(2)}`}
+                        </label>
+                    )}
+                    {millerPlanes && (
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '9px',
+                                color: isDark ? '#ffb347' : '#d97706',
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                            }}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={showMiller}
+                                onChange={() => setShowMiller(m => !m)}
+                                style={{ width: 10, height: 10, margin: 0, cursor: 'pointer' }}
+                            />
+                            ({millerPlanes.hkl.join(' ')}) d={calculateDSpacing(
+                                millerPlanes.hkl[0],
+                                millerPlanes.hkl[1],
+                                millerPlanes.hkl[2],
+                                millerPlanes.structure
+                            ).toFixed(2)} &#8491;
+                        </label>
+                    )}
                 </div>
             )}
 

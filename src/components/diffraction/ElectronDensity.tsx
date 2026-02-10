@@ -8,11 +8,8 @@ import {
 } from './physics';
 import { interpolateFormFactorSmooth } from './FormFactorEditor';
 import type { ControlTheme } from '../shared/controls';
-
-interface ControlPoint {
-    s: number;
-    f: number;
-}
+import type { ControlPoint } from './physics';
+import { getElementColor } from './physics';
 
 export interface ElectronDensityProps {
     width: number;
@@ -21,8 +18,9 @@ export interface ElectronDensityProps {
     wavelength: number;
     slicePosition: number; // Position along zone axis (0-1)
     zoneAxis?: [number, number, number]; // Zone axis [uvw] - slice plane is perpendicular to this
-    showContours: boolean;
     maxHKL: number;
+    twoThetaMax?: number; // Max 2θ in degrees - used when detectorLimited is true
+    detectorLimited?: boolean; // When true, only use reflections within detector 2θ range
     theme: ControlTheme;
     formFactors?: Record<string, ControlPoint[]>;
     bFactor?: number; // Debye-Waller temperature factor in Ų (default ~1.5)
@@ -231,29 +229,6 @@ interface GLState {
     normScaleLoc: WebGLUniformLocation | null;
 }
 
-// Element colors for atom visualization - vibrant, distinguishable palette
-const ELEMENT_COLORS: Record<string, string> = {
-    H: '#e8e8e8',   // light gray (visible on both light/dark)
-    C: '#505050',   // dark gray
-    N: '#3b82f6',   // blue
-    O: '#ef4444',   // red
-    Na: '#a855f7',  // purple
-    Cl: '#22c55e',  // green
-    Si: '#f59e0b',  // amber
-    Fe: '#dc2626',  // darker red
-    Ca: '#84cc16',  // lime
-    Ti: '#64748b',  // slate
-    Cs: '#7c3aed',  // violet
-    Ba: '#16a34a',  // dark green
-    K: '#c084fc',   // light purple
-    I: '#be185d',   // pink
-    S: '#eab308',   // yellow
-    P: '#f97316',   // orange
-    Mg: '#4ade80',  // light green
-    Al: '#94a3b8',  // gray
-    Zn: '#6366f1',  // indigo
-    Cu: '#b45309',  // brown/copper
-};
 
 export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     width,
@@ -262,8 +237,9 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     wavelength,
     slicePosition,
     zoneAxis = [0, 0, 1],
-    showContours,
     maxHKL,
+    twoThetaMax = 180,
+    detectorLimited = false,
     theme,
     formFactors,
     bFactor = 1.5,
@@ -277,9 +253,8 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     const glStateRef = useRef<GLState | null>(null);
     const animFrameRef = useRef<number>(0);
 
-    const margin = 40;
-    const plotWidth = width - 2 * margin;
-    const plotHeight = height - 2 * margin;
+    const plotWidth = width;
+    const plotHeight = height;
 
     // Compute zone axis and basis vectors for slice plane
     const [u, v, w] = zoneAxis;
@@ -356,6 +331,14 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 for (let l = -maxHKL; l <= maxHKL; l++) {
                     if (h === 0 && k === 0 && l === 0) continue;
                     if (!isAllowedReflection(Math.abs(h), Math.abs(k), Math.abs(l), structure)) continue;
+
+                    // When detector-limited, skip reflections beyond the detector 2θ range
+                    if (detectorLimited) {
+                        const d = calculateDSpacing(h, k, l, structure);
+                        const tt = calculateTwoTheta(d, wavelength);
+                        if (isNaN(tt) || tt > twoThetaMax) continue;
+                    }
+
                     const F = calculateStructureFactorCustom(h, k, l, structure, wavelength, formFactors, bFactor);
                     if (F && (Math.abs(F.re) > 0.01 || Math.abs(F.im) > 0.01)) {
                         const intensity = F.re * F.re + F.im * F.im;
@@ -403,7 +386,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
         }
 
         return limited;
-    }, [structure, maxHKL, wavelength, formFactors, bFactor, noise]);
+    }, [structure, maxHKL, wavelength, formFactors, bFactor, noise, detectorLimited, twoThetaMax]);
 
     // Initialize WebGL once
     useEffect(() => {
@@ -555,76 +538,48 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
 
             ctx.clearRect(0, 0, width, height);
 
-            // Margins
             const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
-            ctx.fillStyle = theme.surface || theme.inputBg;
-            ctx.fillRect(0, 0, width, margin);
-            ctx.fillRect(0, height - margin, width, margin);
-            ctx.fillRect(0, 0, margin, height);
-            ctx.fillRect(width - margin, 0, margin, height);
-
-            // Border
-            ctx.strokeStyle = theme.border;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(margin, margin, plotWidth, plotHeight);
+            const bgAlpha = isDark ? 'rgba(30,30,30,0.7)' : 'rgba(255,255,255,0.7)';
 
             // Atoms - show atoms near the slice plane, tiled across the entire view
             if (showAtoms) {
                 const { norm, basis1, basis2 } = zoneAxisData;
 
                 // Tile across enough unit cells to cover the visible area
-                // The basis vectors have scale 1.5, so we need ~2 cells in each direction
                 const tileRange = 2;
 
                 for (let ti = -tileRange; ti <= tileRange; ti++) {
                     for (let tj = -tileRange; tj <= tileRange; tj++) {
                         for (let tk = -tileRange; tk <= tileRange; tk++) {
                             for (const atom of structure.atoms) {
-                                // Atom position with periodic offset
                                 const fx = atom.position[0] + ti;
                                 const fy = atom.position[1] + tj;
                                 const fz = atom.position[2] + tk;
 
-                                // Distance from slice plane = (pos - slicePos*norm) · norm
                                 const distFromPlane = (fx - slicePosition * norm[0]) * norm[0]
                                                     + (fy - slicePosition * norm[1]) * norm[1]
                                                     + (fz - slicePosition * norm[2]) * norm[2];
 
-                                // Only show atoms close to the slice plane
                                 const dist = Math.abs(distFromPlane);
                                 if (dist >= 0.12) continue;
 
-                                // Project to 2D using basis vectors
-                                // Shader: pos = slicePos*zoneAxis + (texCoord.x-0.5)*basis1 + (texCoord.y-0.5)*basis2
-                                // To invert, we project the relative position onto each basis:
-                                // texCoord.x - 0.5 = dot(rel, basis1) / |basis1|²
-                                // texCoord.y - 0.5 = dot(rel, basis2) / |basis2|²
-                                // Since |basis| = 1.5, |basis|² = 2.25
                                 const relX = fx - slicePosition * norm[0];
                                 const relY = fy - slicePosition * norm[1];
                                 const relZ = fz - slicePosition * norm[2];
 
                                 const dot1 = relX * basis1[0] + relY * basis1[1] + relZ * basis1[2];
                                 const dot2 = relX * basis2[0] + relY * basis2[1] + relZ * basis2[2];
-                                // texCoord.x corresponds to basis1, texCoord.y corresponds to basis2
                                 const texCoordX = dot1 / 2.25 + 0.5;
                                 const texCoordY = dot2 / 2.25 + 0.5;
 
-                                // Skip if outside visible area
                                 if (texCoordX < -0.05 || texCoordX > 1.05 || texCoordY < -0.05 || texCoordY > 1.05) continue;
 
-                                // Map to screen coordinates
-                                // WebGL has y-up, Canvas 2D has y-down, so flip y
-                                const ax = margin + texCoordX * plotWidth;
-                                const ay = margin + (1 - texCoordY) * plotHeight;
+                                const ax = texCoordX * plotWidth;
+                                const ay = (1 - texCoordY) * plotHeight;
 
-                                // Element color - use nicer saturated colors
-                                const elemColor = ELEMENT_COLORS[atom.element] || '#808080';
-
-                                // Opacity based on distance from plane
+                                const elemColor = getElementColor(atom.element);
                                 const opacity = 1 - dist / 0.12;
 
-                                // Simple colored spot
                                 const radius = 5;
                                 ctx.beginPath();
                                 ctx.arc(ax, ay, radius, 0, 2 * Math.PI);
@@ -632,7 +587,6 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                                 ctx.globalAlpha = opacity * 0.9;
                                 ctx.fill();
 
-                                // Thin border for contrast
                                 ctx.globalAlpha = opacity * 0.7;
                                 ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.4)';
                                 ctx.lineWidth = 1;
@@ -645,34 +599,52 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 }
             }
 
-            // For non-principal axes, show generic labels; for principal axes, show standard labels
-            const isPrincipal = (zoneAxis[0] === 0 && zoneAxis[1] === 0) ||
-                               (zoneAxis[0] === 0 && zoneAxis[2] === 0) ||
-                               (zoneAxis[1] === 0 && zoneAxis[2] === 0);
+            // Helper to draw text with a semi-transparent background pill
+            const drawLabel = (text: string, x: number, y: number, align: CanvasTextAlign = 'left') => {
+                ctx.font = '9px sans-serif';
+                const metrics = ctx.measureText(text);
+                const padX = 4, padY = 2;
+                const tw = metrics.width;
+                const th = 10; // approximate font height
+                let bx = x - padX;
+                if (align === 'center') bx = x - tw / 2 - padX;
+                else if (align === 'right') bx = x - tw - padX;
+                ctx.fillStyle = bgAlpha;
+                ctx.fillRect(bx, y - th - padY, tw + 2 * padX, th + 2 * padY);
+                ctx.fillStyle = theme.text;
+                ctx.textAlign = align;
+                ctx.fillText(text, x, y);
+            };
+
+            // Axis labels - inside the plot along edges
             let axisLabels: [string, string];
             if (zoneAxis[0] === 0 && zoneAxis[1] === 0 && zoneAxis[2] !== 0) {
-                axisLabels = ['x/a', 'y/b']; // z-axis: xy plane
+                axisLabels = ['x/a', 'y/b'];
             } else if (zoneAxis[0] === 0 && zoneAxis[2] === 0 && zoneAxis[1] !== 0) {
-                axisLabels = ['x/a', 'z/c']; // y-axis: xz plane
+                axisLabels = ['x/a', 'z/c'];
             } else if (zoneAxis[1] === 0 && zoneAxis[2] === 0 && zoneAxis[0] !== 0) {
-                axisLabels = ['y/b', 'z/c']; // x-axis: yz plane
+                axisLabels = ['y/b', 'z/c'];
             } else {
-                axisLabels = ['⊥₁', '⊥₂']; // Generic for non-principal axes
+                axisLabels = ['⊥₁', '⊥₂'];
             }
-            ctx.font = '10px sans-serif';
-            ctx.fillStyle = theme.textMuted;
-            ctx.textAlign = 'center';
-            ctx.fillText(axisLabels[0], width / 2, height - 10);
+
+            // X-axis label at bottom center
+            drawLabel(axisLabels[0], width / 2, height - 6, 'center');
+            // Y-axis label at left center (rotated)
             ctx.save();
-            ctx.translate(15, height / 2);
+            ctx.translate(12, height / 2);
             ctx.rotate(-Math.PI / 2);
-            ctx.fillText(axisLabels[1], 0, 0);
+            drawLabel(axisLabels[1], 0, 0, 'center');
             ctx.restore();
 
-            // Legend - colormap depends on display mode
-            const lw = 15, lh = plotHeight * 0.6;
-            const lx = width - margin + 10;
-            const ly = margin + (plotHeight - lh) / 2;
+            // Reflection count - top left inside plot
+            const modeLabel = detectorLimited ? `${reflections.length} refl (2θ≤${twoThetaMax}°)` : `${reflections.length} refl`;
+            drawLabel(modeLabel, 6, 14);
+
+            // Colorbar - inside plot, right edge
+            const lw = 10, lh = Math.min(plotHeight * 0.5, 120);
+            const lx = width - lw - 8;
+            const ly = (height - lh) / 2;
 
             // Blue-White-Red colormap function for signed mode
             const blueWhiteRed = (t: number): [number, number, number] => {
@@ -708,25 +680,33 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
 
             const getColor = displayMode === 'magnitude' ? viridisJS : blueWhiteRed;
 
+            // Background behind colorbar for readability
+            ctx.fillStyle = bgAlpha;
+            ctx.fillRect(lx - 3, ly - 14, lw + 6, lh + 26);
+
             for (let i = 0; i < lh; i++) {
                 const t = 1 - i / lh;
                 const [r, g, b] = getColor(t);
                 ctx.fillStyle = `rgb(${r},${g},${b})`;
                 ctx.fillRect(lx, ly + i, lw, 1);
             }
-            ctx.strokeStyle = theme.border;
+            ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
             ctx.strokeRect(lx, ly, lw, lh);
-            ctx.fillStyle = theme.textMuted;
-            ctx.font = '9px sans-serif';
-            ctx.textAlign = 'left';
+
+            // Colorbar labels
+            ctx.fillStyle = theme.text;
+            ctx.font = '8px sans-serif';
+            ctx.textAlign = 'center';
+            const barCenterX = lx + lw / 2;
 
             if (displayMode === 'magnitude') {
-                ctx.fillText('high', lx + lw + 3, ly + 8);
-                ctx.fillText('low', lx + lw + 3, ly + lh);
+                ctx.fillText('high', barCenterX, ly - 4);
+                ctx.fillText('low', barCenterX, ly + lh + 10);
             } else {
-                ctx.fillText('+', lx + lw + 3, ly + 8);
-                ctx.fillText('0', lx + lw + 3, ly + lh / 2 + 3);
-                ctx.fillText('−', lx + lw + 3, ly + lh);
+                ctx.fillText('+', barCenterX, ly - 4);
+                ctx.fillText('0', barCenterX + lw / 2 + 6, ly + lh / 2 + 3);
+                ctx.fillText('−', barCenterX, ly + lh + 10);
             }
         });
 
@@ -735,7 +715,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 cancelAnimationFrame(animFrameRef.current);
             }
         };
-    }, [slicePosition, zoneAxis, zoneAxisData, displayMode, showAtoms, width, height, plotWidth, plotHeight, structure, reflections, theme, maxHKL]);
+    }, [slicePosition, zoneAxis, zoneAxisData, displayMode, showAtoms, width, height, structure, reflections, theme, maxHKL, detectorLimited, twoThetaMax]);
 
     return (
         <div
@@ -754,8 +734,8 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
                 ref={glCanvasRef}
                 style={{
                     position: 'absolute',
-                    left: margin,
-                    top: margin,
+                    left: 0,
+                    top: 0,
                     width: plotWidth,
                     height: plotHeight,
                 }}

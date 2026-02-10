@@ -6,8 +6,9 @@
 
 import type { ControlTheme } from '../shared/controls';
 
-// Re-export CrystalStructure from diffraction/physics for convenience
-export type { CrystalStructure, Atom } from '../diffraction/physics';
+// Import and re-export CrystalStructure from diffraction/physics
+import type { CrystalStructure, Atom } from '../diffraction/physics';
+export type { CrystalStructure, Atom };
 
 // ============================================================================
 // Volume Data Types
@@ -34,6 +35,11 @@ export interface IsosurfaceConfig {
     color?: string;
     opacity?: number;
     showBothPhases?: boolean;  // +/- isosurfaces for orbitals
+}
+
+export interface MillerPlanesConfig {
+    hkl: [number, number, number];
+    structure: CrystalStructure;
 }
 
 // ============================================================================
@@ -130,6 +136,8 @@ export interface Viewer3DProps {
     showAxes?: boolean;
     /** Generate supercell, e.g., [2, 2, 2] */
     supercell?: [number, number, number];
+    /** Starting cell offset for supercell, e.g., [-1,-1,-1] centers a 2x2x2 around origin */
+    supercellOrigin?: [number, number, number];
 
     // -------------------------------------------------------------------------
     // Isosurface Options
@@ -142,6 +150,12 @@ export interface Viewer3DProps {
     // -------------------------------------------------------------------------
     /** Slice plane configuration */
     slicePlane?: SlicePlaneConfig;
+
+    // -------------------------------------------------------------------------
+    // Miller Planes
+    // -------------------------------------------------------------------------
+    /** Show Miller planes for selected (hkl) reflection */
+    millerPlanes?: MillerPlanesConfig;
 
     // -------------------------------------------------------------------------
     // Trajectory

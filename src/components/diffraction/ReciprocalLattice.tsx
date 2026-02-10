@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import type { CrystalStructure, Reflection } from './physics';
 import { isAllowedReflection, calculateStructureFactor, calculateReciprocalLattice, calculateDSpacing, calculateTwoTheta, CU_K_ALPHA } from './physics';
 import type { ControlTheme } from '../shared/controls';
+import styles from './DiffractionVisualization.module.css';
 
 export interface ReciprocalLatticeProps {
     width: number;
@@ -17,7 +18,6 @@ export interface ReciprocalLatticeProps {
     viewMode?: 'reciprocal' | 'detector';
     wavelength?: number;
     detectorDistance?: number;
-    oscillationRange?: number;
     twoThetaMax?: number;
     bFactor?: number;
     showIndexingCircles?: boolean; // Show indexing circles for d-spacing families
@@ -109,11 +109,11 @@ const DETECTOR_FRAGMENT_SHADER = `
         // Distance from center
         float distFromCenter = length(pos - center);
 
-        // Clean styling: white/light background, black/gray spots
-        vec3 bgColor = vec3(1.0, 1.0, 1.0);
-        vec3 spotColor = vec3(0.0, 0.0, 0.0);
-        vec3 borderColor = vec3(0.95);
-        vec3 edgeColor = vec3(0.7);
+        // Theme-aware styling
+        vec3 bgColor = u_isDark == 1 ? vec3(0.12, 0.12, 0.12) : vec3(1.0, 1.0, 1.0);
+        vec3 spotColor = u_isDark == 1 ? vec3(0.85, 0.9, 1.0) : vec3(0.0, 0.0, 0.0);
+        vec3 borderColor = u_isDark == 1 ? vec3(0.2) : vec3(0.95);
+        vec3 edgeColor = u_isDark == 1 ? vec3(0.35) : vec3(0.7);
         vec3 color = bgColor;
 
         // Antialiased detector boundary
@@ -222,7 +222,6 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     viewMode = 'reciprocal',
     wavelength = CU_K_ALPHA,
     detectorDistance = 100,
-    oscillationRange = 2,
     twoThetaMax = 120,
     bFactor = 0,
     showIndexingCircles = false,
@@ -233,6 +232,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
     const glStateRef = useRef<GLState | null>(null);
     const spotsRef = useRef<SpotData[]>([]);
+    const [hoveredPoint, setHoveredPoint] = useState<{ h: number; k: number; l: number; x: number; y: number } | null>(null);
 
     // Fixed zoom (no pan/zoom interaction)
     const zoom = 1;
@@ -246,7 +246,12 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
 
     // Zone axis [u,v,w] - reflections (h,k,l) are in the zone if h*u + k*v + l*w = 0
-    const [u, v, w] = zoneAxis;
+    // Guard against [0,0,0] which would produce NaN in projections
+    const [rawU, rawV, rawW] = zoneAxis;
+    const isZeroAxis = rawU === 0 && rawV === 0 && rawW === 0;
+    const u = isZeroAxis ? 0 : rawU;
+    const v = isZeroAxis ? 0 : rawV;
+    const w = isZeroAxis ? 1 : rawW;
 
     // Check if a reflection is in the zone (satisfies zone law)
     const isInZone = useCallback((h: number, k: number, l: number): boolean => {
@@ -354,27 +359,20 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     }, [intensityMap, isCubic, structure]);
 
     // Pre-calculate spot data for detector mode
+    // Uses linear-in-2θ mapping: r_pixel = (2θ / twoThetaMax) * maxRadius
+    // The circle always represents twoThetaMax. Changing it reveals/hides
+    // spots near the edge without repositioning existing spots significantly.
     const spotData = useMemo(() => {
         if (viewMode !== 'detector') return [];
 
         const spots: SpotData[] = [];
         const kWave = 1 / wavelength;
-        const oscRad = (oscillationRange * Math.PI) / 180;
         const plotSize = Math.min(width, height) - 80;
         const maxRadius = plotSize / 2;
         const recip = calculateReciprocalLattice(structure);
 
-        // Detector scale: edge of detector corresponds to 2θ max
-        // Clamp twoThetaMax to 85° to avoid tan blowing up
-        const effectiveTwoThetaMax = Math.min(twoThetaMax, 85);
-        const twoThetaMaxRad = (effectiveTwoThetaMax * Math.PI) / 180;
-        const distanceFactor = 100 / detectorDistance;
-        // Scale so that tan(2θ_max) maps to maxRadius
-        const scale = maxRadius / Math.tan(twoThetaMaxRad) * distanceFactor;
+        const twoThetaMaxRad = (twoThetaMax * Math.PI) / 180;
 
-        // Iterate over all hkl combinations
-        // For single crystal: filter by zone law
-        // For powder: include all reflections (zone filtering disabled)
         for (let h = -maxIndex; h <= maxIndex; h++) {
             for (let k_idx = -maxIndex; k_idx <= maxIndex; k_idx++) {
                 for (let l = -maxIndex; l <= maxIndex; l++) {
@@ -401,11 +399,8 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     const theta = Math.asin(sinTheta);
                     const twoTheta = 2 * theta;
 
-                    // Check 2θ limits
                     const twoThetaDeg = (twoTheta * 180) / Math.PI;
                     if (twoThetaDeg > twoThetaMax) continue;
-                    // Can't show backscattering (≥90°) on flat detector
-                    if (twoThetaDeg >= 85) continue;
 
                     // For single crystal mode: check zone and Ewald sphere
                     // For powder mode (powderSmear > 0): include all reflections
@@ -415,20 +410,20 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     const { px, py } = projectToPlane(h, k_idx, l, recip);
 
                     // Ewald sphere check (only for single crystal)
+                    // Fixed tolerance ~5° oscillation equivalent
                     const qIn2D = Math.sqrt(px * px + py * py);
                     const ewaldRadius = 2 * kWave * Math.sin(theta);
-                    const tolerance = oscRad * kWave * 2;
+                    const tolerance = (5 * Math.PI / 180) * kWave * 2;
                     const onEwald = Math.abs(qIn2D - ewaldRadius) < tolerance;
 
                     // Skip if not visible in single crystal mode
                     // But include all for powder mode (we mark isPowderOnly)
                     const visibleInSingleCrystal = inZone && onEwald;
 
-                    // Detector position: r = tan(2θ) * distance
-                    const detectorR = Math.tan(twoTheta) * scale;
+                    // Linear-in-2θ mapping: radius proportional to scattering angle
+                    const detectorR = (twoTheta / twoThetaMaxRad) * maxRadius;
 
                     // Azimuthal angle from the 2D projection
-                    // For powder, this is just an initial angle - it will be smeared to a full ring
                     const phi = Math.atan2(py, px);
 
                     const detectorX = detectorR * Math.cos(phi);
@@ -436,20 +431,19 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
                     const intensity = getIntensity(h, k_idx, l);
 
-                    // Spot size and elongation
-                    // On a flat detector, spots elongate radially at higher angles
-                    // due to oblique incidence: factor ~ 1/cos²(2θ) = 1 + tan²(2θ)
-                    const baseRadius = 2.5;
+                    // Spot size scales with detector distance (closer = larger spots)
+                    const baseRadius = 2.5 * (100 / detectorDistance);
+                    // Mild elongation at high angles (physical effect of oblique incidence)
                     const tanTwoTheta = Math.tan(twoTheta);
-                    const radialStretch = 1 + tanTwoTheta * tanTwoTheta * 0.3; // Scaled down for visual
-                    const elongation = Math.min(3.0, radialStretch); // Cap to avoid extreme elongation
+                    const radialStretch = 1 + tanTwoTheta * tanTwoTheta * 0.15;
+                    const elongation = Math.min(2.5, radialStretch);
 
                     spots.push({
                         x: detectorX,
                         y: detectorY,
                         radius: baseRadius,
                         elongation,
-                        intensity: visibleInSingleCrystal ? intensity : 0, // Start with 0 for powder-only spots
+                        intensity: visibleInSingleCrystal ? intensity : 0,
                         angle: phi,
                         h,
                         k: k_idx,
@@ -463,7 +457,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         }
 
         return spots;
-    }, [viewMode, wavelength, structure, maxIndex, isInZone, projectToPlane, getIntensity, detectorDistance, oscillationRange, width, height, twoThetaMax]);
+    }, [viewMode, wavelength, structure, maxIndex, isInZone, projectToPlane, getIntensity, detectorDistance, width, height, twoThetaMax]);
 
     // Initialize WebGL for detector mode
     useEffect(() => {
@@ -643,14 +637,14 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         const plotSize = Math.min(width, height) - 80;
         const maxRadius = plotSize / 2;
 
-        // Detector edge now corresponds to 2θ max - label it
-        ctx.fillStyle = '#999';
+        // Detector edge label — circle edge = twoThetaMax
+        ctx.fillStyle = theme.textMuted;
         ctx.font = '9px "Segoe UI", system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(`2θ=${twoThetaMax}°`, centerX, centerY - maxRadius * zoom + 12);
+        ctx.fillText(`2θ_max=${twoThetaMax}°`, centerX, centerY - maxRadius * zoom + 12);
 
         // Title
-        ctx.fillStyle = '#333';
+        ctx.fillStyle = theme.text;
         ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
         ctx.textAlign = 'left';
         const modeText = powderSmear > 0.5 ? 'Powder' : `Zone ${zoneLabel}`;
@@ -658,18 +652,14 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
         // Info
         ctx.font = '10px "Segoe UI", system-ui, sans-serif';
-        ctx.fillStyle = '#666';
+        ctx.fillStyle = theme.textMuted;
         ctx.textAlign = 'right';
         const spotCountText = spotData.length > 4000 ? `⚠️ ${spotData.length}` : `${spotData.length}`;
         ctx.fillText(`λ=${wavelength.toFixed(3)}Å | ${spotCountText} spots`, width - 10, height - 10);
 
         // Draw indexing circles for d-spacing families
         if (showIndexingCircles && powderSmear < 0.5) {
-            // Calculate scale to convert 2θ to pixel radius (same as spot positioning)
-            const effectiveTwoThetaMax = Math.min(twoThetaMax, 85);
-            const twoThetaMaxRad = (effectiveTwoThetaMax * Math.PI) / 180;
-            const distanceFactor = 100 / detectorDistance;
-            const scale = maxRadius / Math.tan(twoThetaMaxRad) * distanceFactor;
+            const twoThetaMaxRad = (twoThetaMax * Math.PI) / 180;
 
             // Group spots by d-spacing to draw indexing circles
             // Use 2θ as proxy (spots at same 2θ have same d-spacing)
@@ -682,7 +672,8 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                 const twoThetaKey = (Math.round(spot.twoTheta * 180 / Math.PI * 10) / 10).toFixed(1);
 
                 if (!dSpacingGroups.has(twoThetaKey)) {
-                    const circleRadius = Math.tan(spot.twoTheta) * scale * zoom;
+                    // Linear mapping matches spot positioning
+                    const circleRadius = (spot.twoTheta / twoThetaMaxRad) * maxRadius * zoom;
                     // Use absolute values for hkl label
                     const h = Math.abs(spot.h), k = Math.abs(spot.k), l = Math.abs(spot.l);
                     // Sort to get canonical form {hkl}
@@ -945,6 +936,48 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         ctx.fillStyle = theme.textMuted;
         ctx.textAlign = 'right';
         ctx.fillText(`${points.length} reflections`, width - 10, height - 10);
+
+        // Hover tooltip
+        if (hoveredPoint) {
+            const hp = hoveredPoint;
+            const d = calculateDSpacing(hp.h, hp.k, hp.l, structure);
+            const twoTheta = calculateTwoTheta(d, wavelength);
+            const intensity = getIntensity(hp.h, hp.k, hp.l);
+            const label = `(${hp.h} ${hp.k} ${hp.l})`;
+            const dLabel = isFinite(d) ? `d=${d.toFixed(3)}Å` : '';
+            const twoThetaLabel = !isNaN(twoTheta) ? `2θ=${twoTheta.toFixed(1)}°` : '';
+            const iLabel = intensity > 0 ? `I=${intensity.toFixed(1)}` : '';
+            const lines = [label, dLabel, twoThetaLabel, iLabel].filter(Boolean);
+
+            ctx.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
+            const maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
+            const padX = 6, padY = 4;
+            const lineHeight = 14;
+            const tooltipW = maxLineWidth + 2 * padX;
+            const tooltipH = lines.length * lineHeight + 2 * padY;
+
+            // Position tooltip above and to the right of the point
+            let tx = hp.x + 12;
+            let ty = hp.y - tooltipH - 4;
+            // Keep tooltip within canvas bounds
+            if (tx + tooltipW > width) tx = hp.x - tooltipW - 12;
+            if (ty < 0) ty = hp.y + 12;
+
+            ctx.fillStyle = isDark ? 'rgba(50, 50, 50, 0.92)' : 'rgba(255, 255, 255, 0.92)';
+            ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(tx, ty, tooltipW, tooltipH, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = theme.text;
+            ctx.textAlign = 'left';
+            for (let i = 0; i < lines.length; i++) {
+                ctx.font = i === 0 ? 'bold 10px "Segoe UI", system-ui, sans-serif' : '10px "Segoe UI", system-ui, sans-serif';
+                ctx.fillText(lines[i], tx + padX, ty + padY + (i + 1) * lineHeight - 3);
+            }
+        }
     }, [
         viewMode,
         width,
@@ -962,7 +995,70 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         getIntensity,
         twoThetaMax,
         wavelength,
+        hoveredPoint,
     ]);
+
+    // Handle mouse move for hover tooltip (reciprocal view only)
+    const handleMouseMove = useCallback(
+        (e: React.MouseEvent) => {
+            if (viewMode !== 'reciprocal') return;
+
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const margin = 40;
+            const plotSize = Math.min(width, height) - 2 * margin;
+            const recip = calculateReciprocalLattice(structure);
+
+            // Build points and compute scale (same as render)
+            let minPx = 0, maxPx = 0, minPy = 0, maxPy = 0;
+            const zonePoints: { h: number; k: number; l: number; px: number; py: number }[] = [];
+            for (let h = -maxIndex; h <= maxIndex; h++) {
+                for (let k = -maxIndex; k <= maxIndex; k++) {
+                    for (let l = -maxIndex; l <= maxIndex; l++) {
+                        if (!isInZone(h, k, l)) continue;
+                        if (h === 0 && k === 0 && l === 0) continue;
+                        if (!isAllowedReflection(Math.abs(h), Math.abs(k), Math.abs(l), structure)) continue;
+                        const { px, py } = projectToPlane(h, k, l, recip);
+                        minPx = Math.min(minPx, px); maxPx = Math.max(maxPx, px);
+                        minPy = Math.min(minPy, py); maxPy = Math.max(maxPy, py);
+                        zonePoints.push({ h, k, l, px, py });
+                    }
+                }
+            }
+
+            const extentX = maxPx - minPx || 1;
+            const extentY = maxPy - minPy || 1;
+            const scale = plotSize / Math.max(extentX, extentY) * 0.85;
+
+            let closestDist = Infinity;
+            let closest: { h: number; k: number; l: number; x: number; y: number } | null = null;
+            for (const pt of zonePoints) {
+                const x = centerX + pt.px * scale;
+                const y = centerY - pt.py * scale;
+                const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+                if (dist < closestDist && dist < 20) {
+                    closestDist = dist;
+                    closest = { h: pt.h, k: pt.k, l: pt.l, x, y };
+                }
+            }
+
+            setHoveredPoint(closest);
+        },
+        [viewMode, width, height, maxIndex, structure, isInZone, projectToPlane]
+    );
+
+    const handleMouseLeave = useCallback(() => {
+        setHoveredPoint(null);
+    }, []);
 
     // Handle click for selection
     const handleClick = useCallback(
@@ -1142,53 +1238,23 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     }}
                 />
                 {/* Inline controls */}
-                <div
-                    style={{
-                        position: 'absolute',
-                        top: 6,
-                        right: 6,
-                        display: 'flex',
-                        gap: '4px',
-                    }}
-                >
-                    {/* Indexing circles toggle */}
+                <div className={styles.detectorOverlayControls}>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             onShowIndexingCirclesChange?.(!showIndexingCircles);
                         }}
-                        style={{
-                            padding: '3px 6px',
-                            fontSize: '9px',
-                            fontWeight: 500,
-                            border: '1px solid #ccc',
-                            borderRadius: '3px',
-                            backgroundColor: showIndexingCircles ? '#2563eb' : '#fff',
-                            color: showIndexingCircles ? '#fff' : '#333',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                        }}
+                        className={`${styles.detectorOverlayButton} ${showIndexingCircles ? styles.detectorOverlayButtonActive : ''}`}
                         title="Toggle indexing circles"
                     >
                         Index
                     </button>
-                    {/* Powder animation button */}
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
                             handlePowderToggle();
                         }}
-                        style={{
-                            padding: '3px 6px',
-                            fontSize: '9px',
-                            fontWeight: 500,
-                            border: '1px solid #ccc',
-                            borderRadius: '3px',
-                            backgroundColor: powderSmear > 0.5 ? '#2563eb' : '#fff',
-                            color: powderSmear > 0.5 ? '#fff' : '#333',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                        }}
+                        className={`${styles.detectorOverlayButton} ${powderSmear > 0.5 ? styles.detectorOverlayButtonActive : ''}`}
                         title={powderSmear > 0.5 ? 'Reset to single crystal' : 'Animate to powder pattern'}
                     >
                         {isAnimating ? '...' : (powderSmear > 0.5 ? 'Crystal' : 'Powder')}
@@ -1204,6 +1270,8 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             width={width}
             height={height}
             onClick={handleClick}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
             style={{
                 cursor: 'pointer',
                 borderRadius: '4px',

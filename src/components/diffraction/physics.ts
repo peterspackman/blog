@@ -111,6 +111,12 @@ export interface DiffractionParams {
     bFactor?: number; // Debye-Waller temperature factor in Ų (0 = no damping)
 }
 
+/** Control point for form factor spline editing */
+export interface ControlPoint {
+    s: number;  // sin(θ)/λ value (x-axis)
+    f: number;  // form factor value (y-axis)
+}
+
 // ============================================================================
 // Constants
 // ============================================================================
@@ -121,7 +127,7 @@ export const MO_K_ALPHA = 0.7107; // Mo Kα wavelength in Å
 // Atomic form factor coefficients (Cromer-Mann parameterization)
 // f(s) = Σᵢ aᵢ·exp(-bᵢ·s²) + c, where s = sin(θ)/λ
 // Format: [a1, b1, a2, b2, a3, b3, a4, b4, c]
-const FORM_FACTOR_COEFFS: Record<string, number[]> = {
+export const FORM_FACTOR_COEFFS: Record<string, number[]> = {
     H: [0.489918, 20.6593, 0.262003, 7.74039, 0.196767, 49.5519, 0.049879, 2.20159, 0.001305],
     Na: [
         4.7626, 3.285, 3.1736, 8.8422, 1.2674, 0.3136, 1.1128, 129.424, 0.676,
@@ -476,11 +482,18 @@ export function calculatePowderPattern(params: DiffractionParams): Reflection[] 
 
                     const multiplicity = calculateMultiplicity(h, k, l);
 
+                    // Lorentz-polarization factor: (1 + cos²2θ) / (sin²θ · cosθ)
+                    const twoThetaRad = twoTheta * Math.PI / 180;
+                    const sinTheta = Math.sin(twoThetaRad / 2);
+                    const cosTheta = Math.cos(twoThetaRad / 2);
+                    const cos2Theta = Math.cos(twoThetaRad);
+                    const lp = (1 + cos2Theta * cos2Theta) / (sinTheta * sinTheta * cosTheta);
+
                     reflections.push({
                         h, k, l,
                         dSpacing: d,
                         twoTheta,
-                        intensity: intensity * multiplicity,
+                        intensity: intensity * multiplicity * lp,
                         structureFactor: F,
                         multiplicity,
                     });
@@ -513,11 +526,18 @@ export function calculatePowderPattern(params: DiffractionParams): Reflection[] 
                     const nonZero = (h !== 0 ? 1 : 0) + (k !== 0 ? 1 : 0) + (l !== 0 ? 1 : 0);
                     const multiplicity = Math.pow(2, nonZero);
 
+                    // Lorentz-polarization factor: (1 + cos²2θ) / (sin²θ · cosθ)
+                    const twoThetaRad = twoTheta * Math.PI / 180;
+                    const sinTheta = Math.sin(twoThetaRad / 2);
+                    const cosTheta = Math.cos(twoThetaRad / 2);
+                    const cos2Theta = Math.cos(twoThetaRad);
+                    const lp = (1 + cos2Theta * cos2Theta) / (sinTheta * sinTheta * cosTheta);
+
                     reflections.push({
                         h, k, l,
                         dSpacing: d,
                         twoTheta,
-                        intensity: intensity * multiplicity,
+                        intensity: intensity * multiplicity * lp,
                         structureFactor: F,
                         multiplicity,
                     });
