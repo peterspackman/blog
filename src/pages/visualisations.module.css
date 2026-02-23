@@ -1,0 +1,111 @@
+.container {
+  padding: 2rem 0 4rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.section {
+  margin-bottom: 2rem;
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: var(--ifm-card-border-radius, 0.5rem);
+  overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  text-decoration: none !important;
+  color: inherit !important;
+  border-left: 3px solid transparent;
+}
+
+.card:hover {
+  border-color: var(--ifm-color-emphasis-300);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+/* Category tints — light mode */
+.cardQuantum {
+  background: rgba(100, 60, 180, 0.04);
+  border-left-color: rgba(100, 60, 180, 0.4);
+}
+
+.cardCrystallography {
+  background: rgba(30, 120, 180, 0.04);
+  border-left-color: rgba(30, 120, 180, 0.4);
+}
+
+.cardSimulation {
+  background: rgba(30, 140, 60, 0.04);
+  border-left-color: rgba(30, 140, 60, 0.4);
+}
+
+.cardMathematics {
+  background: rgba(200, 120, 20, 0.04);
+  border-left-color: rgba(200, 120, 20, 0.4);
+}
+
+/* Category tints — dark mode */
+[data-theme='dark'] .cardQuantum {
+  background: rgba(160, 120, 240, 0.06);
+  border-left-color: rgba(160, 120, 240, 0.5);
+}
+
+[data-theme='dark'] .cardCrystallography {
+  background: rgba(80, 170, 240, 0.06);
+  border-left-color: rgba(80, 170, 240, 0.5);
+}
+
+[data-theme='dark'] .cardSimulation {
+  background: rgba(80, 200, 100, 0.06);
+  border-left-color: rgba(80, 200, 100, 0.5);
+}
+
+[data-theme='dark'] .cardMathematics {
+  background: rgba(240, 180, 60, 0.06);
+  border-left-color: rgba(240, 180, 60, 0.5);
+}
+
+.cardBody {
+  padding: 0.85rem 1rem;
+  flex: 1;
+}
+
+.cardTitle {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+  color: var(--ifm-heading-color);
+}
+
+.cardDesc {
+  font-size: 0.8rem;
+  margin: 0;
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-700);
+}

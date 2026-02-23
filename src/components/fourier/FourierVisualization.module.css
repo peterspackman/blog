@@ -1,0 +1,138 @@
+/* Fourier Visualization Layout */
+
+.container {
+    padding: 1rem;
+    background-color: var(--ifm-background-color);
+}
+
+.title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 1rem 0;
+}
+
+/* Three-column grid — fixed row height prevents reflow when controls change */
+.mainGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 260px;
+    grid-template-rows: clamp(400px, 60vh, 700px);
+    gap: 0.6rem;
+}
+
+/* Panels */
+.inputPanel,
+.outputPanel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--ifm-background-surface-color, #fafafa);
+    border-radius: 6px;
+}
+
+.settingsPanel {
+    min-width: 0;
+    overflow-y: auto;
+}
+
+/* Panel header */
+.panelHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.6rem;
+    background: var(--ifm-color-emphasis-100, #f0f0f0);
+    border-radius: 6px 6px 0 0;
+}
+
+.panelTitle {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--ifm-color-content);
+}
+
+/* Panel content */
+.panelContent {
+    flex: 1;
+    overflow: auto;
+    padding: 0.25rem;
+}
+
+/* Canvas wrapper */
+.viewerContainer {
+    line-height: 0;
+}
+
+.viewerContainer canvas {
+    display: block;
+}
+
+/* Explanation section */
+.explanationContainer {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    background: var(--ifm-color-emphasis-100);
+    border-radius: 6px;
+}
+
+.explanationTitle {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+
+.explanationText {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 0.75rem;
+}
+
+.explanationNote {
+    padding: 0.75rem;
+    background: var(--ifm-color-emphasis-200);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.hintList {
+    margin: 0.5rem 0 0 1.25rem;
+    padding: 0;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.hintList li {
+    margin-bottom: 0.35rem;
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+    .mainGrid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .settingsPanel {
+        grid-column: 1 / -1;
+        max-height: 300px;
+    }
+}
+
+@media (max-width: 700px) {
+    .mainGrid {
+        grid-template-columns: 1fr;
+    }
+    .inputPanel,
+    .outputPanel {
+        min-height: 350px;
+    }
+}
+
+/* Dark mode */
+[data-theme='dark'] .inputPanel,
+[data-theme='dark'] .outputPanel {
+    background: #1e1e1e;
+}
+
+[data-theme='dark'] .panelHeader {
+    background: #2a2a2a;
+}

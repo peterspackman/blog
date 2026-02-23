@@ -209,40 +209,9 @@ const config: Config = {
           ],
         },
         {
-          type: 'dropdown',
           label: 'visualisations',
+          to: '/visualisations',
           position: 'left',
-          items: [
-            {
-              label: "Bragg's Law",
-              href: '/bragg',
-            },
-
-            {
-              label: 'QM 1D',
-              href: '/qm1d',
-            },
-            {
-              label: 'QM 2D',
-              href: '/qm2d',
-            },
-            {
-              label: 'Spherical Harmonics',
-              href: '/spherical-harmonics',
-            },
-            {
-              label: 'Molecular Dynamics',
-              href: '/md',
-            },
-            {
-              label: 'Crystal Structures',
-              href: '/crystals',
-            },
-            {
-              label: 'Wulff Construction 2D',
-              href: '/wulff',
-            },
-          ],
         },
         {
           href: 'https://github.com/peterspackman',
