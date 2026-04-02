@@ -335,8 +335,13 @@ const WavefunctionCalculator: React.FC = () => {
       setMoleculeInfo({ name, formula, numAtoms });
     } catch {}
 
-    // Restore full calculation results
-    restoreSession(savedSession.results);
+    // Reconstruct wavefunction binary from saved owfJson string
+    let wfnData: Uint8Array | undefined;
+    if (savedSession.results.wavefunctionData?.owfJson) {
+      wfnData = new TextEncoder().encode(savedSession.results.wavefunctionData.owfJson);
+    }
+
+    restoreSession(savedSession.results, wfnData);
     setActiveTab('results');
     setSavedSession(null);
   };
