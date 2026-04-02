@@ -359,6 +359,11 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     return orbitals;
   }, [wavefunctionResults]);
 
+  // Clear selected orbitals when results change (e.g. new molecule loaded)
+  useEffect(() => {
+    setSelectedOrbitals(new Set());
+  }, [wavefunctionResults]);
+
   // Show all available orbitals
   const displayedOrbitals = availableOrbitals;
 
@@ -371,6 +376,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
       for (const orbitalIndex of selectedOrbitals) {
         const orbital = availableOrbitals[orbitalIndex];
+        if (!orbital) continue;
         const spin = orbital.spin;
         const cubeKey = spin
           ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
@@ -487,7 +493,8 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     // Check if all selected orbitals have cube data
     const allCubesAvailable = Array.from(selectedOrbitals).every(orbitalIndex => {
       const orbital = availableOrbitals[orbitalIndex];
-      const spin = orbital?.spin;
+      if (!orbital) return false;
+      const spin = orbital.spin;
       const cubeKey = spin
         ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
         : `molecular_orbital_${orbital.index}_${gridSteps}`;
@@ -587,7 +594,8 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       // Load and visualize each selected orbital
       for (const [index, orbitalIndex] of Array.from(selectedOrbitals).entries()) {
         const orbital = availableOrbitals[orbitalIndex];
-        const spin = orbital?.spin;
+        if (!orbital) continue;
+        const spin = orbital.spin;
         const cubeKey = spin
           ? `molecular_orbital_${orbital.index}_${spin}_${gridSteps}`
           : `molecular_orbital_${orbital.index}_${gridSteps}`;
