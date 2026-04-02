@@ -46,6 +46,76 @@
   }
 }
 
+/* PubChem search */
+.pubchemSection {
+  margin-bottom: 0.75rem;
+}
+
+.pubchemRow {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pubchemInput {
+  flex: 1;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
+.pubchemInput:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+}
+
+.pubchemButton {
+  padding: 0.375rem 0.75rem;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--ifm-color-primary);
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pubchemButton:hover:not(:disabled) {
+  background: var(--ifm-color-primary-dark);
+}
+
+.pubchemButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pubchemError {
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--ifm-color-danger);
+}
+
+/* Size warning */
+.warningMessage {
+  padding: 0.4rem 0.6rem;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--ifm-color-warning-darkest, #7c5e00);
+  background: var(--ifm-color-warning-lightest, #fff8e1);
+  border: 1px solid var(--ifm-color-warning-light, #ffcc02);
+  border-radius: 0.25rem;
+}
+
+[data-theme='dark'] .warningMessage {
+  color: #ffd54f;
+  background: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
 .inputContainer {
   border: 1px solid var(--ifm-color-emphasis-300);
   border-radius: 0.25rem;

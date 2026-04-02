@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
 import styles from './MatrixDisplay.module.css';
-
-interface MatrixData {
-  rows: number;
-  cols: number;
-  data: number[][];
-}
+import type { MatrixData } from './types';
 
 interface MatrixDisplayProps {
   matrix: MatrixData;

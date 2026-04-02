@@ -71,6 +71,12 @@ const VISUALISATIONS: VizCard[] = [
     description: 'Real-time molecular dynamics with interatomic potentials.',
   },
   {
+    title: 'Grand Canonical Monte Carlo',
+    href: '/gcmc',
+    tag: 'Simulation',
+    description: 'GCMC simulation with particle insertion, deletion, and displacement moves.',
+  },
+  {
     title: 'Fourier Transform',
     href: '/fourier',
     tag: 'Crystallography',

@@ -214,9 +214,11 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
         const outputW = outputCanvas.width;
         const outputH = outputCanvas.height;
 
+        // Enable smooth interpolation when stretching FFT grid to display canvas
+        outputCtx.imageSmoothingEnabled = true;
+        outputCtx.imageSmoothingQuality = 'high';
+
         if (inputMode === 'draw') {
-            // Draw mode GPU: wallpaper expand → FFT → display
-            // Input display is handled by InputPanel's own Canvas2D
             gpu.renderWallpaper(
                 resolution, cellDims.cellW, cellDims.cellH, cellDims.shear,
                 opsInfo.data, opsInfo.count,
@@ -225,13 +227,15 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
             outputCtx.clearRect(0, 0, outputW, outputH);
             outputCtx.drawImage(gpu.getCanvas(), 0, 0, outputW, outputH);
         } else {
-            // Pattern mode GPU: SDF → FFT → display
             const inputCanvas = gpuInputCanvasRef.current;
             if (!inputCanvas) return;
             const inputCtx = inputCanvas.getContext('2d');
             if (!inputCtx) return;
             const inputW = inputCanvas.width;
             const inputH = inputCanvas.height;
+
+            inputCtx.imageSmoothingEnabled = true;
+            inputCtx.imageSmoothingQuality = 'high';
 
             gpu.renderPatternOnly(patternType, params, resolution);
             inputCtx.clearRect(0, 0, inputW, inputH);
@@ -287,9 +291,66 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
         : displayMode === 'real' ? 'Re(F(k))'
         : 'Im(F(k))';
 
+    // Fullscreen
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+
+    const prevResolutionRef = useRef(resolution);
+
+    const toggleFullscreen = useCallback(() => {
+        if (!containerRef.current) return;
+
+        if (!document.fullscreenElement) {
+            // Auto-bump resolution for fullscreen
+            if (resolution < 512) {
+                prevResolutionRef.current = resolution;
+                setResolution(512);
+            }
+            containerRef.current.requestFullscreen().then(() => {
+                setIsFullscreen(true);
+            }).catch(() => {
+                setIsFullscreen(true);
+            });
+        } else {
+            document.exitFullscreen().then(() => {
+                setIsFullscreen(false);
+            });
+        }
+    }, [resolution]);
+
+    useEffect(() => {
+        const handleChange = () => {
+            setIsFullscreen(!!document.fullscreenElement);
+        };
+        document.addEventListener('fullscreenchange', handleChange);
+        return () => document.removeEventListener('fullscreenchange', handleChange);
+    }, []);
+
+    // Escape key exits CSS fallback fullscreen
+    useEffect(() => {
+        if (!isFullscreen || document.fullscreenElement) return;
+        const handleKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsFullscreen(false);
+        };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [isFullscreen]);
+
     return (
-        <div className={`${styles.container} ${className || ''}`}>
-            <h2 className={styles.title}>Fourier Transform Visualizer</h2>
+        <div
+            ref={containerRef}
+            className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''} ${className || ''}`}
+        >
+            <div className={styles.titleRow}>
+                <h2 className={styles.title}>Fourier Transform Visualizer</h2>
+                <button
+                    className={styles.fullscreenButton}
+                    onClick={toggleFullscreen}
+                    title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                >
+                    {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                </button>
+            </div>
 
             <div className={styles.mainGrid}>
                 {/* LEFT: Input Panel */}

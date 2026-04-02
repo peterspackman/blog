@@ -453,6 +453,12 @@ export const FourierControls: React.FC<FourierControlsProps> = ({
                     >
                         512x512
                     </button>
+                    <button
+                        style={buttonStyle(resolution === 1024, theme)}
+                        onClick={() => onResolutionChange(1024)}
+                    >
+                        1024x1024
+                    </button>
                 </div>
             </CollapsibleSection>
         </div>

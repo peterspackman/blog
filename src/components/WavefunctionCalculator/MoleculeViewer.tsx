@@ -2,14 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as NGL from 'ngl';
 import styles from './MoleculeViewer.module.css';
 import OrbitalItem from './OrbitalItem';
+import { getOrbitalList } from './types';
+import type { CalculationResult, GridInfo, CubeGeometrySettings, OrbitalInfo } from './types';
 
 interface MoleculeViewerProps {
   xyzData: string;
   moleculeName?: string;
-  wavefunctionResults?: any;
+  wavefunctionResults?: CalculationResult;
   cubeResults?: Map<string, string>;
-  cubeGridInfo?: any;
-  cubeSettings?: any;
+  cubeGridInfo?: GridInfo | null;
+  cubeSettings?: CubeGeometrySettings;
   onRequestCubeComputation?: (cubeType: string, orbitalIndex?: number, gridSteps?: number, spin?: 'alpha' | 'beta') => void;
   onOpenCubeSettings?: () => void;
 }
@@ -347,53 +349,10 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
     const orbitals = [];
 
-    // Check if this is an unrestricted calculation
-    const isUnrestricted = typeof wavefunctionResults.orbitalEnergies === 'object' &&
-                           'isUnrestricted' in wavefunctionResults.orbitalEnergies;
-
-    if (isUnrestricted) {
-      const energies = wavefunctionResults.orbitalEnergies;
-      const occupations = wavefunctionResults.orbitalOccupations;
-
-      // Add alpha orbitals
-      for (let i = 0; i < energies.alpha.length; i++) {
-        const energy = energies.alpha[i];
-        const occupation = occupations.alpha[i] || 0;
-        orbitals.push({
-          index: i,
-          energy: energy * 27.2114, // Convert to eV
-          occupation,
-          isOccupied: occupation > 0,
-          spin: 'alpha' as const
-        });
-      }
-
-      // Add beta orbitals
-      for (let i = 0; i < energies.beta.length; i++) {
-        const energy = energies.beta[i];
-        const occupation = occupations.beta[i] || 0;
-        orbitals.push({
-          index: i,
-          energy: energy * 27.2114, // Convert to eV
-          occupation,
-          isOccupied: occupation > 0,
-          spin: 'beta' as const
-        });
-      }
-    } else {
-      // Restricted calculation
-      const energies = wavefunctionResults.orbitalEnergies as number[];
-      const occupations = wavefunctionResults.orbitalOccupations as number[];
-
-      for (let i = 0; i < energies.length; i++) {
-        const energy = energies[i];
-        const occupation = occupations[i] || 0;
-        orbitals.push({
-          index: i,
-          energy: energy * 27.2114, // Convert to eV
-          occupation,
-          isOccupied: occupation > 0
-        });
+    if (wavefunctionResults.orbitalEnergies && wavefunctionResults.orbitalOccupations) {
+      const list = getOrbitalList(wavefunctionResults.orbitalEnergies, wavefunctionResults.orbitalOccupations);
+      for (const o of list) {
+        orbitals.push({ ...o, energy: o.energy * 27.2114 });
       }
     }
 

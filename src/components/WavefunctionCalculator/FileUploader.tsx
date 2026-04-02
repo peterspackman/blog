@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './FileUploader.module.css';
+import { fetchFromPubChem } from './pubchem';
 
 interface FileUploaderProps {
   onFileLoad: (xyzContent: string) => void;
@@ -81,6 +82,8 @@ H  0.000000 -0.923000 -1.232000`
   }
 };
 
+const MAX_ATOMS_WARNING = 50;
+
 const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationChange }) => {
   const [fileName, setFileName] = useState<string>('');
   const [xyzText, setXyzText] = useState<string>('');
@@ -88,8 +91,65 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
   const [selectedExample, setSelectedExample] = useState<string>('formaldehyde');
   const [isValid, setIsValid] = useState<boolean>(true);
   const [validationError, setValidationError] = useState<string>('');
+  const [sizeWarning, setSizeWarning] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // PubChem search
+  const [pubchemQuery, setPubchemQuery] = useState('');
+  const [pubchemLoading, setPubchemLoading] = useState(false);
+  const [pubchemError, setPubchemError] = useState('');
+
+  const checkSizeWarning = (content: string) => {
+    try {
+      const numAtoms = parseInt(content.trim().split('\n')[0]);
+      if (numAtoms > MAX_ATOMS_WARNING) {
+        setSizeWarning(`This molecule has ${numAtoms} atoms. Large molecules may be slow with bigger basis sets (e.g. def2-TZVP). Consider using STO-3G or 3-21G.`);
+      } else {
+        setSizeWarning('');
+      }
+    } catch {
+      setSizeWarning('');
+    }
+  };
+
+  const loadXYZ = (content: string, source?: string) => {
+    setXyzText(content);
+    setFileName(source || '');
+    setSelectedExample('');
+    setPubchemError('');
+
+    const validation = validateXYZ(content);
+    setIsValid(validation.isValid);
+    setValidationError(validation.error || '');
+    checkSizeWarning(content);
+
+    if (validation.isValid) {
+      onFileLoad(content);
+    }
+    onValidationChange?.(validation.isValid, validation.error);
+  };
+
+  const handlePubchemSearch = async () => {
+    const query = pubchemQuery.trim();
+    if (!query) return;
+
+    setPubchemLoading(true);
+    setPubchemError('');
+
+    try {
+      const xyz = await fetchFromPubChem(query);
+      loadXYZ(xyz, `PubChem: ${query}`);
+    } catch (err: any) {
+      setPubchemError(err.message || 'Failed to fetch from PubChem');
+    } finally {
+      setPubchemLoading(false);
+    }
+  };
+
+  const handlePubchemKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handlePubchemSearch();
+  };
 
   // Validate XYZ format
   const validateXYZ = (content: string): { isValid: boolean; error?: string } => {
@@ -261,6 +321,8 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
       setSelectedExample(exampleKey);
       setIsValid(true);
       setValidationError('');
+      setSizeWarning('');
+      setPubchemError('');
       onFileLoad(molecule.xyz);
       if (onValidationChange) {
         onValidationChange(true);
@@ -307,6 +369,31 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
         </select>
       </div>
       
+      <div className={styles.pubchemSection}>
+        <label className={styles.exampleLabel}>Search PubChem</label>
+        <div className={styles.pubchemRow}>
+          <input
+            type="text"
+            className={styles.pubchemInput}
+            placeholder="e.g. aspirin, caffeine, benzene"
+            value={pubchemQuery}
+            onChange={(e) => setPubchemQuery(e.target.value)}
+            onKeyDown={handlePubchemKeyDown}
+            disabled={pubchemLoading}
+          />
+          <button
+            className={styles.pubchemButton}
+            onClick={handlePubchemSearch}
+            disabled={!pubchemQuery.trim() || pubchemLoading}
+          >
+            {pubchemLoading ? '...' : 'Fetch'}
+          </button>
+        </div>
+        {pubchemError && (
+          <div className={styles.pubchemError}>{pubchemError}</div>
+        )}
+      </div>
+
       <div className={styles.inputContainer}>
         <div className={styles.headerRow}>
           <span className={styles.label}>XYZ Coordinates</span>
@@ -344,6 +431,11 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
         {!isValid && validationError && (
           <div className={styles.errorMessage}>
             {validationError}
+          </div>
+        )}
+        {isValid && sizeWarning && (
+          <div className={styles.warningMessage}>
+            {sizeWarning}
           </div>
         )}
       </div>

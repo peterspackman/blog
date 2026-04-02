@@ -1,18 +1,7 @@
 import React from 'react';
 import styles from './CubeSettings.module.css';
-
-export interface CubeGeometrySettings {
-  gridSteps: number;
-  useAdaptive: boolean;
-  bufferDistance: number;
-  threshold: number;
-  customOrigin: boolean;
-  origin: [number, number, number];
-  customDirections: boolean;
-  directionA: [number, number, number];
-  directionB: [number, number, number];
-  directionC: [number, number, number];
-}
+import type { CubeGeometrySettings } from './types';
+export type { CubeGeometrySettings } from './types';
 
 interface CubeSettingsProps {
   settings: CubeGeometrySettings;

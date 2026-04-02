@@ -1,40 +1,7 @@
 import React from 'react';
 import styles from './ResultsDisplay.module.css';
-
-interface CalculationResult {
-  energy: number;
-  energyInEV: number;
-  elapsedMs: number;
-  converged: boolean;
-  properties?: {
-    homo?: number;
-    lumo?: number;
-    gap?: number;
-  };
-  wavefunctionData?: {
-    fchk?: string;
-    owfJson?: string;
-    numBasisFunctions: number;
-    numAtoms: number;
-  };
-  matrices?: any;
-  orbitalEnergies?: number[];
-  optimization?: {
-    trajectory: {
-      energies: number[];
-      gradientNorms: number[];
-      geometries: string[];
-      converged: boolean;
-      steps: number;
-      finalEnergy: number;
-      finalMolecule: any;
-    };
-    finalXYZ: string;
-    steps: number;
-    energies: number[];
-    gradientNorms: number[];
-  };
-}
+import { getEnergyValues, getOrbitalCount } from './types';
+import type { CalculationResult } from './types';
 
 interface ResultsDisplayProps {
   results: CalculationResult | null;
@@ -90,7 +57,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
           numBasisFunctions: results.wavefunctionData.numBasisFunctions,
           numAtoms: results.wavefunctionData.numAtoms,
           calculationTime: results.elapsedMs,
-          orbitalEnergies: results.orbitalEnergies?.slice(0, 20) // First 20 orbitals
+          orbitalEnergies: results.orbitalEnergies ? getEnergyValues(results.orbitalEnergies).slice(0, 20) : undefined
         }, null, 2);
         filename = 'calculation_summary.json';
         mimeType = 'application/json';
@@ -135,7 +102,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
             hasFchk: !!results.wavefunctionData?.fchk,
             hasProperties: !!results.properties,
             hasOrbitalEnergies: !!results.orbitalEnergies,
-            orbitalEnergiesCount: results.orbitalEnergies?.length,
+            orbitalEnergiesCount: results.orbitalEnergies ? getOrbitalCount(results.orbitalEnergies) : 0,
             hasOrbitalOccupations: !!results.orbitalOccupations
           }, null, 2)}
         </pre>

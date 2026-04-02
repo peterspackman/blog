@@ -3,6 +3,45 @@
   background-color: var(--ifm-background-surface-color);
 }
 
+/* Working indicator */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.workingIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  background: var(--ifm-color-primary-lightest, #e0edff);
+  color: var(--ifm-color-primary-dark, #1a56db);
+  font-size: 0.75rem;
+  font-weight: 600;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.workingIndicator::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+[data-theme='dark'] .workingIndicator {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93bbfc;
+}
+
 .layout {
   display: flex;
   height: calc(100vh - 60px);
@@ -419,6 +458,156 @@
   color: var(--ifm-color-info-contrast-foreground);
   border-radius: 0.25rem;
   font-size: 0.875rem;
+}
+
+/* Settings tab */
+.settingsTab {
+  padding: 1.25rem;
+  max-width: 700px;
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settingsField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.settingsField label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.settingsField input,
+.settingsField select {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 4px;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
+.settingsField small {
+  font-size: 0.7rem;
+  color: var(--ifm-color-emphasis-500);
+}
+
+/* Resume banner */
+.resumeBanner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  margin: 0.5rem;
+  background: var(--ifm-color-primary-lightest, #e0edff);
+  border: 1px solid var(--ifm-color-primary-light, #93bbfc);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.resumeBanner p {
+  flex: 1;
+  margin: 0;
+  color: var(--ifm-color-primary-darkest, #1a3a6e);
+}
+
+.resumeBanner button {
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resumeButton {
+  background: var(--ifm-color-primary);
+  color: #fff;
+}
+
+.dismissButton {
+  background: transparent;
+  color: var(--ifm-color-emphasis-600);
+  border: 1px solid var(--ifm-color-emphasis-300) !important;
+}
+
+[data-theme='dark'] .resumeBanner {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+[data-theme='dark'] .resumeBanner p {
+  color: #93bbfc;
+}
+
+/* About tab */
+.aboutTab {
+  padding: 1.25rem;
+  max-width: 700px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.aboutSection {
+  margin-bottom: 1.5rem;
+}
+
+.aboutSection h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+}
+
+.aboutSection p {
+  margin: 0 0 0.5rem 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.aboutSection ul {
+  margin: 0.25rem 0 0 1.25rem;
+  padding: 0;
+}
+
+.aboutSection li {
+  margin-bottom: 0.3rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.aboutSection a {
+  color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+.aboutSection a:hover {
+  text-decoration: underline;
+}
+
+.citation {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 0 4px 4px 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ifm-color-emphasis-800);
+}
+
+.citation em {
+  font-style: italic;
 }
 
 .errorModal {
