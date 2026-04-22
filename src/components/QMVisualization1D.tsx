@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import React, {
+    useState,
+    useEffect,
+    useRef,
+    useCallback,
+    useLayoutEffect,
+    useMemo,
+} from 'react';
 import { useColorMode } from '@docusaurus/theme-common';
 import styles from './QMVisualization.module.css';
 
@@ -6,10 +13,17 @@ import { WavefunctionCanvas, type DisplayOptions } from './qm1d/WavefunctionCanv
 import { PhasorDiagram } from './qm1d/PhasorDiagram';
 import { QMControls } from './qm1d/QMControls';
 import { QMExplanation } from './qm1d/QMExplanation';
-import { getPotentialDisplayName, type PotentialType, type PotentialConfig } from './qm1d/physics';
+import {
+    buildStateSet,
+    defaultDomain,
+    defaultParams,
+    getPotentialDisplayName,
+    type PotentialType,
+    type PotentialConfig,
+    type PotentialParams,
+} from './qm1d/physics';
 import type { ControlTheme } from './shared/controls';
 
-// Hook to measure container width
 function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
     const [width, setWidth] = useState(800);
 
@@ -20,14 +34,9 @@ function useContainerWidth(ref: React.RefObject<HTMLDivElement>) {
                 setWidth(Math.max(400, Math.floor(containerWidth)));
             }
         };
-
         updateWidth();
-
         const resizeObserver = new ResizeObserver(updateWidth);
-        if (ref.current) {
-            resizeObserver.observe(ref.current);
-        }
-
+        if (ref.current) resizeObserver.observe(ref.current);
         return () => resizeObserver.disconnect();
     }, [ref]);
 
@@ -39,11 +48,9 @@ interface QMVisualization1DProps {
 }
 
 const QMVisualization1D: React.FC<QMVisualization1DProps> = ({ className }) => {
-    // Dark mode support
     const { colorMode } = useColorMode();
     const isDark = colorMode === 'dark';
 
-    // Theme-aware colors
     const theme: ControlTheme = {
         background: isDark ? '#2d2d2d' : '#f8f9fa',
         surface: isDark ? '#3d3d3d' : '#ffffff',
@@ -54,80 +61,89 @@ const QMVisualization1D: React.FC<QMVisualization1DProps> = ({ className }) => {
         inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
     };
 
-    // State
     const [activeStates, setActiveStates] = useState<number[]>([0]);
     const [isAnimating, setIsAnimating] = useState(true);
     const [speed, setSpeed] = useState(0.2);
     const [potentialType, setPotentialType] = useState<PotentialType>('harmonic');
+    const [potentialParams, setPotentialParams] = useState<PotentialParams>(
+        defaultParams('harmonic')
+    );
 
     const [displayOptions, setDisplayOptions] = useState<DisplayOptions>({
-        showReal: true,
-        showImaginary: true,
+        showReal: false,
+        showImaginary: false,
         showProbability: true,
         showPotential: true,
-        showIndividualStates: true,
+        showIndividualStates: false,
+        showEnergyLevels: true,
+        autoRescale: false,
     });
 
-    // Animation state
     const animationRef = useRef<number | null>(null);
-    const tauRef = useRef(0); // Dimensionless time
-
-    // Canvas container ref for measuring width
-    const canvasContainerRef = useRef<HTMLDivElement>(null);
-    const canvasWidth = useContainerWidth(canvasContainerRef);
-    const canvasHeight = Math.min(500, Math.round(canvasWidth * 0.45)); // Cap at 500px
-
-    // Derived state
+    const tauRef = useRef(0);
     const [tau, setTau] = useState(0);
 
-    // Potential configuration
-    const potentialConfig: PotentialConfig = {
-        type: potentialType,
-        xMin: -6,
-        xMax: 6,
-    };
+    const canvasContainerRef = useRef<HTMLDivElement>(null);
+    const canvasWidth = useContainerWidth(canvasContainerRef);
+    const canvasHeight = Math.min(500, Math.round(canvasWidth * 0.45));
+
+    // Build state set — memoized so we only diagonalize when params change
+    const stateSet = useMemo(() => {
+        const domain = defaultDomain(potentialType, potentialParams);
+        const config: PotentialConfig = {
+            type: potentialType,
+            xMin: domain.xMin,
+            xMax: domain.xMax,
+            ...potentialParams,
+        };
+        return buildStateSet(config);
+    }, [potentialType, potentialParams]);
 
     // Animation loop
     useEffect(() => {
         const animate = () => {
             if (isAnimating) {
-                // Increment dimensionless time
-                // 0.05 per frame at speed=1 means ~125 frames per ground state period (2*pi)
                 tauRef.current += 0.05 * speed;
                 setTau(tauRef.current);
             }
             animationRef.current = requestAnimationFrame(animate);
         };
-
         animationRef.current = requestAnimationFrame(animate);
-
         return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
         };
     }, [isAnimating, speed]);
 
-    // Toggle quantum state
     const toggleState = useCallback((n: number) => {
         setActiveStates((prev) => {
             if (prev.includes(n)) {
-                // Prevent removing last state
-                if (prev.length > 1) {
-                    return prev.filter((state) => state !== n);
-                }
-                return prev;
+                return prev.length > 1 ? prev.filter((s) => s !== n) : prev;
             }
             return [...prev, n].sort((a, b) => a - b);
         });
     }, []);
 
-    // Set potential type
-    const handlePotentialTypeChange = useCallback((type: PotentialType) => {
-        setPotentialType(type);
+    const selectOnlyState = useCallback((n: number) => {
+        setActiveStates([n]);
     }, []);
 
-    // Update display option
+    const handlePotentialTypeChange = useCallback((type: PotentialType) => {
+        setPotentialType(type);
+        setPotentialParams(defaultParams(type));
+        // Different potentials have different numbers of bound states and
+        // different energy orderings, so reset to just the ground state.
+        setActiveStates([0]);
+        tauRef.current = 0;
+        setTau(0);
+    }, []);
+
+    const handlePotentialParamChange = useCallback(
+        <K extends keyof PotentialParams>(key: K, value: PotentialParams[K]) => {
+            setPotentialParams((prev) => ({ ...prev, [key]: value }));
+        },
+        []
+    );
+
     const handleDisplayOptionChange = useCallback(
         <K extends keyof DisplayOptions>(key: K, value: boolean) => {
             setDisplayOptions((prev) => ({ ...prev, [key]: value }));
@@ -138,42 +154,41 @@ const QMVisualization1D: React.FC<QMVisualization1DProps> = ({ className }) => {
     return (
         <div className={`${styles.container} ${className || ''}`}>
             <h2 className={styles.title}>
-                Quantum {getPotentialDisplayName(potentialType)} Visualization
+                Quantum {getPotentialDisplayName(potentialType)}
             </h2>
 
-            {/* Main grid layout: canvas area + sidebar */}
             <div className={styles.gridLayout}>
-                {/* Left: Canvas area */}
                 <div className={styles.canvasArea} ref={canvasContainerRef}>
-                    {/* Main wavefunction canvas */}
                     <div className={styles.canvasWrapper}>
                         <WavefunctionCanvas
                             width={canvasWidth}
                             height={canvasHeight}
                             activeStates={activeStates}
                             tau={tau}
-                            potentialConfig={potentialConfig}
+                            stateSet={stateSet}
                             displayOptions={displayOptions}
+                            theme={theme}
                         />
                     </div>
 
-                    {/* Phasor diagram below canvas */}
                     <div className={styles.phasorWrapper}>
                         <PhasorDiagram
                             activeStates={activeStates}
                             tau={tau}
-                            potentialConfig={potentialConfig}
+                            stateSet={stateSet}
                             onToggleState={toggleState}
+                            onSelectOnly={selectOnlyState}
                             theme={theme}
                         />
                     </div>
                 </div>
 
-                {/* Right: Sidebar controls */}
                 <div className={styles.sidebarArea}>
                     <QMControls
                         potentialType={potentialType}
                         onPotentialTypeChange={handlePotentialTypeChange}
+                        potentialParams={potentialParams}
+                        onPotentialParamChange={handlePotentialParamChange}
                         displayOptions={displayOptions}
                         onDisplayOptionChange={handleDisplayOptionChange}
                         isAnimating={isAnimating}
@@ -185,7 +200,6 @@ const QMVisualization1D: React.FC<QMVisualization1DProps> = ({ className }) => {
                 </div>
             </div>
 
-            {/* Explanation section */}
             <QMExplanation
                 potentialType={potentialType}
                 activeStates={activeStates}
