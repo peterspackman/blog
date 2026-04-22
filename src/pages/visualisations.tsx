@@ -35,10 +35,11 @@ const VISUALISATIONS: VizCard[] = [
     description: '3D particle in a box with volume ray marching.',
   },
   {
-    title: 'Spherical Harmonics',
+    title: 'Spherical Harmonics & Hydrogen Orbitals',
     href: '/spherical-harmonics',
     tag: 'Quantum',
-    description: '3D visualisation of spherical harmonic functions.',
+    description:
+      'Separation of variables for central potentials: Y_{l,m}(θ,φ), R_{nl}(r), and the full ψ_{nlm} with linear combinations and cartesian pedagogy.',
   },
   {
     title: "Bragg's Law",
