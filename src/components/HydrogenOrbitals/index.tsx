@@ -15,6 +15,12 @@ import {
 } from './physics';
 import { cartesianMonomials, cartesianNorm } from './codegen';
 import RadialPlot from './RadialPlot';
+import {
+    type QualityTier,
+    describeProfile,
+    detectTier,
+    getProfile,
+} from './quality';
 
 type SliceAxis = 0 | 1 | 2;
 
@@ -152,6 +158,14 @@ const HydrogenOrbitalsInner: React.FC = () => {
     const [colorPositive, setColorPositive] = useState('#ed8936');
     const [colorNegative, setColorNegative] = useState('#3b82f6');
     const [showAxes, setShowAxes] = useState(false);
+
+    // Quality tier. 'auto' runs detectTier() once at mount; manual picks stick.
+    // Detection peeks at navigator.hardwareConcurrency and the WebGL renderer
+    // string (where available) — cheap, non-intrusive, and roughly correct.
+    const [qualityOverride, setQualityOverride] = useState<'auto' | QualityTier>('auto');
+    const detectedTier = useMemo(() => detectTier(), []);
+    const effectiveTier = qualityOverride === 'auto' ? detectedTier : qualityOverride;
+    const qualityProfile = useMemo(() => getProfile(effectiveTier), [effectiveTier]);
 
     // Quantum-number constraint enforcement: l ≤ n-1, |m| ≤ l.
     useEffect(() => {
@@ -595,6 +609,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                             boundingRadius={boundingRadius}
                             normScale={normScale}
                             showAxes={showAxes}
+                            qualityProfile={qualityProfile}
                         />
                     ) : (
                         <div
@@ -777,6 +792,29 @@ const HydrogenOrbitalsInner: React.FC = () => {
                             renderMode,
                             (v) => setRenderMode(v as RenderMode),
                         )}
+                    </section>
+
+                    {/* Quality tier — auto-picked from hardware heuristics, manually overridable. */}
+                    <section>
+                        <label style={{ fontSize: 13, color: theme.textMuted, display: 'block', marginBottom: 6 }}>
+                            Quality
+                        </label>
+                        {buttonRow(
+                            [
+                                { value: 'auto', label: 'Auto' },
+                                { value: 'low', label: 'Low' },
+                                { value: 'medium', label: 'Med' },
+                                { value: 'high', label: 'High' },
+                            ],
+                            qualityOverride,
+                            (v) => setQualityOverride(v as 'auto' | QualityTier),
+                        )}
+                        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
+                            {qualityOverride === 'auto'
+                                ? `Auto → ${effectiveTier} · `
+                                : `Manual · `}
+                            {describeProfile(qualityProfile)}
+                        </div>
                     </section>
 
                     {(renderMode === 'isosurface' || renderMode === 'density') && (

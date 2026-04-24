@@ -197,27 +197,60 @@ void main() {
 }
 `;
 
-export const fragmentShader = /* glsl */ `
+export interface FragmentShaderVariant {
+    /** Number of active terms; must be ≥ 1 and ≤ MAX_ORBITAL_TERMS. */
+    numTerms: number;
+    /** 0 = angular Y(θ,φ), 1 = radial R(r), 2 = full ψ = R·Y. */
+    displayMode: 0 | 1 | 2;
+    /** 0 = isosurface, 1 = density, 2 = slice. */
+    renderMode: 0 | 1 | 2;
+    /** Ray-march step count for iso mode. Tier-dependent. */
+    stepsIso: number;
+    /** Ray-march step count for density mode. */
+    stepsDensity: number;
+    /** Bisection iterations at iso-crossing (3 = jagged, 6 = smooth). */
+    bisectionIters: number;
+    /** true → full 3-light rig w/ specular + fresnel; false → cheap diffuse. */
+    lightingComplex: boolean;
+}
+
+/**
+ * Build a specialised fragment shader via GLSL #defines. Compile-time knowledge
+ * of NUM_TERMS / DISPLAY_MODE / RENDER_MODE lets the driver dead-code whole
+ * branches (radial mode skips the term loop entirely; slice mode skips the
+ * clip-plane logic; iso mode's heavy shadeLobe is compiled out of density and
+ * slice variants). Recompile is only needed when these three change.
+ */
+export function buildFragmentShader(v: FragmentShaderVariant): string {
+    const nt = Math.max(1, Math.min(MAX_ORBITAL_TERMS, v.numTerms));
+    const dm = v.displayMode;
+    const rm = v.renderMode;
+    const stepsIso = Math.max(8, Math.min(128, Math.floor(v.stepsIso)));
+    const stepsDensity = Math.max(8, Math.min(96, Math.floor(v.stepsDensity)));
+    const bisect = Math.max(1, Math.min(8, Math.floor(v.bisectionIters)));
+    const lighting = v.lightingComplex ? 1 : 0;
+    return /* glsl */ `
 precision highp float;
 
+#define NUM_TERMS ${nt}
+#define DISPLAY_MODE ${dm}
+#define RENDER_MODE ${rm}
+#define LIGHTING_COMPLEX ${lighting}
+
+#if DISPLAY_MODE != 1
 ${YLM_GLSL}
 
 ${RAW_CART_GLSL}
+#endif
 
 ${RADIAL_GLSL}
 
-// Radial-mode single orbital (radial mode is always single-term for clarity).
+// Radial-mode single orbital.
 uniform int uRadN;
 uniform int uRadL;
 
-// Packed term arrays. Each entry i represents one summand:
-//   kind[i] = 0  ⟹  Σ coeff · R_{n,l}(r) · Y_{l,m}(r̂)     (spherical)
-//   kind[i] = 1  ⟹  Σ coeff · R_{n,a+b+c}(r) · x^a y^b z^c (cartesian; cart.
-//                    normalisation pre-baked into coeff on the JS side)
-//
-// For angular display mode, R is replaced by exp(-r/λ). For radial mode,
-// terms are ignored — we use (uRadN, uRadL) directly.
-uniform int uNumTerms;
+// Packed term arrays. Arrays stay at MAX_ORBITAL_TERMS for layout stability;
+// only the first NUM_TERMS are read.
 uniform int uTermKind[${MAX_ORBITAL_TERMS}];
 uniform int uTermN[${MAX_ORBITAL_TERMS}];
 uniform int uTermP1[${MAX_ORBITAL_TERMS}]; // spherical: l, cartesian: a
@@ -226,8 +259,6 @@ uniform int uTermP3[${MAX_ORBITAL_TERMS}]; // cartesian: c
 uniform float uTermCoeff[${MAX_ORBITAL_TERMS}];
 
 uniform float uIsoValue;
-uniform int uRenderMode;      // 0=iso, 1=density, 2=slice
-uniform int uDisplayMode;     // 0=angular, 1=radial R_{nl}, 2=full ψ
 uniform int uSliceAxis;       // 0 = x-normal, 1 = y-normal, 2 = z-normal
 uniform float uSlicePosition;
 uniform int uClipEnabled;     // 0/1: cutaway against the slice plane in iso/density modes
@@ -242,8 +273,9 @@ uniform float uBoundingRadius;
 
 varying vec3 vWorldPosition;
 
-const int STEPS_ISO = 64;
-const int STEPS_DENSITY = 48;
+const int STEPS_ISO = ${stepsIso};
+const int STEPS_DENSITY = ${stepsDensity};
+const int BISECTION_ITERS = ${bisect};
 const float INV_SQRT_4PI_C = 0.28209479177387814;  // Y_{0,0}
 
 // Small unrolled integer-exponent power for the cartesian monomials. Max
@@ -256,29 +288,26 @@ float pw(float v, int n) {
     return v * v * v * v;
 }
 
-// Sample the field the user currently wants to see.
-//   0 = angular: Σ coeff · (Y or N·x^a y^b z^c) · exp(-r/λ)
-//   1 = radial:  R_{uRadN, uRadL}(r) · Y_{0,0}
-//   2 = full ψ:  Σ coeff · R_{n, l or a+b+c}(r) · (Y or N·x^a y^b z^c)
+// Sample the field. Variant-specialised at compile time:
+//   DISPLAY_MODE == 0 (angular): Σ coeff · (Y or N·x^a y^b z^c) · exp(-r/λ)
+//   DISPLAY_MODE == 1 (radial):  R_{uRadN, uRadL}(r) · Y_{0,0}
+//   DISPLAY_MODE == 2 (full ψ):  Σ coeff · R_{n, l or a+b+c}(r) · (Y or N·x^a y^b z^c)
 float sampleField(vec3 pos) {
     float r2 = dot(pos, pos);
-    if (r2 < 1e-8) {
-        if (uDisplayMode == 1) return radialR(uRadN, uRadL, 0.0, uZ) * INV_SQRT_4PI_C;
-        return 0.0;
-    }
+#if DISPLAY_MODE == 1
+    float r = sqrt(r2);
+    return radialR(uRadN, uRadL, r, uZ) * INV_SQRT_4PI_C;
+#else
+    if (r2 < 1e-8) return 0.0;
     float r = sqrt(r2);
     vec3 nHat = pos / r;
 
-    if (uDisplayMode == 1) {
-        return radialR(uRadN, uRadL, r, uZ) * INV_SQRT_4PI_C;
-    }
-
-    float envelope = (uDisplayMode == 0) ? exp(-r / max(uEnvelopeScale, 0.01)) : 0.0;
+    #if DISPLAY_MODE == 0
+    float envelope = exp(-r / max(uEnvelopeScale, 0.01));
+    #endif
 
     float sum = 0.0;
-    for (int i = 0; i < ${MAX_ORBITAL_TERMS}; i++) {
-        if (i >= uNumTerms) break;
-
+    for (int i = 0; i < NUM_TERMS; i++) {
         int kind = uTermKind[i];
         int n = uTermN[i];
         int p1 = uTermP1[i];
@@ -297,15 +326,15 @@ float sampleField(vec3 pos) {
         }
 
         float radFactor;
-        if (uDisplayMode == 0) {
-            radFactor = envelope;
-        } else {
-            radFactor = radialR(n, lEq, r, uZ);
-        }
-
+    #if DISPLAY_MODE == 0
+        radFactor = envelope;
+    #else
+        radFactor = radialR(n, lEq, r, uZ);
+    #endif
         sum += coeff * ang * radFactor;
     }
     return sum;
+#endif
 }
 
 // Ray–sphere intersection; returns (tNear, tFar) or (-1, -1) for a miss.
@@ -335,12 +364,15 @@ float intersectPlane(vec3 orig, vec3 dir, vec3 n, float offset) {
  * Diffuse uses half-Lambert ((N·L)/2 + 1/2)² so every orientation has some
  * illumination — no fully-occluded dark side when you rotate the orbital.
  */
-vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive) {
+#if RENDER_MODE == 0
+// baseVal = sampleField(hitPos), usually the last bisection value (vA) — reused
+// to turn central differences into forward differences (3 samples instead of 6).
+vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive, float baseVal) {
     float eps = 0.03;
     vec3 grad = vec3(
-        sampleField(hitPos + vec3(eps, 0, 0)) - sampleField(hitPos - vec3(eps, 0, 0)),
-        sampleField(hitPos + vec3(0, eps, 0)) - sampleField(hitPos - vec3(0, eps, 0)),
-        sampleField(hitPos + vec3(0, 0, eps)) - sampleField(hitPos - vec3(0, 0, eps))
+        sampleField(hitPos + vec3(eps, 0, 0)) - baseVal,
+        sampleField(hitPos + vec3(0, eps, 0)) - baseVal,
+        sampleField(hitPos + vec3(0, 0, eps)) - baseVal
     );
     float gLen = length(grad);
     vec3 N = gLen > 1e-6 ? grad / gLen : vec3(0.0, 1.0, 0.0);
@@ -348,6 +380,13 @@ vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive) {
 
     vec3 base = positive ? uColorPositive : uColorNegative;
 
+#if LIGHTING_COMPLEX == 0
+    // Cheap diffuse — single directional light in camera space, no specular,
+    // no fresnel, no basis. About 10× cheaper than the full rig below.
+    vec3 L = normalize(-rayDir + vec3(0.0, 0.7, 0.3));
+    float diff = max(dot(N, L), 0.0);
+    return base * (0.25 + 0.75 * diff);
+#else
     // Build a camera-relative basis (R, U, V). Blend the "world up" reference
     // smoothly between y-axis and z-axis as the viewer approaches a pole —
     // a hard switch at |V.y| ≈ 1 causes R to flip direction, which looks like
@@ -397,7 +436,9 @@ vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive) {
     color += specTint * specBroad * 0.16;         // soft broad highlight
     color += specTint * specTight * 0.38;         // pop clearcoat highlight
     return color;
+#endif
 }
+#endif
 
 void main() {
     vec3 rayOrigin = uCameraPos;
@@ -408,9 +449,26 @@ void main() {
     float tNear = max(tBounds.x, 0.0);
     float tFar = tBounds.y;
 
-    // Cutaway: trim the ray's bounding interval against a clip plane. Only
-    // applied in iso/density modes; slice mode already has its own plane.
-    if (uClipEnabled == 1 && (uRenderMode == 0 || uRenderMode == 1)) {
+#if DISPLAY_MODE == 0
+    // Angular mode: the envelope exp(-r/λ) is essentially zero past r ≈ 4.5λ, so
+    // clip the march to a tighter sphere when the envelope is small relative to
+    // uBoundingRadius. No-op at default λ ≈ 2 with the default bounding radius 6.
+    {
+        float envRadius = 4.5 * max(uEnvelopeScale, 0.01);
+        if (envRadius < uBoundingRadius) {
+            vec2 tInner = intersectSphere(rayOrigin, rayDir, envRadius);
+            if (tInner.y < 0.0) discard;
+            tNear = max(tNear, tInner.x);
+            tFar = min(tFar, tInner.y);
+            if (tFar <= tNear) discard;
+        }
+    }
+#endif
+
+#if RENDER_MODE != 2
+    // Cutaway: trim the ray's bounding interval against a clip plane. Slice
+    // mode has its own plane, so this is compiled out there.
+    if (uClipEnabled == 1) {
         vec3 clipN;
         if (uSliceAxis == 0) clipN = vec3(1.0, 0.0, 0.0);
         else if (uSliceAxis == 1) clipN = vec3(0.0, 1.0, 0.0);
@@ -420,115 +478,96 @@ void main() {
         float startSide = dot(rayOrigin, clipN) - uSlicePosition;
         // Convention: "kept" half-space is where dot(p, n) > uSlicePosition.
         if (abs(denom) < 1e-6) {
-            // Ray parallel to plane; visible only if we start on the kept side.
             if (startSide < 0.0) discard;
         } else {
             float tPlane = (uSlicePosition - dot(rayOrigin, clipN)) / denom;
             if (startSide > 0.0) {
-                // Start kept, exit at the plane if the ray goes through.
                 if (denom < 0.0) tFar = min(tFar, tPlane);
             } else {
-                // Start hidden, enter kept at the plane.
                 if (denom > 0.0) tNear = max(tNear, tPlane);
                 else discard;
             }
             if (tFar <= tNear) discard;
         }
     }
+#endif
 
-    // ------------------------------------------------------------------
-    // ISOSURFACE
-    // ------------------------------------------------------------------
-    if (uRenderMode == 0) {
-        float iso = uIsoValue;
-        float dt = (tFar - tNear) / float(STEPS_ISO);
-        float t = tNear;
-        float prev = sampleField(rayOrigin + rayDir * t);
+#if RENDER_MODE == 0
+    // -------- ISOSURFACE --------
+    float iso = uIsoValue;
+    float dt = (tFar - tNear) / float(STEPS_ISO);
+    float t = tNear;
+    float prev = sampleField(rayOrigin + rayDir * t);
 
-        for (int i = 1; i < STEPS_ISO; i++) {
-            t += dt;
-            vec3 p = rayOrigin + rayDir * t;
-            float val = sampleField(p);
+    for (int i = 1; i < STEPS_ISO; i++) {
+        t += dt;
+        vec3 p = rayOrigin + rayDir * t;
+        float val = sampleField(p);
 
-            bool crossPlus = (prev - iso) * (val - iso) < 0.0;
-            bool crossMinus = (prev + iso) * (val + iso) < 0.0;
+        bool crossPlus = (prev - iso) * (val - iso) < 0.0;
+        bool crossMinus = (prev + iso) * (val + iso) < 0.0;
 
-            if (crossPlus || crossMinus) {
-                float target = crossPlus ? iso : -iso;
-                float tA = t - dt, tB = t;
-                float vA = prev, vB = val;
-                for (int j = 0; j < 5; j++) {
-                    float tMid = 0.5 * (tA + tB);
-                    float vMid = sampleField(rayOrigin + rayDir * tMid);
-                    if ((vA - target) * (vMid - target) < 0.0) {
-                        tB = tMid; vB = vMid;
-                    } else {
-                        tA = tMid; vA = vMid;
-                    }
+        if (crossPlus || crossMinus) {
+            float target = crossPlus ? iso : -iso;
+            float tA = t - dt, tB = t;
+            float vA = prev, vB = val;
+            for (int j = 0; j < BISECTION_ITERS; j++) {
+                float tMid = 0.5 * (tA + tB);
+                float vMid = sampleField(rayOrigin + rayDir * tMid);
+                if ((vA - target) * (vMid - target) < 0.0) {
+                    tB = tMid; vB = vMid;
+                } else {
+                    tA = tMid; vA = vMid;
                 }
-                vec3 hitPos = rayOrigin + rayDir * tA;
-                bool positive = target > 0.0;
-                gl_FragColor = vec4(shadeLobe(hitPos, rayDir, positive), 1.0);
-                return;
             }
-            prev = val;
+            vec3 hitPos = rayOrigin + rayDir * tA;
+            bool positive = target > 0.0;
+            // vA is the field value at hitPos after bisection — reuse as gradient base.
+            gl_FragColor = vec4(shadeLobe(hitPos, rayDir, positive, vA), 1.0);
+            return;
         }
-        discard;
+        prev = val;
     }
-
-    // ------------------------------------------------------------------
-    // DENSITY  (|ψ|² ray march with sign colouring, auto-scaled)
-    // ------------------------------------------------------------------
-    if (uRenderMode == 1) {
-        vec4 acc = vec4(0.0);
-        float dt = (tFar - tNear) / float(STEPS_DENSITY);
-        // Normalised amplitude: val/max ∈ [-1,1], density ∈ [0,1].
-        for (int i = 0; i < STEPS_DENSITY; i++) {
-            float t = tNear + (float(i) + 0.5) * dt;
-            vec3 p = rayOrigin + rayDir * t;
-            float val = sampleField(p) * uNormScale;
-            float density = val * val;
-            if (density < 1e-5) continue;
-
-            // Per-unit-length opacity; dt cancels the "thicker bounding box
-            // means more opacity" artefact.
-            float alpha = clamp(density * dt / max(uBoundingRadius, 1.0) * 40.0, 0.0, 1.0);
-            vec3 color = (val > 0.0) ? uColorPositive : uColorNegative;
-            color *= pow(density, 0.35) * 1.6;
-
-            acc.rgb += (1.0 - acc.a) * color * alpha;
-            acc.a += (1.0 - acc.a) * alpha;
-            if (acc.a > 0.98) break;
-        }
-        if (acc.a < 0.005) discard;
-        gl_FragColor = vec4(acc.rgb, acc.a);
-        return;
-    }
-
-    // ------------------------------------------------------------------
-    // SLICE
-    // ------------------------------------------------------------------
-    if (uRenderMode == 2) {
-        vec3 n;
-        if (uSliceAxis == 0) n = vec3(1.0, 0.0, 0.0);
-        else if (uSliceAxis == 1) n = vec3(0.0, 1.0, 0.0);
-        else n = vec3(0.0, 0.0, 1.0);
-
-        float tP = intersectPlane(rayOrigin, rayDir, n, uSlicePosition);
-        if (tP < tNear || tP > tFar) discard;
-
-        vec3 p = rayOrigin + rayDir * tP;
-        float val = sampleField(p) * uNormScale; // normalised to [-1, 1]
-
-        // Signed colourmap: background at 0, saturate to the lobe colours at ±1.
-        // A mild power curve sharpens small features without killing peaks.
-        float mag = clamp(pow(abs(val), 0.6), 0.0, 1.0);
-        vec3 target = (val >= 0.0) ? uColorPositive : uColorNegative;
-        vec3 color = mix(uBackground, target, mag);
-        gl_FragColor = vec4(color, 1.0);
-        return;
-    }
-
     discard;
+#elif RENDER_MODE == 1
+    // -------- DENSITY (|ψ|² ray march with sign colouring, auto-scaled) --------
+    vec4 acc = vec4(0.0);
+    float dt = (tFar - tNear) / float(STEPS_DENSITY);
+    for (int i = 0; i < STEPS_DENSITY; i++) {
+        float t = tNear + (float(i) + 0.5) * dt;
+        vec3 p = rayOrigin + rayDir * t;
+        float val = sampleField(p) * uNormScale;
+        float density = val * val;
+        if (density < 1e-5) continue;
+
+        float alpha = clamp(density * dt / max(uBoundingRadius, 1.0) * 40.0, 0.0, 1.0);
+        vec3 color = (val > 0.0) ? uColorPositive : uColorNegative;
+        color *= pow(density, 0.35) * 1.6;
+
+        acc.rgb += (1.0 - acc.a) * color * alpha;
+        acc.a += (1.0 - acc.a) * alpha;
+        if (acc.a > 0.98) break;
+    }
+    if (acc.a < 0.005) discard;
+    gl_FragColor = vec4(acc.rgb, acc.a);
+#else
+    // -------- SLICE --------
+    vec3 n;
+    if (uSliceAxis == 0) n = vec3(1.0, 0.0, 0.0);
+    else if (uSliceAxis == 1) n = vec3(0.0, 1.0, 0.0);
+    else n = vec3(0.0, 0.0, 1.0);
+
+    float tP = intersectPlane(rayOrigin, rayDir, n, uSlicePosition);
+    if (tP < tNear || tP > tFar) discard;
+
+    vec3 p = rayOrigin + rayDir * tP;
+    float val = sampleField(p) * uNormScale;
+
+    float mag = clamp(pow(abs(val), 0.6), 0.0, 1.0);
+    vec3 target = (val >= 0.0) ? uColorPositive : uColorNegative;
+    vec3 color = mix(uBackground, target, mag);
+    gl_FragColor = vec4(color, 1.0);
+#endif
 }
 `;
+}

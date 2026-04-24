@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import { fragmentShader, vertexShader, BOUNDING_RADIUS, MAX_ORBITAL_TERMS } from './shaders';
+import { buildFragmentShader, vertexShader, BOUNDING_RADIUS, MAX_ORBITAL_TERMS } from './shaders';
 import { cartesianNorm } from './codegen';
 import type { DisplayMode, RenderMode, Term } from './types';
+import type { QualityProfile } from './quality';
 
 export interface OrbitalVolumeProps {
     /** All summands of the wavefunction. Angular/full modes sum over them.
@@ -26,6 +27,9 @@ export interface OrbitalVolumeProps {
     boundingRadius?: number;
     /** 1 / max|field| for auto-scaling slice and density modes. */
     normScale: number;
+    /** Quality tier — drives shader step counts, bisection iters, and lighting
+     *  complexity. Changing tier recompiles the shader (keyed via shaderVariant). */
+    qualityProfile: QualityProfile;
 }
 
 const MODE_INDEX: Record<RenderMode, number> = {
@@ -99,16 +103,41 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
     background,
     boundingRadius = BOUNDING_RADIUS,
     normScale,
+    qualityProfile,
 }) => {
     const meshRef = useRef<THREE.Mesh>(null);
     const { camera, invalidate } = useThree();
 
     const packed = useMemo(() => packTerms(terms), [terms]);
 
+    // Structural knobs that require a shader recompile (NUM_TERMS / DISPLAY_MODE /
+    // RENDER_MODE + tier-controlled defines). Keyed on primitives so re-derivation
+    // is cheap; recompile only fires on real variant change.
+    const shaderVariant = useMemo(
+        () => ({
+            numTerms: Math.max(1, packed.count),
+            displayMode: DISPLAY_INDEX[displayMode] as 0 | 1 | 2,
+            renderMode: MODE_INDEX[renderMode] as 0 | 1 | 2,
+            stepsIso: qualityProfile.stepsIso,
+            stepsDensity: qualityProfile.stepsDensity,
+            bisectionIters: qualityProfile.bisectionIters,
+            lightingComplex: qualityProfile.lightingComplex,
+        }),
+        [
+            packed.count,
+            displayMode,
+            renderMode,
+            qualityProfile.stepsIso,
+            qualityProfile.stepsDensity,
+            qualityProfile.bisectionIters,
+            qualityProfile.lightingComplex,
+        ],
+    );
+
     const material = useMemo(() => {
         return new THREE.ShaderMaterial({
             vertexShader,
-            fragmentShader,
+            fragmentShader: buildFragmentShader(shaderVariant),
             side: THREE.BackSide,
             transparent: true,
             depthWrite: false,
@@ -116,7 +145,6 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
                 uRadN: { value: radN },
                 uRadL: { value: radL },
                 uZ: { value: Z },
-                uNumTerms: { value: packed.count },
                 uTermKind: { value: packed.kinds.slice() },
                 uTermN: { value: packed.ns.slice() },
                 uTermP1: { value: packed.p1s.slice() },
@@ -124,8 +152,6 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
                 uTermP3: { value: packed.p3s.slice() },
                 uTermCoeff: { value: packed.coeffs.slice() },
                 uIsoValue: { value: isoValue },
-                uRenderMode: { value: MODE_INDEX[renderMode] },
-                uDisplayMode: { value: DISPLAY_INDEX[displayMode] },
                 uSliceAxis: { value: sliceAxis },
                 uSlicePosition: { value: slicePosition },
                 uClipEnabled: { value: clipEnabled ? 1 : 0 },
@@ -139,7 +165,10 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
             },
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [shaderVariant]);
+
+    // Dispose old program/material when a variant change recreates it.
+    useEffect(() => () => material.dispose(), [material]);
 
     // Push prop changes into uniforms and request one redraw.
     useEffect(() => {
@@ -147,7 +176,6 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
         u.uRadN.value = radN;
         u.uRadL.value = radL;
         u.uZ.value = Z;
-        u.uNumTerms.value = packed.count;
         const assign = (dst: number[], src: number[]) => {
             for (let i = 0; i < MAX_ORBITAL_TERMS; i++) dst[i] = src[i];
         };
@@ -158,8 +186,6 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
         assign(u.uTermP3.value as number[], packed.p3s);
         assign(u.uTermCoeff.value as number[], packed.coeffs);
         u.uIsoValue.value = isoValue;
-        u.uRenderMode.value = MODE_INDEX[renderMode];
-        u.uDisplayMode.value = DISPLAY_INDEX[displayMode];
         u.uSliceAxis.value = sliceAxis;
         u.uSlicePosition.value = slicePosition;
         u.uClipEnabled.value = clipEnabled ? 1 : 0;
@@ -177,8 +203,6 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
         radL,
         Z,
         isoValue,
-        renderMode,
-        displayMode,
         sliceAxis,
         slicePosition,
         clipEnabled,
