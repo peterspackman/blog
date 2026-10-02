@@ -1,18 +1,15 @@
 import React from 'react';
-import Layout from '@theme/Layout';
 import QMVisualization1D from '@site/src/components/QMVisualization1D';
-import styles from './qm-visualizations.module.css';
+import { VizPage } from '@site/src/components/shared/viz';
 
 export default function QM1D() {
-  return (
-    <Layout
-      title="1D Quantum Mechanics"
-      description="Interactive visualization of quantum wavefunctions in 1D potentials">
-      <main className={styles.mainContainerWide}>
-        <div className={styles.visualizationContainerFull}>
-          <QMVisualization1D />
-        </div>
-      </main>
-    </Layout>
-  );
+    return (
+        <VizPage
+            titleInPlot
+            title="Schrödinger equation in 1D"
+            description="Interactive visualization of quantum wavefunctions in 1D potentials"
+        >
+            <QMVisualization1D title="Schrödinger equation in 1D" />
+        </VizPage>
+    );
 }

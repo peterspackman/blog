@@ -2,7 +2,6 @@ import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { vertexShader, fragmentShader } from './shaders';
 import type { QuantumState2D, DisplayMode, ColorMapType } from './physics';
-import type { ControlTheme } from '../shared/controls';
 
 export interface Wavefunction2DCanvasProps {
     width: number;
@@ -12,7 +11,6 @@ export interface Wavefunction2DCanvasProps {
     displayMode: DisplayMode;
     colorMapType: ColorMapType;
     showContours: boolean;
-    theme: ControlTheme;
 }
 
 export const Wavefunction2DCanvas: React.FC<Wavefunction2DCanvasProps> = ({
@@ -23,7 +21,6 @@ export const Wavefunction2DCanvas: React.FC<Wavefunction2DCanvasProps> = ({
     displayMode,
     colorMapType,
     showContours,
-    theme,
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -142,8 +139,7 @@ export const Wavefunction2DCanvas: React.FC<Wavefunction2DCanvasProps> = ({
                 display: 'block',
                 width: width,
                 height: height,
-                borderRadius: '4px',
-                border: `1px solid ${theme.border}`,
+                borderRadius: 'var(--viz-radius)',
             }}
         />
     );

@@ -17,22 +17,22 @@ const CATEGORY_ORDER: Category[] = ['Quantum', 'Crystallography', 'Simulation'];
 
 const VISUALISATIONS: VizCard[] = [
   {
-    title: 'Quantum Mechanics 1D',
+    title: 'Schrödinger Equation in 1D',
     href: '/qm1d',
     tag: 'Quantum',
-    description: 'Wavefunctions, potentials, and energy levels in one dimension.',
+    description: 'Stationary states and time evolution in harmonic, box, double-well, Morse and lattice potentials.',
   },
   {
-    title: 'Quantum Mechanics 2D',
+    title: 'Particle in a 2D Box',
     href: '/qm2d',
     tag: 'Quantum',
-    description: 'Two-dimensional potentials and probability densities.',
+    description: 'Superpositions of stationary states in a square box, shown as evolving probability densities.',
   },
   {
-    title: 'Quantum Mechanics 3D',
+    title: 'Particle in a 3D Box',
     href: '/qm3d',
     tag: 'Quantum',
-    description: '3D particle in a box with volume ray marching.',
+    description: 'Probability clouds of a particle in a cubic box, rendered by volume ray marching.',
   },
   {
     title: 'Spherical Harmonics & Hydrogen Orbitals',

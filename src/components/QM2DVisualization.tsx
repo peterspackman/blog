@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
-import styles from './QMVisualization.module.css';
-
+import React, { useState, useCallback } from 'react';
+import Admonition from '@theme/Admonition';
+import { useContainerSize, useVizTheme, VizExplanation, VizPanel, VizPanelSection, VizPanelSplit, VizPlotHeader, VizWorkbench } from './shared/viz';
+import { ControlGroup } from './shared/controls';
+import { useAnimationClock, WithTau } from './shared/quantum';
 import { Wavefunction2DCanvas } from './qm2d/Wavefunction2DCanvas';
 import { ColorScale } from './qm2d/ColorScale';
 import { PhasorGrid } from './qm2d/PhasorGrid';
@@ -11,260 +12,156 @@ import {
     type DisplayMode,
     type ColorMapType,
     MAX_ACTIVE_STATES,
-    formatStateString,
     calcEnergy,
 } from './qm2d/physics';
-import type { ControlTheme } from './shared/controls';
 import MathFormula from './MathFormula';
 
-// Hook to measure container width
-function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
-    const [width, setWidth] = useState(600);
+/** τ per second at speed 1 (the old loop added 0.008 per frame at ~60 fps). */
+const TAU_RATE = 0.48;
 
-    useLayoutEffect(() => {
-        const updateWidth = () => {
-            if (ref.current) {
-                const containerWidth = ref.current.getBoundingClientRect().width;
-                setWidth(Math.max(300, Math.floor(containerWidth)));
-            }
-        };
+const QM2DVisualization: React.FC<{ title: string }> = ({ title }) => {
+    const theme = useVizTheme();
 
-        updateWidth();
-
-        const resizeObserver = new ResizeObserver(updateWidth);
-        if (ref.current) {
-            resizeObserver.observe(ref.current);
-        }
-
-        return () => resizeObserver.disconnect();
-    }, [ref]);
-
-    return width;
-}
-
-interface QM2DVisualizationProps {
-    className?: string;
-}
-
-const QM2DVisualization: React.FC<QM2DVisualizationProps> = ({ className }) => {
-    // Dark mode support
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
-
-    // Theme-aware colors
-    const theme: ControlTheme = {
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    };
-
-    // State
-    const [activeStates, setActiveStates] = useState<QuantumState2D[]>([
-        { nx: 1, ny: 1 },
-    ]);
+    const [activeStates, setActiveStates] = useState<QuantumState2D[]>([{ nx: 1, ny: 1 }]);
     const [isAnimating, setIsAnimating] = useState(true);
     const [speed, setSpeed] = useState(0.2);
     const [displayMode, setDisplayMode] = useState<DisplayMode>('probability');
     const [colorMapType, setColorMapType] = useState<ColorMapType>('viridis');
     const [showContours, setShowContours] = useState(false);
 
-    // Animation state
-    const animationRef = useRef<number | null>(null);
-    const tauRef = useRef(0);
+    const clock = useAnimationClock(isAnimating, TAU_RATE * speed);
+    const resetTau = clock.reset;
 
-    // Canvas container ref for measuring width
-    const canvasContainerRef = useRef<HTMLDivElement>(null);
-    const canvasWidth = useContainerWidth(canvasContainerRef);
+    const [stageRef, stageSize] = useContainerSize();
+    // Fit the square to the viewport height too, so the whole panel is visible.
+    const viewportCap = typeof window !== 'undefined' ? window.innerHeight - 340 : 620;
+    const canvasSize = Math.max(240, Math.min(620, stageSize.width, viewportCap));
 
-    // Main canvas size
-    const canvasSize = Math.min(500, Math.floor(canvasWidth * 0.65)); // 65% of width, cap at 500px
-
-    // Derived state
-    const [tau, setTau] = useState(0);
-
-    // Animation loop
-    useEffect(() => {
-        const animate = () => {
-            if (isAnimating) {
-                // Increment dimensionless time
-                // Use a slower increment for 2D (more complex patterns)
-                tauRef.current += 0.008 * speed;
-                setTau(tauRef.current);
-            }
-            animationRef.current = requestAnimationFrame(animate);
-        };
-
-        animationRef.current = requestAnimationFrame(animate);
-
-        return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
-        };
-    }, [isAnimating, speed]);
-
-    // Toggle quantum state
     const toggleState = useCallback((nx: number, ny: number) => {
         setActiveStates((prev) => {
-            const stateIndex = prev.findIndex(
-                (s) => s.nx === nx && s.ny === ny
-            );
-
-            if (stateIndex >= 0) {
-                // Remove state if it exists (but prevent removing the last state)
-                if (prev.length > 1) {
-                    return prev.filter((_, i) => i !== stateIndex);
-                }
-                return prev;
-            } else {
-                // Add state if it doesn't exist (limit to MAX_ACTIVE_STATES)
-                if (prev.length < MAX_ACTIVE_STATES) {
-                    return [...prev, { nx, ny }];
-                }
-                return prev;
-            }
+            const i = prev.findIndex((s) => s.nx === nx && s.ny === ny);
+            if (i >= 0) return prev.length > 1 ? prev.filter((_, j) => j !== i) : prev;
+            return prev.length < MAX_ACTIVE_STATES ? [...prev, { nx, ny }] : prev;
         });
     }, []);
 
     return (
-        <div className={`${styles.container} ${className || ''}`}>
-            <h2 className={styles.title}>2D Particle in a Box</h2>
-
-            {/* Main grid layout: canvas area + sidebar */}
-            <div className={styles.gridLayout}>
-                {/* Left: Canvas area */}
-                <div className={styles.canvasArea} ref={canvasContainerRef}>
-                    {/* Main canvas + Phasor grid side by side */}
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                        {/* Wavefunction visualization */}
-                        <div>
-                            <div className={styles.canvasWrapper}>
-                                <Wavefunction2DCanvas
-                                    width={canvasSize}
-                                    height={canvasSize}
-                                    activeStates={activeStates}
-                                    tau={tau}
-                                    displayMode={displayMode}
-                                    colorMapType={colorMapType}
-                                    showContours={showContours}
-                                    theme={theme}
-                                />
-                            </div>
-                            {/* Color scale below main canvas */}
-                            <div style={{ marginTop: '0.5rem' }}>
-                                <ColorScale
-                                    width={canvasSize}
-                                    colorMapType={colorMapType}
-                                    displayMode={displayMode}
-                                    theme={theme}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Phasor grid */}
-                        <PhasorGrid
-                            activeStates={activeStates}
-                            tau={tau}
-                            onToggleState={toggleState}
-                            theme={theme}
+        <>
+            <VizWorkbench
+                sidebar={
+                    <VizPanel stack>
+                        <QM2DControls
+                            displayMode={displayMode}
+                            onDisplayModeChange={setDisplayMode}
+                            colorMapType={colorMapType}
+                            onColorMapChange={setColorMapType}
+                            showContours={showContours}
+                            onShowContoursChange={setShowContours}
+                            isAnimating={isAnimating}
+                            onIsAnimatingChange={setIsAnimating}
+                            speed={speed}
+                            onSpeedChange={setSpeed}
+                            onResetTime={resetTau}
                         />
-                    </div>
-                </div>
+                    </VizPanel>
+                }
+            >
+                <VizPanel flush>
+                    <VizPanelSplit>
+                        <VizPanelSection>
+                            <VizPlotHeader
+                                title={title}
+                                readout={<WithTau clock={clock}>{(tau) => `τ = ${tau.toFixed(2)}`}</WithTau>}
+                            />
+                            <div ref={stageRef} style={{ display: 'grid', justifyItems: 'center', gap: '0.5rem' }}>
+                                {canvasSize > 0 && (
+                                    <>
+                                        <WithTau clock={clock}>
+                                            {(tau) => (
+                                                <Wavefunction2DCanvas
+                                                    width={canvasSize}
+                                                    height={canvasSize}
+                                                    activeStates={activeStates}
+                                                    tau={tau}
+                                                    displayMode={displayMode}
+                                                    colorMapType={colorMapType}
+                                                    showContours={showContours}
+                                                />
+                                            )}
+                                        </WithTau>
+                                        <ColorScale width={canvasSize} height={14} colorMapType={colorMapType} displayMode={displayMode} theme={theme} />
+                                    </>
+                                )}
+                            </div>
+                        </VizPanelSection>
+                        <VizPanelSection>
+                            <ControlGroup label={`States in superposition · ${activeStates.length} / ${MAX_ACTIVE_STATES}`}>
+                                <WithTau clock={clock}>
+                                    {(tau) => (
+                                        <PhasorGrid
+                                            activeStates={activeStates}
+                                            tau={tau}
+                                            onToggleState={toggleState}
+                                            onSelectOnly={(nx, ny) => setActiveStates([{ nx, ny }])}
+                                            color={theme.accent}
+                                        />
+                                    )}
+                                </WithTau>
+                            </ControlGroup>
+                        </VizPanelSection>
+                    </VizPanelSplit>
+                </VizPanel>
+            </VizWorkbench>
 
-                {/* Right: Sidebar controls */}
-                <div className={styles.sidebarArea}>
-                    <QM2DControls
-                        displayMode={displayMode}
-                        onDisplayModeChange={setDisplayMode}
-                        colorMapType={colorMapType}
-                        onColorMapChange={setColorMapType}
-                        showContours={showContours}
-                        onShowContoursChange={setShowContours}
-                        isAnimating={isAnimating}
-                        onIsAnimatingChange={setIsAnimating}
-                        speed={speed}
-                        onSpeedChange={setSpeed}
-                        theme={theme}
-                    />
-                </div>
-            </div>
-
-            {/* Explanation section */}
-            <div className={styles.explanationContainer}>
-                <h3 className={styles.explanationTitle}>
-                    About 2D Particle in a Box
-                </h3>
-                <p className={styles.explanationText}>
-                    This visualization shows a quantum particle confined to a
-                    two-dimensional square box with infinite potential walls.
-                    The system has eigenstates characterized by two quantum
-                    numbers (n<sub>x</sub>, n<sub>y</sub>), corresponding to the
-                    number of nodes in each dimension.
+            <VizExplanation
+                aside={
+                    <>
+                <Admonition type="tip" title="Try this">
+                    Add several states with different quantum numbers to see interference, then compare with a degenerate
+                    pair whose pattern does not move.
+                </Admonition>
+                <h3>Active states</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>State</th>
+                            <th>E (units of π²ħ²/2mL²)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {activeStates.map((s) => (
+                            <tr key={`${s.nx}-${s.ny}`}>
+                                <td>
+                                    ({s.nx}, {s.ny})
+                                </td>
+                                <td className="tabular-nums">{calcEnergy(s.nx, s.ny)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                    </>
+                }
+            >
+                <h2>About the 2D particle in a box</h2>
+                <p>
+                    A quantum particle confined to a square box with infinite walls. Its eigenstates are labelled by two
+                    quantum numbers (n<sub>x</sub>, n<sub>y</sub>), the number of half-wavelengths along each axis.
                 </p>
-                <p className={styles.explanationText}>
+                <p>
                     The energy of each state is{' '}
-                    <MathFormula
-                        math="E = \frac{\pi^2 \hbar^2}{2 m L^2} (n_x^2 + n_y^2)"
-                        inline={true}
-                    />
-                    , meaning higher quantum numbers have higher energies. Each
-                    quantum state evolves in time with a phase factor{' '}
-                    <MathFormula
-                        math="e^{-i E t / \hbar}"
-                        inline={true}
-                    />
-                    , with faster rotation for higher energy states.
+                    <MathFormula math="E = \frac{\pi^2 \hbar^2}{2 m L^2} (n_x^2 + n_y^2)" inline />, so higher quantum
+                    numbers have higher energies. Each state evolves with a phase factor{' '}
+                    <MathFormula math="e^{-i E t / \hbar}" inline />, rotating faster the higher its energy.
                 </p>
-
-                <h4>Key features to observe:</h4>
-                <ul className={styles.explanationList}>
-                    <li className={styles.explanationListItem}>
-                        Probability densities show characteristic nodal patterns
-                        based on quantum numbers
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        Superposition of states creates interference patterns
-                        that evolve in time
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        States with different energies evolve at different
-                        rates, creating complex dynamics
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        The phasor grid shows the phase evolution of each active
-                        quantum state
-                    </li>
+                <h3>What to look for</h3>
+                <ul>
+                    <li>Probability densities show nodal lines set by the quantum numbers.</li>
+                    <li>Superpositions create interference patterns that evolve in time.</li>
+                    <li>States with different energies evolve at different rates, giving complex dynamics.</li>
+                    <li>Degenerate pairs such as (1,2) and (2,1) share an energy, so their superposition is stationary.</li>
                 </ul>
-
-                <div className={styles.explanationNote}>
-                    <strong>Tip:</strong> Try activating multiple states with
-                    different quantum numbers to see interference effects and
-                    observe how the pattern evolves over time!
-                </div>
-
-                {/* Active states and energies */}
-                {activeStates.length > 0 && (
-                    <div className={styles.stateEnergiesContainer}>
-                        <h4>Active States: {formatStateString(activeStates)}</h4>
-                        <ul className={styles.stateEnergiesList}>
-                            {activeStates.map((state) => (
-                                <li
-                                    key={`${state.nx}-${state.ny}`}
-                                    className={styles.stateEnergiesItem}
-                                >
-                                    State (n<sub>x</sub>={state.nx}, n<sub>y</sub>
-                                    ={state.ny}): E = {calcEnergy(state.nx, state.ny)}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-        </div>
+            </VizExplanation>
+        </>
     );
 };
 

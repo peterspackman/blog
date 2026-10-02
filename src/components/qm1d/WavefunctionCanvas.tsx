@@ -2,11 +2,14 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import {
     superposition,
     psiAtTau,
-    formatTime,
-    getStateColor,
     type StateSet,
 } from './physics';
-import type { ControlTheme } from '../shared/controls';
+import { canvasFont, setupHiDPICanvas, withAlpha, type VizTheme } from '../shared/viz';
+
+/** Identity colour for stationary state n (palette order; repeats after 8). */
+export function stateColor(theme: VizTheme, n: number): string {
+    return theme.series[n % theme.series.length];
+}
 
 export interface DisplayOptions {
     showReal: boolean;
@@ -25,23 +28,7 @@ export interface WavefunctionCanvasProps {
     tau: number;
     stateSet: StateSet;
     displayOptions: DisplayOptions;
-    theme: ControlTheme;
-}
-
-/**
- * Parse a short hex like #abc or full #aabbcc to rgb; fallback to grey.
- */
-function hexToRgb(hex: string): [number, number, number] {
-    const m3 = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(hex);
-    if (m3) return [parseInt(m3[1] + m3[1], 16), parseInt(m3[2] + m3[2], 16), parseInt(m3[3] + m3[3], 16)];
-    const m6 = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/.exec(hex);
-    if (m6) return [parseInt(m6[1], 16), parseInt(m6[2], 16), parseInt(m6[3], 16)];
-    return [128, 128, 128];
-}
-
-function rgba(hex: string, alpha: number): string {
-    const [r, g, b] = hexToRgb(hex);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    theme: VizTheme;
 }
 
 export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
@@ -140,20 +127,19 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
     }, [activeStates, stateSet, numPoints, potentialData]);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        const ctx = setupHiDPICanvas(canvasRef.current, width, height);
         if (!ctx) return;
+        const [reColor, imColor, probColor] = theme.series;
 
         const padLeft = 36;
         const padRight = 12;
-        const padTop = 30;
+        const padTop = 14;
         const padBottom = 22;
         const plotW = width - padLeft - padRight;
         const plotH = height - padTop - padBottom;
 
         ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = theme.surface ?? '#fff';
+        ctx.fillStyle = theme.canvas;
         ctx.fillRect(0, 0, width, height);
 
         const { xs, pot, yCeiling, yFloor } = potentialData;
@@ -211,7 +197,7 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
         //      state overlays, superposition re/im/prob, labels.
 
         // Zero-energy baseline (thin dashed)
-        ctx.strokeStyle = rgba(theme.textMuted, 0.25);
+        ctx.strokeStyle = withAlpha(theme.muted, 0.25);
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 4]);
         ctx.beginPath();
@@ -232,10 +218,10 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
             ctx.lineTo(padLeft + plotW, yToPixel(yFloor));
             ctx.lineTo(padLeft, yToPixel(yFloor));
             ctx.closePath();
-            ctx.fillStyle = rgba(theme.textMuted, 0.05);
+            ctx.fillStyle = withAlpha(theme.muted, 0.05);
             ctx.fill();
 
-            ctx.strokeStyle = rgba(theme.textMuted, 0.85);
+            ctx.strokeStyle = withAlpha(theme.muted, 0.85);
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
@@ -248,7 +234,7 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
 
         // Energy levels (all of them for context, active ones highlighted)
         if (displayOptions.showEnergyLevels) {
-            ctx.font = '11px "Segoe UI", Helvetica, sans-serif';
+            ctx.font = canvasFont(theme, 11, 'mono');
             const numLevels = Math.min(stateSet.numStates, 32);
             for (let n = 0; n < numLevels; n++) {
                 const E = stateSet.energy(n);
@@ -256,8 +242,8 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
                 const y = yToPixel(E);
                 const active = activeStates.includes(n);
                 ctx.strokeStyle = active
-                    ? getStateColor(n)
-                    : rgba(theme.textMuted, 0.35);
+                    ? stateColor(theme, n)
+                    : withAlpha(theme.muted, 0.35);
                 ctx.lineWidth = active ? 1.5 : 1;
                 ctx.setLineDash(active ? [] : [3, 4]);
                 ctx.beginPath();
@@ -266,7 +252,7 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                ctx.fillStyle = active ? getStateColor(n) : theme.textMuted;
+                ctx.fillStyle = active ? stateColor(theme, n) : theme.muted;
                 ctx.fillText(`E${subscript(n)}`, padLeft + 3, y - 3);
             }
         }
@@ -278,7 +264,7 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
                 const n = activeStates[k];
                 const En = stateSet.energy(n);
                 const baselineY = yToPixel(En);
-                ctx.strokeStyle = rgba(getStateColor(n), 0.55);
+                ctx.strokeStyle = withAlpha(stateColor(theme, n), 0.55);
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 for (let i = 0; i < numPoints; i++) {
@@ -297,8 +283,8 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
         const baselineYSup = yToPixel(ampBaseline);
 
         if (displayOptions.showReal) {
-            ctx.strokeStyle = 'rgba(0, 72, 186, 0.95)';
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = reColor;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
                 const y = baselineYSup - (re[i] / reImDenom) * waveScalePx;
@@ -309,8 +295,8 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
         }
 
         if (displayOptions.showImaginary) {
-            ctx.strokeStyle = 'rgba(220, 20, 60, 0.95)';
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = imColor;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
                 const y = baselineYSup - (im[i] / reImDenom) * waveScalePx;
@@ -330,11 +316,11 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
             ctx.lineTo(pxAt(numPoints - 1), baselineYSup);
             ctx.lineTo(pxAt(0), baselineYSup);
             ctx.closePath();
-            ctx.fillStyle = 'rgba(34, 139, 34, 0.15)';
+            ctx.fillStyle = withAlpha(probColor, 0.15);
             ctx.fill();
 
-            ctx.strokeStyle = 'rgba(34, 139, 34, 0.95)';
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = probColor;
+            ctx.lineWidth = 2;
             ctx.beginPath();
             for (let i = 0; i < numPoints; i++) {
                 const y = baselineYSup - (pr[i] / probDenom) * probScalePx;
@@ -344,20 +330,9 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
             ctx.stroke();
         }
 
-        // Top-bar labels
-        ctx.fillStyle = theme.text;
-        ctx.font = '600 13px "Segoe UI", Helvetica, sans-serif';
-        ctx.fillText(
-            `States: ${activeStates.map((n) => `n=${n}`).join(', ')}`,
-            padLeft,
-            18
-        );
-        ctx.textAlign = 'right';
-        ctx.fillText(`t = ${formatTime(tau)}`, width - padRight, 18);
-
         // x-axis labels
-        ctx.fillStyle = theme.textMuted;
-        ctx.font = '11px "Segoe UI", Helvetica, sans-serif';
+        ctx.fillStyle = theme.muted;
+        ctx.font = canvasFont(theme, 11, 'mono');
         ctx.textAlign = 'left';
         ctx.fillText(xMin.toFixed(1), padLeft, height - 6);
         ctx.textAlign = 'right';
@@ -389,15 +364,9 @@ export const WavefunctionCanvas: React.FC<WavefunctionCanvasProps> = ({
     return (
         <canvas
             ref={canvasRef}
-            width={width}
-            height={height}
-            style={{
-                width: '100%',
-                maxWidth: `${width}px`,
-                height: 'auto',
-                borderRadius: '4px',
-                display: 'block',
-            }}
+            role="img"
+            aria-label={`Wavefunction plot for states ${activeStates.join(', ')}`}
+            style={{ display: 'block', width, height }}
         />
     );
 };

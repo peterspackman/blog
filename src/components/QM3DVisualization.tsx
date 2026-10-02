@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import React, { useState, useCallback } from 'react';
+import Admonition from '@theme/Admonition';
 import BrowserOnly from '@docusaurus/BrowserOnly';
-import styles from './QMVisualization.module.css';
-
+import { useContainerSize, useVizTheme, VizExplanation, VizPanel, VizPanelSection, VizPanelSplit, VizPlotHeader, VizWorkbench } from './shared/viz';
+import { ControlGroup } from './shared/controls';
+import { useAnimationClock, WithTau } from './shared/quantum';
 import { QM3DScene } from './qm3d/QM3DScene';
 import { StateSelector3D } from './qm3d/StateSelector3D';
 import { QM3DControls } from './qm3d/QM3DControls';
@@ -11,265 +12,168 @@ import {
     type ColorMapType,
     type RenderStyle,
     MAX_ACTIVE_STATES,
-    formatStateString,
     calcStateEnergy,
 } from './qm3d/physics';
-import type { ControlTheme } from './shared/controls';
 import MathFormula from './MathFormula';
 
-// Hook to measure container width
-function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
-    const [width, setWidth] = useState(600);
+/** τ per second at speed 1 (the old loop added 0.008 per frame at ~60 fps). */
+const TAU_RATE = 0.48;
 
-    useLayoutEffect(() => {
-        const updateWidth = () => {
-            if (ref.current) {
-                const containerWidth = ref.current.getBoundingClientRect().width;
-                setWidth(Math.max(300, Math.floor(containerWidth)));
-            }
-        };
+const QM3DVisualizationInner: React.FC<{ title: string }> = ({ title }) => {
+    const theme = useVizTheme();
 
-        updateWidth();
-
-        const resizeObserver = new ResizeObserver(updateWidth);
-        if (ref.current) {
-            resizeObserver.observe(ref.current);
-        }
-
-        return () => resizeObserver.disconnect();
-    }, [ref]);
-
-    return width;
-}
-
-interface QM3DVisualizationProps {
-    className?: string;
-}
-
-const QM3DVisualizationInner: React.FC<QM3DVisualizationProps> = ({ className }) => {
-    // Dark mode support
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
-
-    // Theme-aware colors
-    const theme: ControlTheme = {
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    };
-
-    // State
-    const [activeStates, setActiveStates] = useState<QuantumState3D[]>([
-        { nx: 1, ny: 1, nz: 1 },
-    ]);
+    const [activeStates, setActiveStates] = useState<QuantumState3D[]>([{ nx: 1, ny: 1, nz: 1 }]);
     const [isAnimating, setIsAnimating] = useState(true);
     const [speed, setSpeed] = useState(0.2);
     const [colorMapType, setColorMapType] = useState<ColorMapType>('viridis');
     const [renderStyle, setRenderStyle] = useState<RenderStyle>('colorful');
     const [densityScale, setDensityScale] = useState(4.5);
-    const [opacityPower, setOpacityPower] = useState(0.3);  // <1 = fuzzy, >1 = sharp
-    const [threshold, setThreshold] = useState(0);  // Minimum density to render
+    const [opacityPower, setOpacityPower] = useState(0.3); // <1 = fuzzy, >1 = sharp
+    const [threshold, setThreshold] = useState(0); // minimum density to render
 
-    // Animation state
-    const animationRef = useRef<number | null>(null);
-    const tauRef = useRef(0);
+    const clock = useAnimationClock(isAnimating, TAU_RATE * speed);
+    const resetTau = clock.reset;
 
-    // Canvas container ref for measuring width
-    const canvasContainerRef = useRef<HTMLDivElement>(null);
-    const canvasWidth = useContainerWidth(canvasContainerRef);
+    const [stageRef, stageSize] = useContainerSize();
+    // Fit the square to the viewport height too, so the whole panel is visible.
+    const viewportCap = typeof window !== 'undefined' ? window.innerHeight - 340 : 620;
+    const canvasSize = Math.max(240, Math.min(620, stageSize.width, viewportCap));
 
-    // Main canvas size
-    const canvasSize = Math.min(500, Math.floor(canvasWidth * 0.65));
-
-    // Derived state
-    const [tau, setTau] = useState(0);
-
-    // Animation loop
-    useEffect(() => {
-        const animate = () => {
-            if (isAnimating) {
-                tauRef.current += 0.008 * speed;
-                setTau(tauRef.current);
-            }
-            animationRef.current = requestAnimationFrame(animate);
-        };
-
-        animationRef.current = requestAnimationFrame(animate);
-
-        return () => {
-            if (animationRef.current) {
-                cancelAnimationFrame(animationRef.current);
-            }
-        };
-    }, [isAnimating, speed]);
-
-    // Toggle quantum state
     const toggleState = useCallback((nx: number, ny: number, nz: number) => {
         setActiveStates((prev) => {
-            const stateIndex = prev.findIndex(
-                (s) => s.nx === nx && s.ny === ny && s.nz === nz
-            );
-
-            if (stateIndex >= 0) {
-                // Remove state if it exists (but prevent removing the last state)
-                if (prev.length > 1) {
-                    return prev.filter((_, i) => i !== stateIndex);
-                }
-                return prev;
-            } else {
-                // Add state if it doesn't exist (limit to MAX_ACTIVE_STATES)
-                if (prev.length < MAX_ACTIVE_STATES) {
-                    return [...prev, { nx, ny, nz }];
-                }
-                return prev;
-            }
+            const i = prev.findIndex((s) => s.nx === nx && s.ny === ny && s.nz === nz);
+            if (i >= 0) return prev.length > 1 ? prev.filter((_, j) => j !== i) : prev;
+            return prev.length < MAX_ACTIVE_STATES ? [...prev, { nx, ny, nz }] : prev;
         });
     }, []);
 
     return (
-        <div className={`${styles.container} ${className || ''}`}>
-            <h2 className={styles.title}>3D Particle in a Box</h2>
-
-            {/* Main grid layout: canvas area + sidebar */}
-            <div className={styles.gridLayout}>
-                {/* Left: Canvas area */}
-                <div className={styles.canvasArea} ref={canvasContainerRef}>
-                    {/* Main canvas + State selector side by side */}
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                        {/* 3D visualization */}
-                        <div>
-                            <QM3DScene
-                                activeStates={activeStates}
-                                tau={tau}
-                                densityScale={densityScale}
-                                opacityPower={opacityPower}
-                                threshold={threshold}
-                                colorMapType={colorMapType}
-                                renderStyle={renderStyle}
-                                width={canvasSize}
-                                height={canvasSize}
-                                isDark={isDark}
-                            />
-                        </div>
-
-                        {/* State selector grid */}
-                        <StateSelector3D
-                            activeStates={activeStates}
-                            tau={tau}
-                            onToggleState={toggleState}
-                            theme={theme}
+        <>
+            <VizWorkbench
+                sidebar={
+                    <VizPanel stack>
+                        <QM3DControls
+                            colorMapType={colorMapType}
+                            onColorMapChange={setColorMapType}
+                            renderStyle={renderStyle}
+                            onRenderStyleChange={setRenderStyle}
+                            densityScale={densityScale}
+                            onDensityScaleChange={setDensityScale}
+                            opacityPower={opacityPower}
+                            onOpacityPowerChange={setOpacityPower}
+                            threshold={threshold}
+                            onThresholdChange={setThreshold}
+                            isAnimating={isAnimating}
+                            onIsAnimatingChange={setIsAnimating}
+                            speed={speed}
+                            onSpeedChange={setSpeed}
+                            onResetTime={resetTau}
                         />
-                    </div>
-                </div>
+                    </VizPanel>
+                }
+            >
+                <VizPanel flush>
+                    <VizPanelSplit>
+                        <VizPanelSection>
+                            <VizPlotHeader
+                                title={title}
+                                readout={<WithTau clock={clock}>{(tau) => `τ = ${tau.toFixed(2)}`}</WithTau>}
+                            />
+                            <div ref={stageRef} style={{ display: 'grid', justifyItems: 'center' }}>
+                                {canvasSize > 0 && (
+                                    <WithTau clock={clock}>
+                                        {(tau) => (
+                                            <QM3DScene
+                                                activeStates={activeStates}
+                                                tau={tau}
+                                                densityScale={densityScale}
+                                                opacityPower={opacityPower}
+                                                threshold={threshold}
+                                                colorMapType={colorMapType}
+                                                renderStyle={renderStyle}
+                                                width={canvasSize}
+                                                height={canvasSize}
+                                                background={theme.surface}
+                                                edgeColor={theme.axis}
+                                            />
+                                        )}
+                                    </WithTau>
+                                )}
+                            </div>
+                        </VizPanelSection>
+                        <VizPanelSection>
+                            <ControlGroup label={`States in superposition · ${activeStates.length} / ${MAX_ACTIVE_STATES}`}>
+                                <WithTau clock={clock}>
+                                    {(tau) => (
+                                        <StateSelector3D
+                                            activeStates={activeStates}
+                                            tau={tau}
+                                            onToggleState={toggleState}
+                                            onSelectOnly={(nx, ny, nz) => setActiveStates([{ nx, ny, nz }])}
+                                            color={theme.accent}
+                                        />
+                                    )}
+                                </WithTau>
+                            </ControlGroup>
+                        </VizPanelSection>
+                    </VizPanelSplit>
+                </VizPanel>
+            </VizWorkbench>
 
-                {/* Right: Sidebar controls */}
-                <div className={styles.sidebarArea}>
-                    <QM3DControls
-                        colorMapType={colorMapType}
-                        onColorMapChange={setColorMapType}
-                        renderStyle={renderStyle}
-                        onRenderStyleChange={setRenderStyle}
-                        densityScale={densityScale}
-                        onDensityScaleChange={setDensityScale}
-                        opacityPower={opacityPower}
-                        onOpacityPowerChange={setOpacityPower}
-                        threshold={threshold}
-                        onThresholdChange={setThreshold}
-                        isAnimating={isAnimating}
-                        onIsAnimatingChange={setIsAnimating}
-                        speed={speed}
-                        onSpeedChange={setSpeed}
-                        theme={theme}
-                    />
-                </div>
-            </div>
-
-            {/* Explanation section */}
-            <div className={styles.explanationContainer}>
-                <h3 className={styles.explanationTitle}>
-                    About 3D Particle in a Box
-                </h3>
-                <p className={styles.explanationText}>
-                    This visualization shows a quantum particle confined to a
-                    three-dimensional cubic box with infinite potential walls.
-                    The system has eigenstates characterized by three quantum
-                    numbers (n<sub>x</sub>, n<sub>y</sub>, n<sub>z</sub>), representing
-                    the number of nodes in each dimension.
+            <VizExplanation
+                aside={
+                    <>
+                <Admonition type="tip" title="Try this">
+                    Combine the degenerate states (2,1,1), (1,2,1) and (1,1,2) and compare the shapes different
+                    combinations make at the same energy.
+                </Admonition>
+                <h3>Active states</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>State</th>
+                            <th>E (units of π²ħ²/2mL²)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {activeStates.map((s) => (
+                            <tr key={`${s.nx}-${s.ny}-${s.nz}`}>
+                                <td>
+                                    ({s.nx}, {s.ny}, {s.nz})
+                                </td>
+                                <td className="tabular-nums">{calcStateEnergy(s)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                    </>
+                }
+            >
+                <h2>About the 3D particle in a box</h2>
+                <p>
+                    A quantum particle confined to a cubic box with infinite walls. Its eigenstates are labelled by three
+                    quantum numbers (n<sub>x</sub>, n<sub>y</sub>, n<sub>z</sub>), the number of half-wavelengths along
+                    each axis.
                 </p>
-                <p className={styles.explanationText}>
+                <p>
                     The energy of each state is{' '}
-                    <MathFormula
-                        math="E = \frac{\pi^2 \hbar^2}{2 m L^2} (n_x^2 + n_y^2 + n_z^2)"
-                        inline={true}
-                    />
-                    . States with the same sum n<sub>x</sub><sup>2</sup> + n<sub>y</sub><sup>2</sup> + n<sub>z</sub><sup>2</sup>{' '}
-                    are degenerate (same energy). Each state evolves with a phase{' '}
-                    <MathFormula
-                        math="e^{-i E t / \hbar}"
-                        inline={true}
-                    />
-                    , with faster oscillation for higher energy states.
+                    <MathFormula math="E = \frac{\pi^2 \hbar^2}{2 m L^2} (n_x^2 + n_y^2 + n_z^2)" inline />. States with
+                    the same n<sub>x</sub>² + n<sub>y</sub>² + n<sub>z</sub>² are degenerate. Each state evolves with a
+                    phase <MathFormula math="e^{-i E t / \hbar}" inline />, rotating faster the higher its energy.
                 </p>
-
-                <h4>Key features to observe:</h4>
-                <ul className={styles.explanationList}>
-                    <li className={styles.explanationListItem}>
-                        The probability density |ψ|² is rendered as a
-                        semi-transparent cloud using volume ray marching
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        Superposition of states creates complex 3D interference
-                        patterns that evolve over time
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        Degenerate states (same energy) can form standing wave
-                        patterns when combined
-                    </li>
-                    <li className={styles.explanationListItem}>
-                        Use the orbit controls to rotate and zoom the visualization
-                    </li>
+                <h3>What to look for</h3>
+                <ul>
+                    <li>|ψ|² is drawn as a semi-transparent cloud by ray marching through the box.</li>
+                    <li>Superpositions create 3D interference patterns that evolve in time.</li>
+                    <li>Combinations of degenerate states stay still: they share one phase rate.</li>
                 </ul>
-
-                <div className={styles.explanationNote}>
-                    <strong>Tip:</strong> Try combining degenerate states like
-                    (2,1,1), (1,2,1), and (1,1,2) to see how different combinations
-                    create different spatial distributions with the same energy!
-                </div>
-
-                {/* Active states and energies */}
-                {activeStates.length > 0 && (
-                    <div className={styles.stateEnergiesContainer}>
-                        <h4>Active States: {formatStateString(activeStates)}</h4>
-                        <ul className={styles.stateEnergiesList}>
-                            {activeStates.map((state) => (
-                                <li
-                                    key={`${state.nx}-${state.ny}-${state.nz}`}
-                                    className={styles.stateEnergiesItem}
-                                >
-                                    State (n<sub>x</sub>={state.nx}, n<sub>y</sub>
-                                    ={state.ny}, n<sub>z</sub>={state.nz}): E ={' '}
-                                    {calcStateEnergy(state)}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-            </div>
-        </div>
+            </VizExplanation>
+        </>
     );
 };
 
-// Wrap with BrowserOnly for SSR safety
-const QM3DVisualization: React.FC<QM3DVisualizationProps> = (props) => {
-    return (
-        <BrowserOnly fallback={<div>Loading 3D visualization...</div>}>
-            {() => <QM3DVisualizationInner {...props} />}
-        </BrowserOnly>
-    );
-};
+const QM3DVisualization: React.FC<{ title: string }> = ({ title }) => (
+    <BrowserOnly fallback={<div style={{ minHeight: 560 }} />}>{() => <QM3DVisualizationInner title={title} />}</BrowserOnly>
+);
 
 export default QM3DVisualization;

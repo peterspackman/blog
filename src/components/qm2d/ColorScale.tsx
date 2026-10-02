@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import type { DisplayMode, ColorMapType } from './physics';
-import type { ControlTheme } from '../shared/controls';
+import { setupHiDPICanvas, type VizTheme } from '../shared/viz';
 
 // Color map definitions
 const COLOR_MAPS: Record<ColorMapType, number[][]> = {
@@ -66,7 +66,7 @@ export interface ColorScaleProps {
     height?: number;
     colorMapType: ColorMapType;
     displayMode: DisplayMode;
-    theme: ControlTheme;
+    theme: VizTheme;
 }
 
 export const ColorScale: React.FC<ColorScaleProps> = ({
@@ -79,10 +79,7 @@ export const ColorScale: React.FC<ColorScaleProps> = ({
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
+        const ctx = setupHiDPICanvas(canvasRef.current, width, height);
         if (!ctx) return;
 
         const colorMap = COLOR_MAPS[colorMapType];
@@ -97,38 +94,26 @@ export const ColorScale: React.FC<ColorScaleProps> = ({
             ctx.fillRect(i, 0, 1, height);
         }
 
-        // Draw border
-        ctx.strokeStyle = theme.border;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(0, 0, width, height);
-
         // Draw zero marker for real/imaginary parts
         if (displayMode === 'real' || displayMode === 'imaginary') {
-            ctx.strokeStyle = '#fff';
+            ctx.strokeStyle = theme.page;
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.moveTo(width / 2, 0);
             ctx.lineTo(width / 2, height);
             ctx.stroke();
         }
-    }, [width, height, colorMapType, displayMode, theme.border]);
+    }, [width, height, colorMapType, displayMode, theme]);
 
     const labelStyle: React.CSSProperties = {
-        fontSize: '0.7rem',
-        color: theme.textMuted,
+        fontSize: 'var(--viz-font-xs)',
+        fontFamily: 'var(--ifm-font-family-monospace)',
+        color: 'var(--viz-muted)',
     };
 
     return (
         <div style={{ width }}>
-            <canvas
-                ref={canvasRef}
-                width={width}
-                height={height}
-                style={{
-                    display: 'block',
-                    borderRadius: '4px',
-                }}
-            />
+            <canvas ref={canvasRef} style={{ display: 'block', borderRadius: 'var(--viz-radius-sm)' }} />
             <div
                 style={{
                     display: 'flex',
@@ -139,14 +124,14 @@ export const ColorScale: React.FC<ColorScaleProps> = ({
                 {displayMode === 'probability' ? (
                     <>
                         <span style={labelStyle}>0</span>
-                        <span style={labelStyle}>|ψ|²</span>
-                        <span style={labelStyle}>Max</span>
+                        <span style={{ ...labelStyle, fontFamily: 'inherit' }}>|ψ|²</span>
+                        <span style={labelStyle}>max</span>
                     </>
                 ) : (
                     <>
-                        <span style={labelStyle}>-Max</span>
+                        <span style={labelStyle}>−max</span>
                         <span style={labelStyle}>0</span>
-                        <span style={labelStyle}>+Max</span>
+                        <span style={labelStyle}>+max</span>
                     </>
                 )}
             </div>

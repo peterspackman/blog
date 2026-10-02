@@ -394,22 +394,4 @@ export function getPotentialDisplayName(type: PotentialType): string {
     }
 }
 
-/**
- * Color scheme for quantum states.
- */
-export const STATE_COLORS = [
-    '#0048BA',
-    '#DC143C',
-    '#228B22',
-    '#FF8C00',
-    '#8A2BE2',
-    '#008B8B',
-    '#FF1493',
-    '#8B4513',
-];
-
-export function getStateColor(n: number): string {
-    return STATE_COLORS[n % STATE_COLORS.length];
-}
-
 export const MAX_STATES = 32;

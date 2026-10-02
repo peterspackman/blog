@@ -1,48 +1,38 @@
 import React from 'react';
-import Button from '../Button';
-import LegendItem from '../LegendItem';
 import {
     SliderWithInput,
     CollapsibleSection,
     ToggleSwitch,
-    type ControlTheme,
+    SegmentedControl,
+    VizButton,
+    ControlGroup,
+    Legend,
 } from '../shared/controls';
+import type { VizTheme } from '../shared/viz';
 import { type PotentialType, type PotentialParams } from './physics';
 import type { DisplayOptions } from './WavefunctionCanvas';
 
 export interface QMControlsProps {
-    // Potential
     potentialType: PotentialType;
     onPotentialTypeChange: (type: PotentialType) => void;
     potentialParams: PotentialParams;
-    onPotentialParamChange: <K extends keyof PotentialParams>(
-        key: K,
-        value: PotentialParams[K]
-    ) => void;
-
-    // Display options
+    onPotentialParamChange: <K extends keyof PotentialParams>(key: K, value: PotentialParams[K]) => void;
     displayOptions: DisplayOptions;
-    onDisplayOptionChange: <K extends keyof DisplayOptions>(
-        key: K,
-        value: boolean
-    ) => void;
-
-    // Animation
+    onDisplayOptionChange: <K extends keyof DisplayOptions>(key: K, value: boolean) => void;
     isAnimating: boolean;
     onIsAnimatingChange: (animating: boolean) => void;
     speed: number;
     onSpeedChange: (speed: number) => void;
-
-    // Theme
-    theme: ControlTheme;
+    onResetTime: () => void;
+    theme: VizTheme;
 }
 
-const POTENTIALS: { type: PotentialType; short: string; label: string }[] = [
-    { type: 'harmonic', short: 'Harmonic', label: 'Harmonic Oscillator' },
-    { type: 'infinite_well', short: 'Box', label: 'Particle in a Box' },
-    { type: 'double_well', short: 'Double Well', label: 'Double Well' },
-    { type: 'morse', short: 'Morse', label: 'Morse Potential' },
-    { type: 'lattice', short: 'Lattice', label: 'Chain of Wells (MO → band)' },
+const POTENTIALS: { value: PotentialType; label: string; title: string }[] = [
+    { value: 'harmonic', label: 'Harmonic', title: 'Harmonic oscillator' },
+    { value: 'infinite_well', label: 'Box', title: 'Particle in a box' },
+    { value: 'double_well', label: 'Double well', title: 'Double well' },
+    { value: 'morse', label: 'Morse', title: 'Morse potential' },
+    { value: 'lattice', label: 'Lattice', title: 'Chain of wells (MO → band)' },
 ];
 
 export const QMControls: React.FC<QMControlsProps> = ({
@@ -56,70 +46,26 @@ export const QMControls: React.FC<QMControlsProps> = ({
     onIsAnimatingChange,
     speed,
     onSpeedChange,
+    onResetTime,
     theme,
 }) => {
-    return (
-        <div
-            style={{
-                backgroundColor: theme.surface || theme.inputBg,
-                padding: '1rem',
-                borderRadius: '8px',
-                border: `1px solid ${theme.border}`,
-                color: theme.text,
-            }}
-        >
-            {/* Potential picker — 2-col button grid */}
-            <div style={{ marginBottom: '1rem' }}>
-                <div
-                    style={{
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        color: theme.textMuted,
-                        marginBottom: '0.4rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px',
-                    }}
-                >
-                    Potential
-                </div>
-                <div
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '4px',
-                    }}
-                >
-                    {POTENTIALS.map(({ type, short, label }) => {
-                        const isActive = potentialType === type;
-                        return (
-                            <button
-                                key={type}
-                                onClick={() => onPotentialTypeChange(type)}
-                                title={label}
-                                style={{
-                                    padding: '0.45rem 0.4rem',
-                                    border: `1px solid ${theme.border}`,
-                                    borderRadius: '5px',
-                                    backgroundColor: isActive
-                                        ? theme.accent || '#2563eb'
-                                        : 'transparent',
-                                    color: isActive ? '#fff' : theme.text,
-                                    fontSize: '0.72rem',
-                                    fontWeight: isActive ? 600 : 400,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease',
-                                }}
-                            >
-                                {short}
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
+    const toggle = (key: keyof DisplayOptions) => onDisplayOptionChange(key, !displayOptions[key]);
+    const [reColor, imColor, probColor] = theme.series;
 
-            {/* Potential parameters */}
+    return (
+        <>
+            <ControlGroup label="Potential">
+                <SegmentedControl
+                    aria-label="Potential"
+                    columns={3}
+                    value={potentialType}
+                    onChange={onPotentialTypeChange}
+                    options={POTENTIALS}
+                />
+            </ControlGroup>
+
             {potentialType === 'double_well' && (
-                <CollapsibleSection title="Double Well" defaultExpanded theme={theme}>
+                <CollapsibleSection title="Double well" defaultExpanded>
                     <SliderWithInput
                         label="Barrier height"
                         value={potentialParams.doubleWellBarrier ?? 4}
@@ -129,7 +75,6 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.1}
                         decimals={1}
                         unit="V₀"
-                        theme={theme}
                     />
                     <SliderWithInput
                         label="Well separation"
@@ -140,7 +85,6 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.1}
                         decimals={1}
                         unit="a"
-                        theme={theme}
                     />
                     <SliderWithInput
                         label="Well offset (R−L)"
@@ -151,24 +95,20 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.05}
                         decimals={2}
                         unit="ΔV"
-                        theme={theme}
                     />
                 </CollapsibleSection>
             )}
 
             {potentialType === 'lattice' && (
-                <CollapsibleSection title="Lattice" defaultExpanded theme={theme}>
+                <CollapsibleSection title="Lattice" defaultExpanded>
                     <SliderWithInput
                         label="Number of wells"
                         value={potentialParams.latticeWells ?? 4}
-                        onChange={(v) =>
-                            onPotentialParamChange('latticeWells', Math.round(v))
-                        }
+                        onChange={(v) => onPotentialParamChange('latticeWells', Math.round(v))}
                         min={1}
                         max={16}
                         step={1}
                         decimals={0}
-                        theme={theme}
                     />
                     <SliderWithInput
                         label="Well depth"
@@ -179,7 +119,6 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.5}
                         decimals={1}
                         unit="V"
-                        theme={theme}
                     />
                     <SliderWithInput
                         label="Well spacing"
@@ -190,13 +129,12 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.1}
                         decimals={2}
                         unit="a"
-                        theme={theme}
                     />
                 </CollapsibleSection>
             )}
 
             {potentialType === 'morse' && (
-                <CollapsibleSection title="Morse Potential" defaultExpanded theme={theme}>
+                <CollapsibleSection title="Morse potential" defaultExpanded>
                     <SliderWithInput
                         label="Well depth"
                         value={potentialParams.morseDepth ?? 10}
@@ -206,7 +144,6 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.5}
                         decimals={1}
                         unit="D"
-                        theme={theme}
                     />
                     <SliderWithInput
                         label="Range parameter"
@@ -217,25 +154,19 @@ export const QMControls: React.FC<QMControlsProps> = ({
                         step={0.05}
                         decimals={2}
                         unit="α"
-                        theme={theme}
                     />
                 </CollapsibleSection>
             )}
 
-            {/* Play/Pause */}
-            <div style={{ marginBottom: '1rem', marginTop: '1rem' }}>
-                <Button
-                    onClick={() => onIsAnimatingChange(!isAnimating)}
-                    variant={isAnimating ? 'danger' : 'success'}
-                    size="sm"
-                    style={{ width: '100%' }}
-                >
-                    {isAnimating ? 'Pause' : 'Play'}
-                </Button>
-            </div>
-
-            {/* Animation speed */}
-            <CollapsibleSection title="Animation" defaultExpanded theme={theme}>
+            <ControlGroup label="Time">
+                <div style={{ display: 'flex', gap: '0.375rem' }}>
+                    <VizButton variant="primary" style={{ flex: 1 }} onClick={() => onIsAnimatingChange(!isAnimating)}>
+                        {isAnimating ? 'Pause' : 'Play'}
+                    </VizButton>
+                    <VizButton variant="secondary" onClick={onResetTime}>
+                        Reset t
+                    </VizButton>
+                </div>
                 <SliderWithInput
                     label="Speed"
                     value={speed}
@@ -244,86 +175,29 @@ export const QMControls: React.FC<QMControlsProps> = ({
                     max={5}
                     step={0.1}
                     decimals={1}
-                    unit="x"
-                    theme={theme}
+                    unit="×"
                 />
                 <ToggleSwitch
                     label="Auto-rescale amplitude"
                     checked={displayOptions.autoRescale}
                     onChange={(v) => onDisplayOptionChange('autoRescale', v)}
-                    theme={theme}
                 />
-            </CollapsibleSection>
+            </ControlGroup>
 
-            {/* Visibility toggles */}
-            <CollapsibleSection title="Display" defaultExpanded theme={theme}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <LegendItem
-                        color="rgba(0, 72, 186, 0.9)"
-                        text="Real part"
-                        active={displayOptions.showReal}
-                        onClick={() =>
-                            onDisplayOptionChange('showReal', !displayOptions.showReal)
-                        }
-                    />
-                    <LegendItem
-                        color="rgba(220, 20, 60, 0.9)"
-                        text="Imaginary part"
-                        active={displayOptions.showImaginary}
-                        onClick={() =>
-                            onDisplayOptionChange(
-                                'showImaginary',
-                                !displayOptions.showImaginary
-                            )
-                        }
-                    />
-                    <LegendItem
-                        color="rgba(34, 139, 34, 0.9)"
-                        text="Probability |ψ|²"
-                        active={displayOptions.showProbability}
-                        onClick={() =>
-                            onDisplayOptionChange(
-                                'showProbability',
-                                !displayOptions.showProbability
-                            )
-                        }
-                    />
-                    <LegendItem
-                        color="rgba(128, 128, 128, 0.8)"
-                        text="Potential V(x)"
-                        active={displayOptions.showPotential}
-                        onClick={() =>
-                            onDisplayOptionChange(
-                                'showPotential',
-                                !displayOptions.showPotential
-                            )
-                        }
-                    />
-                    <LegendItem
-                        color="rgba(100, 100, 100, 0.6)"
-                        text="Energy levels"
-                        active={displayOptions.showEnergyLevels}
-                        onClick={() =>
-                            onDisplayOptionChange(
-                                'showEnergyLevels',
-                                !displayOptions.showEnergyLevels
-                            )
-                        }
-                    />
-                    <LegendItem
-                        color="rgba(128, 128, 128, 0.5)"
-                        text="Individual states"
-                        active={displayOptions.showIndividualStates}
-                        onClick={() =>
-                            onDisplayOptionChange(
-                                'showIndividualStates',
-                                !displayOptions.showIndividualStates
-                            )
-                        }
-                    />
-                </div>
-            </CollapsibleSection>
-        </div>
+            <ControlGroup label="Show">
+                <Legend
+                    onToggle={(k) => toggle(k as keyof DisplayOptions)}
+                    items={[
+                        { key: 'showProbability', label: '|ψ|²', color: probColor, active: displayOptions.showProbability },
+                        { key: 'showReal', label: 'Re ψ', color: reColor, shape: 'line', active: displayOptions.showReal },
+                        { key: 'showImaginary', label: 'Im ψ', color: imColor, shape: 'line', active: displayOptions.showImaginary },
+                        { key: 'showPotential', label: 'V(x)', color: theme.muted, shape: 'line', active: displayOptions.showPotential },
+                        { key: 'showEnergyLevels', label: 'Energy levels', color: theme.muted, shape: 'dashed', active: displayOptions.showEnergyLevels },
+                        { key: 'showIndividualStates', label: 'Individual states', color: theme.muted, shape: 'line', active: displayOptions.showIndividualStates },
+                    ]}
+                />
+            </ControlGroup>
+        </>
     );
 };
 
