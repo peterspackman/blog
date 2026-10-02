@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useLayoutEffect, useCallback, useEffect } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { useVizTheme } from './shared/viz';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import styles from './fourier/FourierVisualization.module.css';
 
@@ -57,18 +57,10 @@ interface FourierVisualizationProps {
 }
 
 const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ className }) => {
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
+    const vizTheme = useVizTheme();
+    const isDark = vizTheme.isDark;
 
-    const theme = useMemo<ControlTheme>(() => ({
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    }), [isDark]);
+    const theme: ControlTheme = vizTheme.controls;
 
     // State
     const [inputMode, setInputMode] = useState<InputMode>('pattern');

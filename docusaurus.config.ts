@@ -138,14 +138,7 @@ const config: Config = {
     },
   ],
 
-  stylesheets: [
-    {
-      href: "https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css",
-      integrity:
-        "sha384-Um5gpz1odJg5Z4HAmzPtgZKdTBHZdw8S29IecapCSB31ligYPhHQZMIlWLYQGVoc",
-      crossorigin: "anonymous",
-    },
-  ],
+  clientModules: ['./src/clientModules/fonts.ts'],
 
 
   themeConfig: {

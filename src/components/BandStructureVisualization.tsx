@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { useVizTheme } from './shared/viz';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import styles from './QMVisualization.module.css';
 
@@ -50,19 +50,11 @@ const BandStructureVisualizationInner: React.FC<BandStructureVisualizationProps>
     className,
 }) => {
     // Dark mode support
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
+    const vizTheme = useVizTheme();
+    const isDark = vizTheme.isDark;
 
     // Theme-aware colors
-    const theme: ControlTheme = {
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    };
+    const theme: ControlTheme = vizTheme.controls;
 
     // State
     const [N, setN] = useState(10);

@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId, useState } from 'react';
+import clsx from 'clsx';
+import styles from './Controls.module.css';
 
+/**
+ * @deprecated Colours now come from --viz-* CSS tokens; the `theme` prop on
+ * shared controls is ignored. Use useVizTheme() for imperative drawing.
+ */
 export interface ControlTheme {
     text: string;
     textMuted: string;
@@ -11,7 +17,7 @@ export interface ControlTheme {
 }
 
 export interface SliderWithInputProps {
-    label: string;
+    label: React.ReactNode;
     value: number;
     onChange: (value: number) => void;
     min: number;
@@ -19,7 +25,8 @@ export interface SliderWithInputProps {
     step: number;
     unit?: string;
     decimals?: number;
-    theme: ControlTheme;
+    /** @deprecated ignored */
+    theme?: ControlTheme;
     disabled?: boolean;
 }
 
@@ -32,23 +39,17 @@ export const SliderWithInput: React.FC<SliderWithInputProps> = ({
     step,
     unit = '',
     decimals = 2,
-    theme,
     disabled = false,
 }) => {
+    const id = useId();
     const [inputValue, setInputValue] = useState(value.toFixed(decimals));
     const [isFocused, setIsFocused] = useState(false);
 
-    const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = parseFloat(e.target.value);
-        onChange(val);
-        setInputValue(val.toFixed(decimals));
-    };
+    useEffect(() => {
+        if (!isFocused) setInputValue(value.toFixed(decimals));
+    }, [value, decimals, isFocused]);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInputValue(e.target.value);
-    };
-
-    const handleInputBlur = () => {
+    const commit = () => {
         setIsFocused(false);
         const val = parseFloat(inputValue);
         if (!isNaN(val)) {
@@ -60,70 +61,36 @@ export const SliderWithInput: React.FC<SliderWithInputProps> = ({
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            (e.target as HTMLInputElement).blur();
-        }
-    };
-
-    // Sync input value when slider changes externally
-    useEffect(() => {
-        if (!isFocused) {
-            setInputValue(value.toFixed(decimals));
-        }
-    }, [value, decimals, isFocused]);
-
     return (
-        <div style={{ marginBottom: '0.6rem', opacity: disabled ? 0.5 : 1 }}>
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '0.25rem',
-            }}>
-                <span style={{ fontSize: '0.8rem', color: theme.text }}>{label}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+        <div className={clsx(styles.slider, disabled && styles.disabled)}>
+            <div className={styles.sliderHead}>
+                <label htmlFor={id}>{label}</label>
+                <span className={styles.sliderValue}>
                     <input
                         type="text"
+                        inputMode="decimal"
+                        aria-label={typeof label === 'string' ? `${label} value` : 'value'}
+                        className={styles.numberInput}
                         value={isFocused ? inputValue : value.toFixed(decimals)}
-                        onChange={handleInputChange}
+                        onChange={(e) => setInputValue(e.target.value)}
                         onFocus={() => setIsFocused(true)}
-                        onBlur={handleInputBlur}
-                        onKeyDown={handleKeyDown}
+                        onBlur={commit}
+                        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                         disabled={disabled}
-                        style={{
-                            width: '4rem',
-                            padding: '0.15rem 0.3rem',
-                            fontSize: '0.75rem',
-                            fontFamily: 'monospace',
-                            textAlign: 'right',
-                            border: `1px solid ${theme.border}`,
-                            borderRadius: '3px',
-                            backgroundColor: theme.inputBg,
-                            color: theme.text,
-                        }}
                     />
-                    {unit && (
-                        <span style={{ fontSize: '0.7rem', color: theme.textMuted, minWidth: '1.5rem' }}>
-                            {unit}
-                        </span>
-                    )}
-                </div>
+                    {unit && <span className={styles.unit}>{unit}</span>}
+                </span>
             </div>
             <input
+                id={id}
                 type="range"
+                className={styles.range}
                 min={min}
                 max={max}
                 step={step}
                 value={value}
-                onChange={handleSliderChange}
+                onChange={(e) => onChange(parseFloat(e.target.value))}
                 disabled={disabled}
-                style={{
-                    width: '100%',
-                    height: '4px',
-                    borderRadius: '2px',
-                    cursor: disabled ? 'not-allowed' : 'pointer',
-                }}
             />
         </div>
     );

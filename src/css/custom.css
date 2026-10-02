@@ -1,18 +1,111 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles. Infima variables are overridden here, and the --viz-*
+ * tokens are the single source of colour/type/spacing for every
+ * interactive visualisation (read from JS via useVizTheme()).
  */
 
-/* You can override the default Infima variables here. */
 :root {
-  --ifm-color-primary: #3578E5;
-  --ifm-color-primary-dark: #1d68e1;
-  --ifm-color-primary-darker: #1b62d4;
-  --ifm-color-primary-darkest: #1751af;
-  --ifm-color-primary-lighter: #5a91ea;
-  --ifm-color-primary-lightest: #80aaef;
-  --ifm-code-font-size: 95%;
+  /* Accent: "ink blue" */
+  --ifm-color-primary: #1f5bbf;
+  --ifm-color-primary-dark: #1c52ac;
+  --ifm-color-primary-darker: #1a4da2;
+  --ifm-color-primary-darkest: #164086;
+  --ifm-color-primary-light: #356bc5;
+  --ifm-color-primary-lighter: #4174c9;
+  --ifm-color-primary-lightest: #628cd2;
+
+  /* Type: Source Sans 3 for text and headings, Source Code Pro for code/numbers */
+  --ifm-font-family-base: 'Source Sans 3 Variable', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, 'Noto Sans', sans-serif;
+  --ifm-font-family-monospace: 'Source Code Pro Variable', SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
+  --ifm-font-size-base: 106.25%; /* Source Sans runs small; 17px body */
+  --ifm-code-font-size: 90%;
+
+  /* Visualisation surfaces. --viz-page matches the page behind the content
+     (Infima's light background is transparent over a white body). */
+  --viz-page: #ffffff;
+  --viz-surface: #ffffff;
+  --viz-surface-subtle: #f5f7fa;
+  --viz-canvas: #ffffff;
+  --viz-border: #e1e6ee;
+  --viz-text: #1d2532;
+  --viz-muted: #5f6b7d;
+  --viz-grid: #eff0f1;
+  --viz-axis: #9aa3b1;
+  --viz-accent: var(--ifm-color-primary);
+  --viz-accent-soft: #edf2fa;
+  --viz-on-accent: #ffffff;
+
+  /* Plot series: categorical, validated for colour-vision deficiency. Use in order. */
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+  --viz-series-3: #1baf7a;
+  --viz-series-4: #eda100;
+  --viz-series-5: #e87ba4;
+  --viz-series-6: #008300;
+  --viz-series-7: #4a3aa7;
+  --viz-series-8: #e34948;
+
+  /* Signed quantities (wavefunction phase, charge density, strain):
+     series slots 2 and 1, a validated colour-vision-safe pair */
+  --viz-positive: #eb6834;
+  --viz-negative: #2a78d6;
+
+  /* Status: never reused as series colours */
+  --viz-success: #1a7f4b;
+  --viz-warning: #b45309;
+  --viz-danger: #c62f2f;
+
+  /* Shape and rhythm */
+  --viz-radius-sm: 4px;
+  --viz-radius: 6px;
+  --viz-radius-lg: 8px;
+  --viz-gap: 0.75rem;
+  --viz-sidebar-width: 18rem;
+  --viz-font-xs: 0.75rem;
+  --viz-font-sm: 0.8125rem;
+  --viz-font-md: 0.875rem;
+  --viz-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #7aa7ff;
+  --ifm-color-primary-dark: #6e96e6;
+  --ifm-color-primary-darker: #688ed9;
+  --ifm-color-primary-darkest: #5575b3;
+  --ifm-color-primary-light: #87b0ff;
+  --ifm-color-primary-lighter: #8eb4ff;
+  --ifm-color-primary-lightest: #a2c1ff;
+
+  --viz-page: #1b1b1d;
+  --viz-surface: #222429;
+  --viz-surface-subtle: #2a2d34;
+  --viz-canvas: #222429;
+  --viz-border: #373b45;
+  --viz-text: #e5e8ee;
+  --viz-muted: #9aa2b1;
+  --viz-grid: #36383d;
+  --viz-axis: #6b7280;
+  --viz-accent-soft: #2e3647;
+  --viz-on-accent: #0f1115;
+
+  --viz-series-1: #3987e5;
+  --viz-series-2: #d95926;
+  --viz-series-3: #199e70;
+  --viz-series-4: #c98500;
+  --viz-series-5: #d55181;
+  --viz-series-6: #008300;
+  --viz-series-7: #9085e9;
+  --viz-series-8: #e66767;
+
+  --viz-positive: #d95926;
+  --viz-negative: #3987e5;
+
+  --viz-success: #3fb27f;
+  --viz-warning: #e0a03a;
+  --viz-danger: #ef6b6b;
+
+  --viz-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .docusaurus-highlight-code-line {
@@ -24,4 +117,9 @@
 
 html[data-theme='dark'] .docusaurus-highlight-code-line {
   background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* Aligned digits wherever numbers sit in columns or update live */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }

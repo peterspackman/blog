@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { useVizTheme } from './shared/viz';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import styles from './diffraction/DiffractionVisualization.module.css';
 
@@ -66,19 +66,11 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     className,
 }) => {
     // Dark mode support
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
+    const vizTheme = useVizTheme();
+    const isDark = vizTheme.isDark;
 
     // Theme-aware colors - memoized to prevent child re-renders
-    const theme = useMemo<ControlTheme>(() => ({
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    }), [isDark]);
+    const theme: ControlTheme = vizTheme.controls;
 
     // State
     const [structureId, setStructureId] = useState('NaCl');
