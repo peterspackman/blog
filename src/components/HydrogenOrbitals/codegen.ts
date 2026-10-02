@@ -338,3 +338,36 @@ export function evalRawCart(a: number, b: number, c: number, x: number, y: numbe
 
 /** Pre-generated RawCart GLSL. */
 export const RAW_CART_GLSL = generateRawCartGLSL(SHADER_L_MAX);
+
+// -----------------------------------------------------------------------
+// Data-driven shader input
+//
+// Instead of a GLSL function with one hard-coded branch per (l, m), the
+// shader evaluates a generic homogeneous polynomial whose coefficients are
+// uploaded as uniforms. Large branchy functions compile very slowly on
+// D3D-backed WebGL (Chrome/Firefox on Windows); a short generic loop
+// compiles almost instantly.
+// -----------------------------------------------------------------------
+
+let cachedSolid: ReturnType<typeof generateSolidPolynomials> | null = null;
+
+/**
+ * Normalised real Y_{l,m} as monomial coefficients over the unit direction:
+ * Y_{l,m}(x, y, z) = Σ coeff · x^a y^b z^c with a + b + c = l.
+ */
+export function sphericalMonomials(l: number, m: number): { a: number; b: number; c: number; coeff: number }[] {
+    if (l < 0 || l > SHADER_L_MAX || Math.abs(m) > l) return [];
+    cachedSolid ??= generateSolidPolynomials(SHADER_L_MAX);
+    const N = Math.sqrt((2 * l + 1) / (4 * Math.PI));
+    return cachedSolid[solidIndex(l, m)].map((mono) => ({ a: mono.i, b: mono.j, c: mono.k, coeff: mono.c * N }));
+}
+
+/**
+ * Position of x^a y^b z^c in the degree-l enumeration the shader uses:
+ * for a = l..0, for b = (l - a)..0, c = l - a - b.
+ */
+export function monomialSlot(a: number, b: number, l: number): number {
+    // Rows before a: a' = l..a+1 contribute (l - a' + 1) entries each.
+    const before = ((l - a) * (l - a + 1)) / 2;
+    return before + (l - a - b);
+}

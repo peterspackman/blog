@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import OrbitalVolume, { type OrbitalVolumeProps } from './OrbitalVolume';
 import { BOUNDING_RADIUS } from './shaders';
@@ -28,9 +28,10 @@ const CameraManager: React.FC<{ boundingRadius: number }> = ({ boundingRadius })
 
 /**
  * Adaptive pixel ratio: while OrbitControls is being dragged, render at
- * profile.dragDpr (4× fewer fragments when dragDpr=0.5, 6× when 0.4). Restore
- * to profile.restDpr 400ms after drag-end — the user has already released, so
- * the brief low-res tail during damping is imperceptible.
+ * profile.dragDpr (4x fewer fragments when dragDpr=0.5). Restore to
+ * profile.restDpr 400ms after drag-end — the brief low-res tail during
+ * damping is imperceptible. Uses R3F's setDpr (not gl.setPixelRatio) so the
+ * store's viewport stays consistent across resizes.
  *
  * Needs the OrbitControls in the scene to use `makeDefault`.
  */
@@ -38,23 +39,15 @@ const AdaptiveDpr: React.FC<{ dragDpr: number; restDpr: number }> = ({
     dragDpr,
     restDpr,
 }) => {
-    const { gl, size, invalidate } = useThree();
+    const setDpr = useThree((s) => s.setDpr);
+    const invalidate = useThree((s) => s.invalidate);
     const controls = useThree((s) => s.controls) as any;
-
-    // Apply the at-rest ratio immediately when tier changes (so upgrading to
-    // high on a retina display actually sharpens the output).
-    useEffect(() => {
-        gl.setPixelRatio(restDpr);
-        gl.setSize(size.width, size.height, false);
-        invalidate();
-    }, [gl, size, invalidate, restDpr]);
 
     useEffect(() => {
         if (!controls) return;
         let restoreTimer: ReturnType<typeof setTimeout> | null = null;
         const apply = (dpr: number) => {
-            gl.setPixelRatio(dpr);
-            gl.setSize(size.width, size.height, false);
+            setDpr(dpr);
             invalidate();
         };
         const onStart = () => {
@@ -75,7 +68,54 @@ const AdaptiveDpr: React.FC<{ dragDpr: number; restDpr: number }> = ({
             controls.removeEventListener('end', onEnd);
             if (restoreTimer) clearTimeout(restoreTimer);
         };
-    }, [controls, gl, size, invalidate, dragDpr, restDpr]);
+    }, [controls, setDpr, invalidate, dragDpr, restDpr]);
+    return null;
+};
+
+/**
+ * Frame-time watchdog. With frameloop="demand", frames only run back to back
+ * while the user is rotating (plus the damping tail), so frame intervals are
+ * measured only then. If the median of a window is over budget the GPU can't
+ * keep up at this tier and onSlow fires (at most once per tier).
+ */
+const FrameBudget: React.FC<{ onSlow?: () => void; budgetMs?: number }> = ({ onSlow, budgetMs = 50 }) => {
+    const controls = useThree((s) => s.controls) as any;
+    const active = useRef(false);
+    const last = useRef(0);
+    const samples = useRef<number[]>([]);
+    const fired = useRef(false);
+
+    useEffect(() => {
+        if (!controls) return;
+        const start = () => {
+            active.current = true;
+            last.current = 0;
+        };
+        const end = () => {
+            active.current = false;
+        };
+        controls.addEventListener('start', start);
+        controls.addEventListener('end', end);
+        return () => {
+            controls.removeEventListener('start', start);
+            controls.removeEventListener('end', end);
+        };
+    }, [controls]);
+
+    useFrame(() => {
+        if (!active.current || fired.current || !onSlow) return;
+        const now = performance.now();
+        if (last.current) samples.current.push(now - last.current);
+        last.current = now;
+        if (samples.current.length >= 12) {
+            const sorted = [...samples.current].sort((a, b) => a - b);
+            samples.current = [];
+            if (sorted[sorted.length >> 1] > budgetMs) {
+                fired.current = true;
+                onSlow();
+            }
+        }
+    });
     return null;
 };
 
@@ -85,6 +125,10 @@ export interface SceneProps extends OrbitalVolumeProps {
     isDark?: boolean;
     showAxes?: boolean;
     qualityProfile: QualityProfile;
+    /** Called when rotation runs below ~20 fps at the current tier. */
+    onSlow?: () => void;
+    /** Called if the browser drops the WebGL context (GPU reset). */
+    onContextLost?: () => void;
 }
 
 const Axes: React.FC<{ length: number; isDark: boolean }> = ({ length, isDark }) => {
@@ -119,9 +163,11 @@ export const Scene: React.FC<SceneProps> = ({
     showAxes = false,
     boundingRadius = BOUNDING_RADIUS,
     qualityProfile,
+    onSlow,
+    onContextLost,
     ...orbitalProps
 }) => {
-    const bg = isDark ? '#0e0e12' : '#fafbfc';
+    const bg = orbitalProps.background;
     const camR = boundingRadius * 1.6;
     const cameraInit: [number, number, number] = [camR, camR * 0.75, camR];
     const cameraFar = boundingRadius * 20;
@@ -131,9 +177,8 @@ export const Scene: React.FC<SceneProps> = ({
             style={{
                 width,
                 height,
-                borderRadius: 8,
+                // Same colour as the page, so no frame: the orbital floats on it.
                 overflow: 'hidden',
-                border: `1px solid ${isDark ? '#333' : '#e0e0e0'}`,
                 background: bg,
             }}
         >
@@ -141,6 +186,13 @@ export const Scene: React.FC<SceneProps> = ({
                 dpr={qualityProfile.restDpr}
                 frameloop="demand"
                 gl={{ alpha: false, antialias: true, powerPreference: 'high-performance' }}
+                onCreated={({ gl }) => {
+                    gl.domElement.addEventListener('webglcontextlost', (e) => {
+                        // Allow restoration instead of a permanently dead canvas.
+                        e.preventDefault();
+                        onContextLost?.();
+                    });
+                }}
                 camera={{ position: cameraInit, fov: 45, near: 0.1, far: cameraFar }}
             >
                 <Suspense fallback={null}>
@@ -165,6 +217,7 @@ export const Scene: React.FC<SceneProps> = ({
                         dragDpr={qualityProfile.dragDpr}
                         restDpr={qualityProfile.restDpr}
                     />
+                    <FrameBudget key={qualityProfile.tier} onSlow={onSlow} />
                     {showAxes && <Axes length={boundingRadius * 1.1} isDark={isDark} />}
                     <OrbitalVolume
                         {...orbitalProps}

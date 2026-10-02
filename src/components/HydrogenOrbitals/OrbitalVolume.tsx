@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
-import { buildFragmentShader, vertexShader, BOUNDING_RADIUS, MAX_ORBITAL_TERMS } from './shaders';
-import { cartesianNorm } from './codegen';
+import { clampQuality, fragmentShader, vertexShader, BOUNDING_RADIUS } from './shaders';
+import { ANG_SLOTS, MAX_TERMS, packOrbital } from './packing';
 import type { DisplayMode, RenderMode, Term } from './types';
-import type { QualityProfile } from './quality';
+import { scaledSteps, type QualityProfile } from './quality';
 
 export interface OrbitalVolumeProps {
     /** All summands of the wavefunction. Angular/full modes sum over them.
@@ -28,7 +28,7 @@ export interface OrbitalVolumeProps {
     /** 1 / max|field| for auto-scaling slice and density modes. */
     normScale: number;
     /** Quality tier — drives shader step counts, bisection iters, and lighting
-     *  complexity. Changing tier recompiles the shader (keyed via shaderVariant). */
+     *  complexity (all uniforms; no recompile). */
     qualityProfile: QualityProfile;
 }
 
@@ -37,54 +37,6 @@ const MODE_INDEX: Record<RenderMode, number> = {
     density: 1,
     slice: 2,
 };
-
-const DISPLAY_INDEX: Record<DisplayMode, number> = {
-    angular: 0,
-    radial: 1,
-    full: 2,
-};
-
-interface PackedTerms {
-    kinds: number[];
-    ns: number[];
-    p1s: number[];
-    p2s: number[];
-    p3s: number[];
-    coeffs: number[];
-    count: number;
-}
-
-/** Flatten the Term[] into GLSL-friendly fixed-size arrays. Cartesian
- *  coefficients absorb the unit-sphere normalisation so the shader just
- *  multiplies coeff · x^a y^b z^c without needing a norm lookup. */
-function packTerms(terms: Term[]): PackedTerms {
-    const kinds = new Array<number>(MAX_ORBITAL_TERMS).fill(0);
-    const ns = new Array<number>(MAX_ORBITAL_TERMS).fill(1);
-    const p1s = new Array<number>(MAX_ORBITAL_TERMS).fill(0);
-    const p2s = new Array<number>(MAX_ORBITAL_TERMS).fill(0);
-    const p3s = new Array<number>(MAX_ORBITAL_TERMS).fill(0);
-    const coeffs = new Array<number>(MAX_ORBITAL_TERMS).fill(0);
-
-    const bounded = terms.slice(0, MAX_ORBITAL_TERMS);
-    bounded.forEach((t, i) => {
-        ns[i] = t.n;
-        if (t.kind === 'spherical') {
-            kinds[i] = 0;
-            p1s[i] = t.l;
-            p2s[i] = t.m;
-            p3s[i] = 0;
-            coeffs[i] = t.coeff;
-        } else {
-            kinds[i] = 1;
-            p1s[i] = t.a;
-            p2s[i] = t.b;
-            p3s[i] = t.c;
-            coeffs[i] = t.coeff * cartesianNorm(t.a, t.b, t.c);
-        }
-    });
-
-    return { kinds, ns, p1s, p2s, p3s, coeffs, count: bounded.length };
-}
 
 export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
     terms,
@@ -106,85 +58,99 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
     qualityProfile,
 }) => {
     const meshRef = useRef<THREE.Mesh>(null);
-    const { camera, invalidate } = useThree();
+    const { camera, gl, scene, invalidate } = useThree();
 
-    const packed = useMemo(() => packTerms(terms), [terms]);
+    const packed = useMemo(() => packOrbital(terms, displayMode, radN, radL, Z), [terms, displayMode, radN, radL, Z]);
 
-    // Structural knobs that require a shader recompile (NUM_TERMS / DISPLAY_MODE /
-    // RENDER_MODE + tier-controlled defines). Keyed on primitives so re-derivation
-    // is cheap; recompile only fires on real variant change.
-    const shaderVariant = useMemo(
-        () => ({
-            numTerms: Math.max(1, packed.count),
-            displayMode: DISPLAY_INDEX[displayMode] as 0 | 1 | 2,
-            renderMode: MODE_INDEX[renderMode] as 0 | 1 | 2,
-            stepsIso: qualityProfile.stepsIso,
-            stepsDensity: qualityProfile.stepsDensity,
-            bisectionIters: qualityProfile.bisectionIters,
-            lightingComplex: qualityProfile.lightingComplex,
-        }),
-        [
-            packed.count,
-            displayMode,
-            renderMode,
-            qualityProfile.stepsIso,
-            qualityProfile.stepsDensity,
-            qualityProfile.bisectionIters,
-            qualityProfile.lightingComplex,
-        ],
+    // Mode, term count and quality are uniforms, so one program serves every
+    // setting. Ray-march steps shrink with superposition size because each
+    // step evaluates every term.
+    const numTerms = Math.max(1, packed.numTerms);
+    const costTerms = numTerms;
+    const q = clampQuality({
+        stepsIso: scaledSteps(qualityProfile.stepsIso, costTerms),
+        stepsDensity: scaledSteps(qualityProfile.stepsDensity, costTerms),
+        bisectionIters: qualityProfile.bisectionIters,
+    });
+
+    // Created once. Initial uniform values are placeholders; the effect below
+    // fills them before the first frame.
+    const material = useMemo(
+        () =>
+            new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader,
+                side: THREE.BackSide,
+                transparent: true,
+                depthWrite: false,
+                uniforms: {
+                    uRenderMode: { value: 0 },
+                    uUseEnvelope: { value: 0 },
+                    uNumTerms: { value: 1 },
+                    uStepsIso: { value: 32 },
+                    uStepsDensity: { value: 32 },
+                    uBisectionIters: { value: 4 },
+                    uLightingComplex: { value: 1 },
+                    uDegree: { value: new Array<number>(MAX_TERMS).fill(0) },
+                    uAng: { value: new Array<number>(MAX_TERMS * ANG_SLOTS).fill(0) },
+                    uRadPoly: { value: Array.from({ length: MAX_TERMS }, () => new THREE.Vector4()) },
+                    uRadPower: { value: new Array<number>(MAX_TERMS).fill(0) },
+                    uRadInvN: { value: new Array<number>(MAX_TERMS).fill(1) },
+                    uZ: { value: 1 },
+                    uIsoValue: { value: 0.05 },
+                    uSliceAxis: { value: 2 },
+                    uSlicePosition: { value: 0 },
+                    uClipEnabled: { value: 0 },
+                    uEnvelopeScale: { value: 2 },
+                    uColorPositive: { value: new THREE.Color() },
+                    uColorNegative: { value: new THREE.Color() },
+                    uBackground: { value: new THREE.Color() },
+                    uCameraPos: { value: new THREE.Vector3() },
+                    uBoundingRadius: { value: BOUNDING_RADIUS },
+                    uNormScale: { value: 1 },
+                },
+            }),
+        [],
     );
-
-    const material = useMemo(() => {
-        return new THREE.ShaderMaterial({
-            vertexShader,
-            fragmentShader: buildFragmentShader(shaderVariant),
-            side: THREE.BackSide,
-            transparent: true,
-            depthWrite: false,
-            uniforms: {
-                uRadN: { value: radN },
-                uRadL: { value: radL },
-                uZ: { value: Z },
-                uTermKind: { value: packed.kinds.slice() },
-                uTermN: { value: packed.ns.slice() },
-                uTermP1: { value: packed.p1s.slice() },
-                uTermP2: { value: packed.p2s.slice() },
-                uTermP3: { value: packed.p3s.slice() },
-                uTermCoeff: { value: packed.coeffs.slice() },
-                uIsoValue: { value: isoValue },
-                uSliceAxis: { value: sliceAxis },
-                uSlicePosition: { value: slicePosition },
-                uClipEnabled: { value: clipEnabled ? 1 : 0 },
-                uEnvelopeScale: { value: envelopeScale },
-                uColorPositive: { value: new THREE.Color(colorPositive) },
-                uColorNegative: { value: new THREE.Color(colorNegative) },
-                uBackground: { value: new THREE.Color(background) },
-                uCameraPos: { value: camera.position.clone() },
-                uBoundingRadius: { value: boundingRadius },
-                uNormScale: { value: normScale },
-            },
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [shaderVariant]);
-
-    // Dispose old program/material when a variant change recreates it.
     useEffect(() => () => material.dispose(), [material]);
+
+    // Compile off the main thread where the browser supports
+    // KHR_parallel_shader_compile; the mesh stays hidden until ready, so the
+    // tab never blocks on the first draw.
+    const [ready, setReady] = useState(false);
+    useEffect(() => {
+        let cancelled = false;
+        const probe = new THREE.Mesh(new THREE.SphereGeometry(1, 4, 2), material);
+        const done = () => {
+            probe.geometry.dispose();
+            if (cancelled) return;
+            setReady(true);
+            invalidate();
+        };
+        const compile = (gl as THREE.WebGLRenderer).compileAsync?.(probe, camera, scene);
+        if (compile) compile.then(done, done);
+        else done();
+        return () => {
+            cancelled = true;
+        };
+    }, [material, gl, camera, scene, invalidate]);
 
     // Push prop changes into uniforms and request one redraw.
     useEffect(() => {
         const u = material.uniforms;
-        u.uRadN.value = radN;
-        u.uRadL.value = radL;
+        u.uRenderMode.value = MODE_INDEX[renderMode];
+        u.uUseEnvelope.value = packed.useEnvelope ? 1 : 0;
+        u.uNumTerms.value = numTerms;
+        u.uStepsIso.value = q.stepsIso;
+        u.uStepsDensity.value = q.stepsDensity;
+        u.uBisectionIters.value = q.bisectionIters;
+        u.uLightingComplex.value = qualityProfile.lightingComplex ? 1 : 0;
         u.uZ.value = Z;
-        const assign = (dst: number[], src: number[]) => {
-            for (let i = 0; i < MAX_ORBITAL_TERMS; i++) dst[i] = src[i];
-        };
-        assign(u.uTermKind.value as number[], packed.kinds);
-        assign(u.uTermN.value as number[], packed.ns);
-        assign(u.uTermP1.value as number[], packed.p1s);
-        assign(u.uTermP2.value as number[], packed.p2s);
-        assign(u.uTermP3.value as number[], packed.p3s);
-        assign(u.uTermCoeff.value as number[], packed.coeffs);
+        (u.uDegree.value as number[]).splice(0, MAX_TERMS, ...packed.degree);
+        (u.uAng.value as number[]).splice(0, MAX_TERMS * ANG_SLOTS, ...packed.angCoeffs);
+        (u.uRadPower.value as number[]).splice(0, MAX_TERMS, ...packed.radPower);
+        (u.uRadInvN.value as number[]).splice(0, MAX_TERMS, ...packed.radInvN);
+        (u.uRadPoly.value as THREE.Vector4[]).forEach((v, i) => v.fromArray(packed.radPoly, i * 4));
         u.uIsoValue.value = isoValue;
         u.uSliceAxis.value = sliceAxis;
         u.uSlicePosition.value = slicePosition;
@@ -199,8 +165,12 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
     }, [
         material,
         packed,
-        radN,
-        radL,
+        renderMode,
+        numTerms,
+        q.stepsIso,
+        q.stepsDensity,
+        q.bisectionIters,
+        qualityProfile.lightingComplex,
         Z,
         isoValue,
         sliceAxis,
@@ -220,7 +190,7 @@ export const OrbitalVolume: React.FC<OrbitalVolumeProps> = ({
     });
 
     return (
-        <mesh ref={meshRef} material={material}>
+        <mesh ref={meshRef} material={material} visible={ready}>
             <sphereGeometry args={[boundingRadius, 48, 24]} />
         </mesh>
     );

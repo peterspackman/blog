@@ -1,5 +1,5 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useVizTheme } from '../shared/viz';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import MathFormula from '../MathFormula';
 import type { BasisMode, DisplayMode, RenderMode, Term } from './types';
@@ -19,6 +19,7 @@ import {
     type QualityTier,
     describeProfile,
     detectTier,
+    lowerTier,
     getProfile,
 } from './quality';
 
@@ -31,18 +32,9 @@ interface Theme {
     textMuted: string;
     accent: string;
     inputBg: string;
+    onAccent: string;
 }
 
-function useTheme(isDark: boolean): Theme {
-    return {
-        surface: isDark ? '#1b1b1f' : '#ffffff',
-        border: isDark ? '#333' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#222',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#2a2a30' : '#f3f4f6',
-    };
-}
 
 function useContainerWidth(ref: React.RefObject<HTMLDivElement | null>) {
     const [width, setWidth] = useState(800);
@@ -128,9 +120,20 @@ function boundingRadiusFor(mode: DisplayMode, n: number): number {
 }
 
 const HydrogenOrbitalsInner: React.FC = () => {
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
-    const theme = useTheme(isDark);
+    const viz = useVizTheme();
+    const isDark = viz.isDark;
+    const theme: Theme = useMemo(
+        () => ({
+            surface: viz.surface,
+            border: viz.border,
+            text: viz.text,
+            textMuted: viz.muted,
+            accent: viz.accent,
+            inputBg: viz.surfaceSubtle,
+            onAccent: viz.onAccent,
+        }),
+        [viz],
+    );
 
     const [displayMode, setDisplayMode] = useState<DisplayMode>('angular');
     const [basisMode, setBasisMode] = useState<BasisMode>('spherical');
@@ -149,23 +152,46 @@ const HydrogenOrbitalsInner: React.FC = () => {
     // or a raw amplitude (advanced). Probability-enclosing iso is the chemistry
     // standard: pick an iso such that ∫|ψ|² over the enclosed region = fraction.
     const [isoMode, setIsoMode] = useState<'probability' | 'amplitude'>('probability');
-    const [isoProbFraction, setIsoProbFraction] = useState(0.9);
+    const [isoProbFraction, setIsoProbFraction] = useState(0.8);
     const [renderMode, setRenderMode] = useState<RenderMode>('isosurface');
     const [sliceAxis, setSliceAxis] = useState<SliceAxis>(2);
     const [slicePosition, setSlicePosition] = useState(0);
     const [clipEnabled, setClipEnabled] = useState(false);
     const [envelopeScale, setEnvelopeScale] = useState(2.0);
-    const [colorPositive, setColorPositive] = useState('#ed8936');
-    const [colorNegative, setColorNegative] = useState('#3b82f6');
+    // Lobe colours follow the site's signed-quantity tokens (and so the colour
+    // mode) until the user picks their own.
+    const [lobeOverride, setLobeOverride] = useState<{ pos?: string; neg?: string }>({});
+    const colorPositive = lobeOverride.pos ?? viz.positive;
+    const colorNegative = lobeOverride.neg ?? viz.negative;
+    const setColorPositive = (c: string) => setLobeOverride((o) => ({ ...o, pos: c }));
+    const setColorNegative = (c: string) => setLobeOverride((o) => ({ ...o, neg: c }));
     const [showAxes, setShowAxes] = useState(false);
 
     // Quality tier. 'auto' runs detectTier() once at mount; manual picks stick.
     // Detection peeks at navigator.hardwareConcurrency and the WebGL renderer
     // string (where available) — cheap, non-intrusive, and roughly correct.
     const [qualityOverride, setQualityOverride] = useState<'auto' | QualityTier>('auto');
-    const detectedTier = useMemo(() => detectTier(), []);
-    const effectiveTier = qualityOverride === 'auto' ? detectedTier : qualityOverride;
+    // Auto starts from the hardware guess and steps down if rotation is slow.
+    const [autoTier, setAutoTier] = useState<QualityTier>(() => detectTier());
+    const effectiveTier = qualityOverride === 'auto' ? autoTier : qualityOverride;
     const qualityProfile = useMemo(() => getProfile(effectiveTier), [effectiveTier]);
+    const [qualityNotice, setQualityNotice] = useState<string | null>(null);
+    // Bumped to remount the WebGL canvas after a GPU reset.
+    const [sceneKey, setSceneKey] = useState(0);
+
+    const handleSlow = useCallback(() => {
+        if (qualityOverride !== 'auto') return;
+        const lower = lowerTier(autoTier);
+        if (!lower) return;
+        setAutoTier(lower);
+        setQualityNotice(`Rotation was slow, so Auto lowered quality to ${lower}.`);
+    }, [qualityOverride, autoTier]);
+
+    const handleContextLost = useCallback(() => {
+        setQualityOverride('low');
+        setSceneKey((k) => k + 1);
+        setQualityNotice('The graphics driver reset, so quality is now Low. You can raise it again here.');
+    }, []);
 
     // Quantum-number constraint enforcement: l ≤ n-1, |m| ≤ l.
     useEffect(() => {
@@ -464,7 +490,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                         borderRadius: 4,
                         border: `1px solid ${theme.border}`,
                         background: current === opt.value ? theme.accent : theme.inputBg,
-                        color: current === opt.value ? '#fff' : theme.text,
+                        color: current === opt.value ? theme.onAccent : theme.text,
                         cursor: 'pointer',
                         fontSize: 13,
                     }}
@@ -503,7 +529,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                 borderRadius: 3,
                                 border: `1px solid ${theme.border}`,
                                 background: selected ? theme.accent : theme.inputBg,
-                                color: selected ? '#fff' : theme.text,
+                                color: selected ? theme.onAccent : theme.text,
                                 cursor: 'pointer',
                                 fontSize: 12,
                                 fontFamily: 'ui-monospace, SFMono-Regular, monospace',
@@ -590,6 +616,9 @@ const HydrogenOrbitalsInner: React.FC = () => {
                 >
                     {Scene ? (
                         <Scene
+                            key={sceneKey}
+                            onSlow={handleSlow}
+                            onContextLost={handleContextLost}
                             width={canvasWidth}
                             height={canvasHeight}
                             isDark={isDark}
@@ -605,7 +634,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                             envelopeScale={envelopeScale}
                             colorPositive={colorPositive}
                             colorNegative={colorNegative}
-                            background={isDark ? '#0e0e12' : '#fafbfc'}
+                            background={viz.page}
                             boundingRadius={boundingRadius}
                             normScale={normScale}
                             showAxes={showAxes}
@@ -643,7 +672,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                 rMax={boundingRadius}
                                 width={canvasWidth - 18}
                                 height={130}
-                                isDark={isDark}
+                                theme={viz}
                                 colorR={theme.accent}
                                 colorProb={colorPositive}
                             />
@@ -764,7 +793,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                                 borderRadius: 4,
                                                 border: `1px solid ${theme.border}`,
                                                 background: selected ? theme.accent : theme.inputBg,
-                                                color: selected ? '#fff' : theme.text,
+                                                color: selected ? theme.onAccent : theme.text,
                                                 cursor: 'pointer',
                                                 fontSize: 13,
                                                 fontFamily: 'ui-monospace, SFMono-Regular, monospace',
@@ -807,7 +836,10 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                 { value: 'high', label: 'High' },
                             ],
                             qualityOverride,
-                            (v) => setQualityOverride(v as 'auto' | QualityTier),
+                            (v) => {
+                                setQualityOverride(v as 'auto' | QualityTier);
+                                setQualityNotice(null);
+                            },
                         )}
                         <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
                             {qualityOverride === 'auto'
@@ -815,6 +847,11 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                 : `Manual · `}
                             {describeProfile(qualityProfile)}
                         </div>
+                        {qualityNotice && (
+                            <div role="status" style={{ fontSize: 12, color: theme.text, marginTop: 6 }}>
+                                {qualityNotice}
+                            </div>
+                        )}
                     </section>
 
                     {(renderMode === 'isosurface' || renderMode === 'density') && (
@@ -1245,7 +1282,7 @@ const HydrogenOrbitalsInner: React.FC = () => {
                                                             fontSize: 11,
                                                             border: `1px solid ${theme.border}`,
                                                             background: selected ? theme.accent : theme.surface,
-                                                            color: selected ? '#fff' : theme.text,
+                                                            color: selected ? theme.onAccent : theme.text,
                                                             borderRadius: 3,
                                                             cursor: 'pointer',
                                                             fontFamily:

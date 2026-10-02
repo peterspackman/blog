@@ -55,7 +55,9 @@ export function getProfile(tier: QualityTier): QualityProfile {
                 stepsDensity: 48,
                 bisectionIters: 6,
                 dragDpr: 0.75,
-                restDpr: Math.min(devDpr, 2),
+                // Capped below 2: at DPR 2 a full-ψ superposition is ~4x the
+                // fragments of DPR 1 and can trip the GPU watchdog.
+                restDpr: Math.min(devDpr, 1.5),
                 lightingComplex: true,
             };
         case 'medium':
@@ -74,15 +76,18 @@ export function getProfile(tier: QualityTier): QualityProfile {
 
 /**
  * Heuristic tier detection. Creates a throwaway canvas to sniff the WebGL
- * renderer string (some browsers mask this for fingerprint protection — we
- * fall back to CPU / memory heuristics).
+ * renderer string (some browsers mask this for fingerprint protection), then
+ * releases the context so it doesn't count against the browser's limit.
  *
- * Decision logic, in priority order:
- *   1. Software renderers (SwiftShader, llvmpipe, Microsoft Basic) → low
- *   2. Known-strong GPU string + ≥ 6 cores → high
- *   3. ≤ 2 cores or ≤ 2GB deviceMemory → low
- *   4. ≥ 8 cores and ≥ 8GB deviceMemory → high
- *   5. Default → medium
+ * Deliberately conservative: a too-high tier freezes the tab or resets the
+ * GPU, a too-low one just looks softer (and the runtime monitor can't step
+ * *up* past what we pick here).
+ *   1. Software renderers (SwiftShader, llvmpipe, Microsoft Basic) -> low
+ *   2. Integrated / mobile GPUs (Intel, Mali, Adreno, PowerVR) -> low on weak
+ *      CPUs, else medium
+ *   3. Known-strong discrete or Apple-silicon GPU + >= 6 cores -> high
+ *   4. <= 2 cores or <= 2GB deviceMemory -> low
+ *   5. Everything else, including masked renderer strings -> medium
  */
 export function detectTier(): QualityTier {
     if (typeof navigator === 'undefined' || typeof document === 'undefined') {
@@ -102,21 +107,42 @@ export function detectTier(): QualityTier {
             if (ext) {
                 rendererStr = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '');
             }
+            gl.getExtension('WEBGL_lose_context')?.loseContext();
         }
     } catch {
         // Ignore — WebGL may be unavailable (server, blocked, etc.).
     }
 
-    // Software/fallback rasterizers — these are the page's worst case.
     if (/SwiftShader|llvmpipe|Microsoft Basic|ANGLE.*Software|software/i.test(rendererStr)) {
         return 'low';
     }
 
-    // Known-fast discrete / Apple-silicon GPUs.
+    const weak = cores <= 2 || mem <= 2;
+    if (/Intel|Mali|Adreno|PowerVR|Apple GPU|Xclipse/i.test(rendererStr)) {
+        return weak || cores <= 4 ? 'low' : 'medium';
+    }
+
     const strongGpu = /RTX|GTX 1[06789]|GTX [23]\d{3}|Radeon Pro|Radeon RX|Arc A\d|Apple M[1-9]/i.test(rendererStr);
     if (strongGpu && cores >= 6) return 'high';
 
-    if (cores <= 2 || mem <= 2) return 'low';
-    if (cores >= 8 && mem >= 8) return 'high';
+    if (weak) return 'low';
     return 'medium';
+}
+
+const TIER_ORDER: QualityTier[] = ['low', 'medium', 'high'];
+
+/** The next tier down, or null if already at the bottom. */
+export function lowerTier(tier: QualityTier): QualityTier | null {
+    const i = TIER_ORDER.indexOf(tier);
+    return i > 0 ? TIER_ORDER[i - 1] : null;
+}
+
+/**
+ * Ray-march steps scaled by superposition size. Per-step cost is linear in
+ * the number of terms, so total cost would otherwise grow 8x for an 8-term
+ * preset; dividing by sqrt(terms) keeps it ~2.8x while iso surfaces stay
+ * smooth (bisection refines the crossing anyway).
+ */
+export function scaledSteps(base: number, numTerms: number, floor = 16): number {
+    return Math.max(floor, Math.round(base / Math.sqrt(Math.max(1, numTerms))));
 }

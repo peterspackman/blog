@@ -6,6 +6,7 @@
 
 import React, { useEffect, useMemo, useRef } from 'react';
 import { radialR, radialProbabilityDensity } from './physics';
+import { canvasFont, type VizTheme } from '../shared/viz';
 
 interface RadialPlotProps {
     n: number;
@@ -14,7 +15,7 @@ interface RadialPlotProps {
     rMax: number;
     width: number;
     height: number;
-    isDark: boolean;
+    theme: VizTheme;
     colorR: string;
     colorProb: string;
 }
@@ -70,7 +71,7 @@ export const RadialPlot: React.FC<RadialPlotProps> = ({
     rMax,
     width,
     height,
-    isDark,
+    theme,
     colorR,
     colorProb,
 }) => {
@@ -109,10 +110,10 @@ export const RadialPlot: React.FC<RadialPlotProps> = ({
         const plotH = height - padT - padB;
         const midY = padT + plotH / 2;
 
-        const bg = isDark ? '#0e0e12' : '#fafbfc';
-        const grid = isDark ? '#2a2a30' : '#e5e5e5';
-        const axis = isDark ? '#555' : '#888';
-        const label = isDark ? '#999' : '#555';
+        const bg = theme.surface;
+        const grid = theme.grid;
+        const axis = theme.axis;
+        const label = theme.muted;
 
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = bg;
@@ -129,7 +130,7 @@ export const RadialPlot: React.FC<RadialPlotProps> = ({
         // r axis ticks
         ctx.strokeStyle = axis;
         ctx.fillStyle = label;
-        ctx.font = '10px system-ui, -apple-system, sans-serif';
+        ctx.font = canvasFont(theme, 11);
         ctx.textAlign = 'center';
         const nTicks = 5;
         for (let i = 0; i <= nTicks; i++) {
@@ -146,7 +147,7 @@ export const RadialPlot: React.FC<RadialPlotProps> = ({
         ctx.fillText('r / a₀', padL + plotW, padT + plotH + 14);
 
         // Nodes: vertical dashed lines
-        ctx.strokeStyle = isDark ? '#666' : '#aaa';
+        ctx.strokeStyle = theme.axis;
         ctx.setLineDash([3, 3]);
         for (const rN of nodes) {
             if (rN > rMax) continue;
@@ -196,7 +197,7 @@ export const RadialPlot: React.FC<RadialPlotProps> = ({
         ctx.fillText(`R_${n}${l}(r)`, padL + 4, padT + 12);
         ctx.fillStyle = colorProb;
         ctx.fillText(`r² |R|²`, padL + 4, padT + 25);
-    }, [samples, maxAbsR, maxProb, nodes, width, height, isDark, rMax, n, l, colorR, colorProb]);
+    }, [samples, maxAbsR, maxProb, nodes, width, height, theme, rMax, n, l, colorR, colorProb]);
 
     return <canvas ref={canvasRef} style={{ width, height, display: 'block' }} />;
 };

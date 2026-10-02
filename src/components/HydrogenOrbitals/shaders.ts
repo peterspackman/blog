@@ -12,7 +12,8 @@
  *   - Radial R_{nl}(r) in atomic units (a₀ = 1), closed form for n ≤ 4.
  */
 
-import { YLM_GLSL, RAW_CART_GLSL, SHADER_L_MAX } from './codegen';
+import { SHADER_L_MAX } from './codegen';
+import { ANG_SLOTS, MAX_TERMS as PACK_MAX_TERMS } from './packing';
 
 const MAX_L = SHADER_L_MAX;
 const SOLID_ARRAY_SIZE = (MAX_L + 1) * (MAX_L + 1); // 25
@@ -197,66 +198,51 @@ void main() {
 }
 `;
 
-export interface FragmentShaderVariant {
-    /** Number of active terms; must be ≥ 1 and ≤ MAX_ORBITAL_TERMS. */
-    numTerms: number;
-    /** 0 = angular Y(θ,φ), 1 = radial R(r), 2 = full ψ = R·Y. */
-    displayMode: 0 | 1 | 2;
-    /** 0 = isosurface, 1 = density, 2 = slice. */
-    renderMode: 0 | 1 | 2;
-    /** Ray-march step count for iso mode. Tier-dependent. */
-    stepsIso: number;
-    /** Ray-march step count for density mode. */
-    stepsDensity: number;
-    /** Bisection iterations at iso-crossing (3 = jagged, 6 = smooth). */
-    bisectionIters: number;
-    /** true → full 3-light rig w/ specular + fresnel; false → cheap diffuse. */
-    lightingComplex: boolean;
-}
-
 /**
- * Build a specialised fragment shader via GLSL #defines. Compile-time knowledge
- * of NUM_TERMS / DISPLAY_MODE / RENDER_MODE lets the driver dead-code whole
- * branches (radial mode skips the term loop entirely; slice mode skips the
- * clip-plane logic; iso mode's heavy shadeLobe is compiled out of density and
- * slice variants). Recompile is only needed when these three change.
+ * Fragment shader: one program for every mode, term count and quality tier.
+ *
+ * Everything that used to be a #define (term count, display/render mode,
+ * step counts, lighting) is a uniform, and every loop is bounded by a
+ * uniform. GLSL ES 3.00 (which three uses for ShaderMaterial) allows that,
+ * and it stops drivers from unrolling the ray march: with constant bounds
+ * ANGLE/D3D and Mesa inline sampleField() at every unrolled step (x64 steps
+ * x 8 terms x 25 Ylm cases), which took seconds to compile, reported
+ * "optimization did not converge", and could reset the GPU. Uniform
+ * branches are coherent across a draw, so the runtime cost is negligible,
+ * and changing mode or terms no longer recompiles anything.
+ *
+ * The field is data-driven too: angular parts are generic homogeneous
+ * polynomials and radial parts generic R_nl polynomials, with coefficients
+ * from packOrbital(). The previous generated Ylm()/radialR() functions (one
+ * branch and return per case) took the D3D compiler minutes to optimise.
+ *
+ * sampleField() is called from as few sites as possible (march, bisection,
+ * gradient, slice) because each call site inlines the whole term loop.
  */
-export function buildFragmentShader(v: FragmentShaderVariant): string {
-    const nt = Math.max(1, Math.min(MAX_ORBITAL_TERMS, v.numTerms));
-    const dm = v.displayMode;
-    const rm = v.renderMode;
-    const stepsIso = Math.max(8, Math.min(128, Math.floor(v.stepsIso)));
-    const stepsDensity = Math.max(8, Math.min(96, Math.floor(v.stepsDensity)));
-    const bisect = Math.max(1, Math.min(8, Math.floor(v.bisectionIters)));
-    const lighting = v.lightingComplex ? 1 : 0;
-    return /* glsl */ `
+export const fragmentShader = /* glsl */ `
 precision highp float;
+precision highp int;
 
-#define NUM_TERMS ${nt}
-#define DISPLAY_MODE ${dm}
-#define RENDER_MODE ${rm}
-#define LIGHTING_COMPLEX ${lighting}
+const int MAX_TERMS = ${PACK_MAX_TERMS};
+const int ANG_SLOTS = ${ANG_SLOTS};
 
-#if DISPLAY_MODE != 1
-${YLM_GLSL}
+// 0 = isosurface, 1 = density, 2 = slice
+uniform int uRenderMode;
+// 1 in angular display mode: F(r) is a generic envelope instead of R_nl(r)
+uniform int uUseEnvelope;
+uniform int uNumTerms;
+uniform int uStepsIso;
+uniform int uStepsDensity;
+uniform int uBisectionIters;
+uniform int uLightingComplex;
 
-${RAW_CART_GLSL}
-#endif
-
-${RADIAL_GLSL}
-
-// Radial-mode single orbital.
-uniform int uRadN;
-uniform int uRadL;
-
-// Packed term arrays. Arrays stay at MAX_ORBITAL_TERMS for layout stability;
-// only the first NUM_TERMS are read.
-uniform int uTermKind[${MAX_ORBITAL_TERMS}];
-uniform int uTermN[${MAX_ORBITAL_TERMS}];
-uniform int uTermP1[${MAX_ORBITAL_TERMS}]; // spherical: l, cartesian: a
-uniform int uTermP2[${MAX_ORBITAL_TERMS}]; // spherical: m, cartesian: b
-uniform int uTermP3[${MAX_ORBITAL_TERMS}]; // cartesian: c
-uniform float uTermCoeff[${MAX_ORBITAL_TERMS}];
+// Wavefunction, packed by packOrbital() in packing.ts:
+//   ψ = Σ_i A_i(r̂) · F_i(r),  A_i = Σ_k uAng[i*ANG_SLOTS + k] · x^a y^b z^c (a+b+c = uDegree[i])
+uniform int uDegree[MAX_TERMS];
+uniform float uAng[MAX_TERMS * ANG_SLOTS];
+uniform vec4 uRadPoly[MAX_TERMS];  // R = (Zr)^p · (c0 + c1 Zr + c2 Zr² + c3 Zr³) · exp(-Zr/n)
+uniform int uRadPower[MAX_TERMS];
+uniform float uRadInvN[MAX_TERMS];
 
 uniform float uIsoValue;
 uniform int uSliceAxis;       // 0 = x-normal, 1 = y-normal, 2 = z-normal
@@ -273,68 +259,41 @@ uniform float uBoundingRadius;
 
 varying vec3 vWorldPosition;
 
-const int STEPS_ISO = ${stepsIso};
-const int STEPS_DENSITY = ${stepsDensity};
-const int BISECTION_ITERS = ${bisect};
-const float INV_SQRT_4PI_C = 0.28209479177387814;  // Y_{0,0}
-
-// Small unrolled integer-exponent power for the cartesian monomials. Max
-// exponent supported is L_MAX = 4 (same as the codegen'd Ylm).
-float pw(float v, int n) {
-    if (n == 0) return 1.0;
-    if (n == 1) return v;
-    if (n == 2) return v * v;
-    if (n == 3) return v * v * v;
-    return v * v * v * v;
+// v^n for small non-negative integer n.
+float ipow(float v, int n) {
+    float result = 1.0;
+    for (int i = 0; i < n; i++) result *= v;
+    return result;
 }
 
-// Sample the field. Variant-specialised at compile time:
-//   DISPLAY_MODE == 0 (angular): Σ coeff · (Y or N·x^a y^b z^c) · exp(-r/λ)
-//   DISPLAY_MODE == 1 (radial):  R_{uRadN, uRadL}(r) · Y_{0,0}
-//   DISPLAY_MODE == 2 (full ψ):  Σ coeff · R_{n, l or a+b+c}(r) · (Y or N·x^a y^b z^c)
+// Sample ψ at pos. Mirrors evalPacked() in packing.ts.
 float sampleField(vec3 pos) {
-    float r2 = dot(pos, pos);
-#if DISPLAY_MODE == 1
-    float r = sqrt(r2);
-    return radialR(uRadN, uRadL, r, uZ) * INV_SQRT_4PI_C;
-#else
-    if (r2 < 1e-8) return 0.0;
-    float r = sqrt(r2);
-    vec3 nHat = pos / r;
-
-    #if DISPLAY_MODE == 0
+    float r = length(pos);
+    if (r < 1e-4) return 0.0;
+    vec3 u = pos / r;
+    float Zr = uZ * r;
     float envelope = exp(-r / max(uEnvelopeScale, 0.01));
-    #endif
 
     float sum = 0.0;
-    for (int i = 0; i < NUM_TERMS; i++) {
-        int kind = uTermKind[i];
-        int n = uTermN[i];
-        int p1 = uTermP1[i];
-        int p2 = uTermP2[i];
-        int p3 = uTermP3[i];
-        float coeff = uTermCoeff[i];
-
-        float ang;
-        int lEq;
-        if (kind == 0) {
-            ang = Ylm(p1, p2, nHat.x, nHat.y, nHat.z);
-            lEq = p1;
-        } else {
-            ang = pw(nHat.x, p1) * pw(nHat.y, p2) * pw(nHat.z, p3);
-            lEq = p1 + p2 + p3;
+    for (int i = 0; i < uNumTerms; i++) {
+        int l = uDegree[i];
+        int k = i * ANG_SLOTS;
+        float ang = 0.0;
+        for (int a = l; a >= 0; a--) {
+            float xa = ipow(u.x, a);
+            for (int b = l - a; b >= 0; b--) {
+                ang += uAng[k] * xa * ipow(u.y, b) * ipow(u.z, l - a - b);
+                k++;
+            }
         }
-
-        float radFactor;
-    #if DISPLAY_MODE == 0
-        radFactor = envelope;
-    #else
-        radFactor = radialR(n, lEq, r, uZ);
-    #endif
-        sum += coeff * ang * radFactor;
+        float radial = envelope;
+        if (uUseEnvelope == 0) {
+            vec4 c = uRadPoly[i];
+            radial = ipow(Zr, uRadPower[i]) * (c.x + Zr * (c.y + Zr * (c.z + Zr * c.w))) * exp(-Zr * uRadInvN[i]);
+        }
+        sum += ang * radial;
     }
     return sum;
-#endif
 }
 
 // Ray–sphere intersection; returns (tNear, tFar) or (-1, -1) for a miss.
@@ -364,29 +323,31 @@ float intersectPlane(vec3 orig, vec3 dir, vec3 n, float offset) {
  * Diffuse uses half-Lambert ((N·L)/2 + 1/2)² so every orientation has some
  * illumination — no fully-occluded dark side when you rotate the orbital.
  */
-#if RENDER_MODE == 0
-// baseVal = sampleField(hitPos), usually the last bisection value (vA) — reused
-// to turn central differences into forward differences (3 samples instead of 6).
+// baseVal = sampleField(hitPos), usually the last bisection value — reused to
+// turn central differences into forward differences (3 samples, one call site).
 vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive, float baseVal) {
     float eps = 0.03;
-    vec3 grad = vec3(
-        sampleField(hitPos + vec3(eps, 0, 0)) - baseVal,
-        sampleField(hitPos + vec3(0, eps, 0)) - baseVal,
-        sampleField(hitPos + vec3(0, 0, eps)) - baseVal
-    );
+    vec3 grad = vec3(0.0);
+    // Bound is 3, but expressed via a uniform so the compiler can't unroll
+    // it into three inlined copies of sampleField().
+    int axes = 3 + min(uNumTerms, 0);
+    for (int k = 0; k < axes; k++) {
+        vec3 off = vec3(k == 0 ? eps : 0.0, k == 1 ? eps : 0.0, k == 2 ? eps : 0.0);
+        grad[k] = sampleField(hitPos + off) - baseVal;
+    }
     float gLen = length(grad);
     vec3 N = gLen > 1e-6 ? grad / gLen : vec3(0.0, 1.0, 0.0);
     if (dot(N, rayDir) > 0.0) N = -N;
 
     vec3 base = positive ? uColorPositive : uColorNegative;
 
-#if LIGHTING_COMPLEX == 0
-    // Cheap diffuse — single directional light in camera space, no specular,
-    // no fresnel, no basis. About 10× cheaper than the full rig below.
-    vec3 L = normalize(-rayDir + vec3(0.0, 0.7, 0.3));
-    float diff = max(dot(N, L), 0.0);
-    return base * (0.25 + 0.75 * diff);
-#else
+    if (uLightingComplex == 0) {
+        // Cheap diffuse — single directional light in camera space.
+        vec3 L = normalize(-rayDir + vec3(0.0, 0.7, 0.3));
+        float diff = max(dot(N, L), 0.0);
+        return base * (0.25 + 0.75 * diff);
+    }
+
     // Build a camera-relative basis (R, U, V). Blend the "world up" reference
     // smoothly between y-axis and z-axis as the viewer approaches a pole —
     // a hard switch at |V.y| ≈ 1 causes R to flip direction, which looks like
@@ -436,9 +397,11 @@ vec3 shadeLobe(vec3 hitPos, vec3 rayDir, bool positive, float baseVal) {
     color += specTint * specBroad * 0.16;         // soft broad highlight
     color += specTint * specTight * 0.38;         // pop clearcoat highlight
     return color;
-#endif
 }
-#endif
+
+vec3 axisNormal(int axis) {
+    return axis == 0 ? vec3(1.0, 0.0, 0.0) : (axis == 1 ? vec3(0.0, 1.0, 0.0) : vec3(0.0, 0.0, 1.0));
+}
 
 void main() {
     vec3 rayOrigin = uCameraPos;
@@ -449,11 +412,22 @@ void main() {
     float tNear = max(tBounds.x, 0.0);
     float tFar = tBounds.y;
 
-#if DISPLAY_MODE == 0
-    // Angular mode: the envelope exp(-r/λ) is essentially zero past r ≈ 4.5λ, so
-    // clip the march to a tighter sphere when the envelope is small relative to
-    // uBoundingRadius. No-op at default λ ≈ 2 with the default bounding radius 6.
-    {
+    // -------- SLICE --------
+    if (uRenderMode == 2) {
+        vec3 n = axisNormal(uSliceAxis);
+        float tP = intersectPlane(rayOrigin, rayDir, n, uSlicePosition);
+        if (tP < tNear || tP > tFar) discard;
+
+        float val = sampleField(rayOrigin + rayDir * tP) * uNormScale;
+        float mag = clamp(pow(abs(val), 0.6), 0.0, 1.0);
+        vec3 target = (val >= 0.0) ? uColorPositive : uColorNegative;
+        gl_FragColor = vec4(mix(uBackground, target, mag), 1.0);
+        return;
+    }
+
+    if (uUseEnvelope == 1) {
+        // Angular mode: the envelope exp(-r/λ) is essentially zero past r ≈ 4.5λ,
+        // so clip the march to a tighter sphere when that is inside the bounds.
         float envRadius = 4.5 * max(uEnvelopeScale, 0.01);
         if (envRadius < uBoundingRadius) {
             vec2 tInner = intersectSphere(rayOrigin, rayDir, envRadius);
@@ -463,16 +437,10 @@ void main() {
             if (tFar <= tNear) discard;
         }
     }
-#endif
 
-#if RENDER_MODE != 2
-    // Cutaway: trim the ray's bounding interval against a clip plane. Slice
-    // mode has its own plane, so this is compiled out there.
+    // Cutaway: trim the ray's interval against the slice plane.
     if (uClipEnabled == 1) {
-        vec3 clipN;
-        if (uSliceAxis == 0) clipN = vec3(1.0, 0.0, 0.0);
-        else if (uSliceAxis == 1) clipN = vec3(0.0, 1.0, 0.0);
-        else clipN = vec3(0.0, 0.0, 1.0);
+        vec3 clipN = axisNormal(uSliceAxis);
 
         float denom = dot(rayDir, clipN);
         float startSide = dot(rayOrigin, clipN) - uSlicePosition;
@@ -490,84 +458,74 @@ void main() {
             if (tFar <= tNear) discard;
         }
     }
-#endif
 
-#if RENDER_MODE == 0
+    // -------- DENSITY (|ψ|² ray march with sign colouring, auto-scaled) --------
+    if (uRenderMode == 1) {
+        vec4 acc = vec4(0.0);
+        float dt = (tFar - tNear) / float(uStepsDensity);
+        for (int i = 0; i < uStepsDensity; i++) {
+            float t = tNear + (float(i) + 0.5) * dt;
+            float val = sampleField(rayOrigin + rayDir * t) * uNormScale;
+            float density = val * val;
+            if (density < 1e-5) continue;
+
+            float alpha = clamp(density * dt / max(uBoundingRadius, 1.0) * 40.0, 0.0, 1.0);
+            vec3 color = (val > 0.0) ? uColorPositive : uColorNegative;
+            color *= pow(density, 0.35) * 1.6;
+
+            acc.rgb += (1.0 - acc.a) * color * alpha;
+            acc.a += (1.0 - acc.a) * alpha;
+            if (acc.a > 0.98) break;
+        }
+        if (acc.a < 0.005) discard;
+        gl_FragColor = vec4(acc.rgb, acc.a);
+        return;
+    }
+
     // -------- ISOSURFACE --------
+    // March to the first bracketed crossing of ±iso, then refine once.
     float iso = uIsoValue;
-    float dt = (tFar - tNear) / float(STEPS_ISO);
-    float t = tNear;
-    float prev = sampleField(rayOrigin + rayDir * t);
-
-    for (int i = 1; i < STEPS_ISO; i++) {
-        t += dt;
-        vec3 p = rayOrigin + rayDir * t;
-        float val = sampleField(p);
-
-        bool crossPlus = (prev - iso) * (val - iso) < 0.0;
-        bool crossMinus = (prev + iso) * (val + iso) < 0.0;
-
-        if (crossPlus || crossMinus) {
-            float target = crossPlus ? iso : -iso;
-            float tA = t - dt, tB = t;
-            float vA = prev, vB = val;
-            for (int j = 0; j < BISECTION_ITERS; j++) {
-                float tMid = 0.5 * (tA + tB);
-                float vMid = sampleField(rayOrigin + rayDir * tMid);
-                if ((vA - target) * (vMid - target) < 0.0) {
-                    tB = tMid; vB = vMid;
-                } else {
-                    tA = tMid; vA = vMid;
-                }
+    float dt = (tFar - tNear) / float(uStepsIso);
+    bool hit = false;
+    float target = iso;
+    float prev = 0.0;
+    float tA = tNear, tB = tNear, vA = 0.0;
+    for (int i = 0; i <= uStepsIso; i++) {
+        float t = tNear + float(i) * dt;
+        float val = sampleField(rayOrigin + rayDir * t);
+        if (i > 0) {
+            bool crossPlus = (prev - iso) * (val - iso) < 0.0;
+            bool crossMinus = (prev + iso) * (val + iso) < 0.0;
+            if (crossPlus || crossMinus) {
+                target = crossPlus ? iso : -iso;
+                tA = t - dt; tB = t;
+                vA = prev;
+                hit = true;
+                break;
             }
-            vec3 hitPos = rayOrigin + rayDir * tA;
-            bool positive = target > 0.0;
-            // vA is the field value at hitPos after bisection — reuse as gradient base.
-            gl_FragColor = vec4(shadeLobe(hitPos, rayDir, positive, vA), 1.0);
-            return;
         }
         prev = val;
     }
-    discard;
-#elif RENDER_MODE == 1
-    // -------- DENSITY (|ψ|² ray march with sign colouring, auto-scaled) --------
-    vec4 acc = vec4(0.0);
-    float dt = (tFar - tNear) / float(STEPS_DENSITY);
-    for (int i = 0; i < STEPS_DENSITY; i++) {
-        float t = tNear + (float(i) + 0.5) * dt;
-        vec3 p = rayOrigin + rayDir * t;
-        float val = sampleField(p) * uNormScale;
-        float density = val * val;
-        if (density < 1e-5) continue;
+    if (!hit) discard;
 
-        float alpha = clamp(density * dt / max(uBoundingRadius, 1.0) * 40.0, 0.0, 1.0);
-        vec3 color = (val > 0.0) ? uColorPositive : uColorNegative;
-        color *= pow(density, 0.35) * 1.6;
-
-        acc.rgb += (1.0 - acc.a) * color * alpha;
-        acc.a += (1.0 - acc.a) * alpha;
-        if (acc.a > 0.98) break;
+    for (int j = 0; j < uBisectionIters; j++) {
+        float tMid = 0.5 * (tA + tB);
+        float vMid = sampleField(rayOrigin + rayDir * tMid);
+        if ((vA - target) * (vMid - target) < 0.0) {
+            tB = tMid;
+        } else {
+            tA = tMid; vA = vMid;
+        }
     }
-    if (acc.a < 0.005) discard;
-    gl_FragColor = vec4(acc.rgb, acc.a);
-#else
-    // -------- SLICE --------
-    vec3 n;
-    if (uSliceAxis == 0) n = vec3(1.0, 0.0, 0.0);
-    else if (uSliceAxis == 1) n = vec3(0.0, 1.0, 0.0);
-    else n = vec3(0.0, 0.0, 1.0);
-
-    float tP = intersectPlane(rayOrigin, rayDir, n, uSlicePosition);
-    if (tP < tNear || tP > tFar) discard;
-
-    vec3 p = rayOrigin + rayDir * tP;
-    float val = sampleField(p) * uNormScale;
-
-    float mag = clamp(pow(abs(val), 0.6), 0.0, 1.0);
-    vec3 target = (val >= 0.0) ? uColorPositive : uColorNegative;
-    vec3 color = mix(uBackground, target, mag);
-    gl_FragColor = vec4(color, 1.0);
-#endif
+    gl_FragColor = vec4(shadeLobe(rayOrigin + rayDir * tA, rayDir, target > 0.0, vA), 1.0);
 }
 `;
+
+/** Clamp quality knobs to the ranges the shader is tuned for. */
+export function clampQuality(q: { stepsIso: number; stepsDensity: number; bisectionIters: number }) {
+    return {
+        stepsIso: Math.max(8, Math.min(128, Math.floor(q.stepsIso))),
+        stepsDensity: Math.max(8, Math.min(96, Math.floor(q.stepsDensity))),
+        bisectionIters: Math.max(1, Math.min(8, Math.floor(q.bisectionIters))),
+    };
 }
