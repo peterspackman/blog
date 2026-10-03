@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from '@docusaurus/Link';
+import clsx from 'clsx';
 import { VizPage } from './layout';
 import styles from './CardIndex.module.css';
 
@@ -7,6 +8,8 @@ export interface IndexCard {
     title: string;
     href: string;
     description: string;
+    /** Optional small illustration shown at the top of the card. */
+    preview?: React.ReactNode;
 }
 
 export interface IndexSection {
@@ -31,7 +34,8 @@ export function CardIndex({ title, description, intro, sections, footer }: CardI
                     {section.title && <h2 className={styles.sectionTitle}>{section.title}</h2>}
                     <div className={styles.grid}>
                         {section.cards.map((card) => (
-                            <Link key={card.href} to={card.href} className={styles.card}>
+                            <Link key={card.href} to={card.href} className={clsx(styles.card, card.preview && styles.withPreview)}>
+                                {card.preview && <div className={styles.preview} aria-hidden="true">{card.preview}</div>}
                                 <h3 className={styles.cardTitle}>{card.title}</h3>
                                 <p className={styles.cardDesc}>{card.description}</p>
                             </Link>

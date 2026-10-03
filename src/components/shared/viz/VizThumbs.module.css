@@ -1,0 +1,36 @@
+.canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+}
+
+/* Particle in a 3D box (vector) */
+.boxEdge {
+  stroke: var(--viz-axis);
+  stroke-width: 1;
+}
+
+.cloud {
+  fill: var(--viz-accent);
+  fill-opacity: 0.18;
+}
+
+.slosh {
+  animation: slosh 2s ease-in-out infinite alternate;
+}
+
+@keyframes slosh {
+  to { opacity: 0.25; }
+}
+
+/* Paused until the card is hovered or focused (CardIndex runs it). */
+.slosh {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slosh {
+    animation: none;
+  }
+}

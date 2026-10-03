@@ -37,6 +37,24 @@
   box-shadow: var(--viz-shadow);
 }
 
+.withPreview {
+  padding-top: 0;
+  overflow: hidden;
+}
+
+.preview {
+  margin: 0 -1rem 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--viz-surface-subtle);
+  border-bottom: 1px solid var(--viz-border);
+}
+
+/* Thumbnails animate only while their card is hovered or focused. */
+.card:hover .preview *,
+.card:focus-visible .preview * {
+  animation-play-state: running;
+}
+
 .cardTitle {
   font-size: 1rem;
   font-weight: 600;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { CardIndex, type IndexCard } from '@site/src/components/shared/viz/CardIndex';
+import { VIZ_THUMBS } from '@site/src/components/shared/viz/VizThumbs';
 
 type Category = 'Quantum' | 'Crystallography' | 'Simulation';
 
@@ -78,7 +79,10 @@ const VISUALISATIONS: (IndexCard & { tag: Category })[] = [
 export default function Visualisations() {
   const sections = CATEGORY_ORDER.map((tag) => ({
     title: tag,
-    cards: VISUALISATIONS.filter((card) => card.tag === tag),
+    cards: VISUALISATIONS.filter((card) => card.tag === tag).map((card) => {
+      const Thumb = VIZ_THUMBS[card.href];
+      return Thumb ? { ...card, preview: <Thumb /> } : card;
+    }),
   }));
   return (
     <CardIndex
