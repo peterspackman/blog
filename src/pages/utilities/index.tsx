@@ -1,5 +1,6 @@
 import React from 'react';
 import { CardIndex, type IndexSection } from '@site/src/components/shared/viz/CardIndex';
+import { UTILITY_THUMBS } from '@site/src/components/shared/viz/UtilityThumbs';
 
 const SECTIONS: IndexSection[] = [
   {
@@ -8,12 +9,12 @@ const SECTIONS: IndexSection[] = [
       {
         title: 'Wavefunction calculator',
         href: '/utilities/wavefunction-calculator',
-        description: 'Hartree–Fock and DFT in the browser: energies, orbitals, geometry optimisation and frequencies.',
+        description: 'HF and DFT with OCC, plus orbitals, geometry optimisations and frequencies.',
       },
       {
         title: 'Elastic tensor analysis',
         href: '/utilities/elastic-tensor',
-        description: "Mechanical properties from a 6×6 elastic tensor, with directional Young's modulus, shear and Poisson's ratio.",
+        description: 'Paste a 6×6 stiffness matrix and see how the moduli vary with direction.',
       },
     ],
   },
@@ -23,7 +24,7 @@ const SECTIONS: IndexSection[] = [
       {
         title: 'LAMMPS in the browser',
         href: '/utilities/lammps-interface',
-        description: 'Run LAMMPS input scripts with WebAssembly, then plot thermo output and view the trajectory.',
+        description: 'Run an input script, plot the thermo output, watch the trajectory.',
       },
       {
         title: 'Trajectory viewer',
@@ -54,8 +55,14 @@ export default function Utilities() {
     <CardIndex
       title="Utilities"
       description="Interactive chemistry tools that run entirely in your browser"
-      intro="Chemistry tools that run entirely in your browser. Nothing is uploaded: calculations run locally with WebAssembly."
-      sections={SECTIONS}
+      intro="Chemistry tools that run in your browser. Everything runs locally with WebAssembly, so nothing gets uploaded anywhere."
+      sections={SECTIONS.map((section) => ({
+        ...section,
+        cards: section.cards.map((card) => {
+          const Thumb = UTILITY_THUMBS[card.href];
+          return Thumb ? { ...card, preview: <Thumb /> } : card;
+        }),
+      }))}
       footer={
         <p>
           Built with <a href="https://getocc.xyz">OCC</a> for quantum chemistry,{' '}

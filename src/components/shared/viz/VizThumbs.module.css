@@ -85,6 +85,46 @@
   fill: var(--viz-series-2);
 }
 
+.shapeB {
+  fill: var(--viz-series-2);
+  fill-opacity: 0.18;
+  stroke: var(--viz-series-2);
+  stroke-width: 1;
+}
+
+.faintBox {
+  fill: none;
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+
+.trace,
+.traceB {
+  fill: none;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.trace {
+  stroke: var(--viz-series-1);
+}
+
+.traceB {
+  stroke: var(--viz-series-2);
+}
+
+/* Heteroatom labels in skeletal formulae; the gap matches the preview background. */
+.labelGap {
+  fill: var(--viz-surface-subtle);
+}
+
+.atomLabel {
+  fill: var(--viz-text);
+  font-size: 10px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
 /* Motion */
 .slosh {
   animation: fade 2s ease-in-out infinite alternate;
@@ -130,6 +170,18 @@
   animation-delay: var(--delay, 0s);
 }
 
+.draw {
+  stroke-dasharray: 1;
+  animation: draw 3s ease-in-out infinite;
+}
+
+/* Starts drawn, since a paused animation shows its first keyframe. */
+@keyframes draw {
+  0%, 100% { stroke-dashoffset: 0; }
+  15% { stroke-dashoffset: 1; }
+  75% { stroke-dashoffset: 0; }
+}
+
 @keyframes blink {
   0%, 40% { opacity: 1; }
   55%, 85% { opacity: 0; }
@@ -140,6 +192,7 @@
 .slosh,
 .spin,
 .twinkle,
+.draw,
 .slide,
 .jiggle,
 .blink {
