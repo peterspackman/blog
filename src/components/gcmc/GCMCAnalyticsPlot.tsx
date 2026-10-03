@@ -1,12 +1,15 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { GCMCAnalyticsEngine } from './GCMCAnalytics';
+import { canvasFont, withAlpha, type VizTheme } from '../shared/viz';
+import { SegmentedControl } from '../shared/controls';
+import styles from '../shared/sim/SimPlot.module.css';
 
 interface GCMCAnalyticsPlotProps {
     analytics: GCMCAnalyticsEngine | null;
-    width?: number;
-    isDark?: boolean;
+    theme: VizTheme;
     typeLabels?: string[];
-    typeColors?: string[];
+    /** Per-type colours (hex), matching the particles. */
+    typeColors: string[];
     numTypes?: number;
 }
 
@@ -14,10 +17,9 @@ type MetricType = 'particle_count' | 'energy' | 'acceptance_rates' | 'pn_histogr
 
 const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
     analytics,
-    width: containerWidth,
-    isDark = false,
+    theme: viz,
     typeLabels = ['Type 0'],
-    typeColors = ['rgba(128, 128, 255, 0.8)'],
+    typeColors,
     numTypes = 1,
 }) => {
     const plotCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -25,11 +27,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
     const rafRef = useRef<number>(0);
     const lastDrawRef = useRef(0);
 
-    const getPlotColor = (rgba: string): string => {
-        const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-        if (match) return `rgb(${match[1]}, ${match[2]}, ${match[3]})`;
-        return rgba;
-    };
+    const getPlotColor = (c: string): string => c;
 
     // Gaussian kernel smooth for density profiles
     const smooth = (data: number[], radius: number = 2): number[] => {
@@ -57,18 +55,20 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
     };
 
     useEffect(() => {
+        // Plot colours from the site tokens; categorical series follow the palette order.
         const theme = {
-            background: isDark ? '#1a1a1a' : '#ffffff',
-            text: isDark ? '#e0e0e0' : '#374151',
-            textMuted: isDark ? '#888' : '#6b7280',
-            axis: isDark ? '#666' : '#666666',
-            grid: isDark ? '#333' : '#e5e7eb',
-            lineBlue: '#3b82f6',
-            lineGreen: '#10b981',
-            lineRed: '#ef4444',
-            lineOrange: '#f97316',
-            linePurple: '#8b5cf6',
+            background: viz.canvas,
+            text: viz.text,
+            textMuted: viz.muted,
+            axis: viz.axis,
+            grid: viz.grid,
+            lineBlue: viz.series[0],
+            lineOrange: viz.series[1],
+            lineGreen: viz.series[2],
+            lineRed: viz.series[3],
+            linePurple: viz.series[6],
         };
+        const font = (px: number) => canvasFont(viz, px);
 
         const renderPlot = (now: number) => {
             rafRef.current = requestAnimationFrame(renderPlot);
@@ -94,7 +94,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
 
             const width = displayWidth;
             const height = displayHeight;
-            const padding = { top: 45, right: 20, bottom: 35, left: 55 };
+            const padding = { top: 28, right: 20, bottom: 35, left: 55 };
             const plotWidth = width - padding.left - padding.right;
             const plotHeight = height - padding.top - padding.bottom;
 
@@ -102,6 +102,13 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
             ctx.fillRect(0, 0, width, height);
 
             const snapshots = analytics.getSnapshots();
+            if (snapshots.length < 2) {
+                ctx.font = font(13);
+                ctx.textAlign = 'center';
+                ctx.fillStyle = theme.textMuted;
+                ctx.fillText('Run the simulation to collect statistics.', width / 2, height / 2);
+                return;
+            }
 
             const drawAxes = () => {
                 ctx.strokeStyle = theme.axis;
@@ -126,7 +133,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
             };
 
             const drawYTicks = (minVal: number, maxVal: number, numTicks: number, decimals: number = 1) => {
-                ctx.font = '10px Arial';
+                ctx.font = font(10);
                 ctx.textAlign = 'right';
                 ctx.fillStyle = theme.textMuted;
                 const range = maxVal - minVal || 1;
@@ -138,14 +145,14 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
             };
 
             const drawTitle = (title: string) => {
-                ctx.font = '13px Arial';
+                ctx.font = font(13);
                 ctx.textAlign = 'center';
                 ctx.fillStyle = theme.text;
-                ctx.fillText(title, width / 2, 20);
+                ctx.fillText(title, width / 2, 16);
             };
 
             const drawXLabel = (label: string) => {
-                ctx.font = '11px Arial';
+                ctx.font = font(11);
                 ctx.fillStyle = theme.textMuted;
                 ctx.textAlign = 'center';
                 ctx.fillText(label, width / 2, height - 5);
@@ -175,7 +182,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 const maxN = Math.max(...counts, 1);
 
                 drawAxes(); drawGrid(4); drawYTicks(minN, maxN, 4, 0);
-                drawCurve(counts, minN, maxN, isDark ? '#e0e0e0' : '#1f2937', 2);
+                drawCurve(counts, minN, maxN, viz.text, 2);
 
                 // Per-type
                 if (numTypes > 1) {
@@ -244,7 +251,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
 
                 // Legend
                 const legendX = width - padding.right - 55;
-                ctx.font = '10px Arial';
+                ctx.font = font(10);
                 types.forEach(({ color, label }, i) => {
                     const y = padding.top + 5 + i * 14;
                     ctx.strokeStyle = color; ctx.lineWidth = 2;
@@ -267,7 +274,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 drawAxes(); drawGrid(4); drawYTicks(0, maxP, 4, 3);
 
                 const barWidth = Math.max(2, plotWidth / (nRange + 2));
-                ctx.fillStyle = theme.lineBlue + '88';
+                ctx.fillStyle = withAlpha(theme.lineBlue, 0.5);
                 ctx.strokeStyle = theme.lineBlue;
                 ctx.lineWidth = 1;
                 for (let i = 0; i < hist.n.length; i++) {
@@ -278,7 +285,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                     ctx.strokeRect(x, y, barWidth, barH);
                 }
 
-                ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
+                ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
                 const tickStep = Math.max(1, Math.floor(nRange / 8));
                 for (let n = minN; n <= maxN; n += tickStep) {
                     const x = padding.left + ((n - minN) / (nRange + 1)) * plotWidth + barWidth / 2;
@@ -306,7 +313,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 drawYTicks(0, maxRho, 4, 4);
 
                 // Position axis ticks
-                ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
+                ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
                 const tickSpacing = Math.ceil(maxPos / 6);
                 for (let p = 0; p <= maxPos; p += tickSpacing) {
                     const x = padding.left + (p / maxPos) * plotWidth;
@@ -342,7 +349,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 }
 
                 // Total density line on top (smoothed)
-                ctx.strokeStyle = isDark ? '#e0e0e0' : '#1f2937';
+                ctx.strokeStyle = viz.text;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 for (let i = 0; i < dp.y.length; i++) {
@@ -364,7 +371,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 drawAxes(); drawGrid(4); drawYTicks(0, maxGr, 4, 1);
 
                 // X-axis ticks
-                ctx.font = '10px Arial'; ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
+                ctx.font = font(10); ctx.textAlign = 'center'; ctx.fillStyle = theme.textMuted;
                 const tickSpacing = maxR <= 5 ? 1 : Math.ceil(maxR / 5);
                 for (let r = 0; r <= maxR; r += tickSpacing) {
                     const x = padding.left + (r / maxR) * plotWidth;
@@ -382,7 +389,7 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
                 }
 
                 // Main g(r)
-                ctx.strokeStyle = isDark ? '#e0e0e0' : '#1f2937'; ctx.lineWidth = 2;
+                ctx.strokeStyle = viz.text; ctx.lineWidth = 2;
                 ctx.beginPath();
                 for (let i = 0; i < rdf.r.length; i++) {
                     const x = padding.left + (rdf.r[i] / maxR) * plotWidth;
@@ -411,55 +418,31 @@ const GCMCAnalyticsPlot: React.FC<GCMCAnalyticsPlotProps> = ({
 
         rafRef.current = requestAnimationFrame(renderPlot);
         return () => cancelAnimationFrame(rafRef.current);
-    }, [analytics, isDark, selectedMetric, typeLabels, typeColors, numTypes]);
+    }, [analytics, viz, selectedMetric, typeLabels, typeColors, numTypes]);
 
-    const metrics: { key: MetricType; label: string }[] = [
-        { key: 'particle_count', label: '<N>' },
-        { key: 'energy', label: 'Energy' },
-        { key: 'acceptance_rates', label: 'Acc. Rates' },
-        { key: 'density_x', label: 'ρ(x)' },
-        { key: 'density_y', label: 'ρ(y)' },
-        { key: 'density_r', label: 'ρ(r)' },
-        { key: 'pn_histogram', label: 'P(N)' },
-        { key: 'rdf', label: 'g(r)' },
+    const metrics: { value: MetricType; label: string; title?: string }[] = [
+        { value: 'particle_count', label: '⟨N⟩', title: 'Particle count' },
+        { value: 'energy', label: 'E', title: 'Energy' },
+        { value: 'acceptance_rates', label: 'Acc.', title: 'Acceptance rates' },
+        { value: 'density_x', label: 'ρ(x)' },
+        { value: 'density_y', label: 'ρ(y)' },
+        { value: 'density_r', label: 'ρ(r)' },
+        { value: 'pn_histogram', label: 'P(N)' },
+        { value: 'rdf', label: 'g(r)' },
     ];
 
     return (
-        <div style={{
-            width: containerWidth ? `${containerWidth}px` : '100%',
-            margin: '0.5rem auto 0',
-        }}>
-            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                {metrics.map(({ key, label }) => (
-                    <button
-                        key={key}
-                        onClick={() => setSelectedMetric(key)}
-                        style={{
-                            padding: '0.2rem 0.5rem',
-                            border: 'none',
-                            borderRadius: '10px',
-                            fontSize: '0.7rem',
-                            fontWeight: selectedMetric === key ? 600 : 400,
-                            cursor: 'pointer',
-                            backgroundColor: selectedMetric === key
-                                ? (isDark ? '#60a5fa' : '#2563eb')
-                                : (isDark ? '#2d2d2d' : '#f5f5f5'),
-                            color: selectedMetric === key ? '#fff' : (isDark ? '#888' : '#666'),
-                            transition: 'all 0.15s ease',
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
+        <div className={styles.plot}>
+            <div className={styles.bar}>
+                <SegmentedControl<MetricType>
+                    aria-label="Quantity to plot"
+                    value={selectedMetric}
+                    onChange={setSelectedMetric}
+                    options={metrics}
+                    className={styles.metrics}
+                />
             </div>
-            <canvas
-                ref={plotCanvasRef}
-                style={{
-                    width: '100%',
-                    height: '200px',
-                    borderRadius: '8px',
-                }}
-            />
+            <canvas ref={plotCanvasRef} className={styles.canvas} aria-label="Simulation analytics plot" />
         </div>
     );
 };

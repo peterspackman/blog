@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { SliderWithInput } from '../shared/controls';
+import {
+    SliderWithInput,
+    CollapsibleSection,
+    ToggleSwitch,
+    SegmentedControl,
+    Select,
+    ControlGroup,
+    ControlHint,
+} from '../shared/controls';
+import { TypePair } from '../shared/sim';
 import { ExternalPotentialType } from './ExternalPotentials';
 import { InitLayout } from './GCMCParticleData';
 import { BOLTZMANN_CONSTANT } from '../md/constants';
@@ -12,7 +21,18 @@ const EVA3_TO_KPA = 1.602e11 / 1000;
 const R_GAS = 8.314;       // J/(mol·K)
 const EV_TO_KJMOL = 96.485;
 
-interface GCMCSimulationControlsProps {
+export interface BoxOption<K extends string> {
+    value: K;
+    label: string;
+    title: string;
+}
+
+interface GCMCSimulationControlsProps<K extends string = string> {
+    /** Custom scenario exposes the external-potential picker. */
+    isCustom: boolean;
+    boxSize: K;
+    setBoxSize: (size: K) => void;
+    boxOptions: BoxOption<K>[];
     // Thermodynamic state
     temperature: number;
     setTemperature: (t: number) => void;
@@ -61,11 +81,49 @@ interface GCMCSimulationControlsProps {
     setTypeRatio: (r: number) => void;
     densityWindow: number;
     setDensityWindow: (w: number) => void;
-
-    isDark?: boolean;
 }
 
-const GCMCSimulationControls: React.FC<GCMCSimulationControlsProps> = ({
+const INPUT_MODES: { value: InputMode; label: string; title: string }[] = [
+    { value: 'pressure', label: 'P', title: 'Pressure (kPa)' },
+    { value: 'concentration', label: 'c', title: 'Concentration (mol/L)' },
+    { value: 'chemical-potential', label: 'μ', title: 'Chemical potential (kJ/mol)' },
+];
+
+const INIT_LAYOUTS: { value: InitLayout; label: string }[] = [
+    { value: 'empty', label: 'Empty (start from vacuum)' },
+    { value: 'random', label: 'Random' },
+    { value: 'square-lattice', label: 'Square lattice' },
+    { value: 'hex-lattice', label: 'Hexagonal lattice' },
+    { value: 'ions-left', label: 'Neutral fluid + ions (left)' },
+];
+
+const EXTERNAL_POTENTIALS: { value: ExternalPotentialType; label: string }[] = [
+    { value: 'none', label: 'None' },
+    { value: 'cylindrical-pore', label: 'Cylindrical pore' },
+    { value: 'slit-pore', label: 'Slit pore' },
+    { value: 'zeolite', label: 'Zeolite' },
+    { value: 'charged-surface', label: 'Charged surface' },
+    { value: 'potential-gradient', label: 'Potential gradient' },
+];
+
+const pairLabel: React.CSSProperties = { fontSize: 'var(--viz-font-sm)', fontWeight: 600, margin: '0.25rem 0 -0.125rem' };
+
+const weightInputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '0.25rem',
+    font: 'inherit',
+    fontFamily: 'var(--ifm-font-family-monospace)',
+    fontSize: 'var(--viz-font-xs)',
+    textAlign: 'center',
+    color: 'var(--viz-text)',
+    background: 'var(--viz-surface-subtle)',
+    border: '1px solid var(--viz-border)',
+    borderRadius: 'var(--viz-radius-sm)',
+};
+
+function GCMCSimulationControls<K extends string>({
+    isCustom,
+    boxSize, setBoxSize, boxOptions,
     temperature, setTemperature,
     pressures, setPressures,
     thermoInputMode, setThermoInputMode,
@@ -85,47 +143,10 @@ const GCMCSimulationControls: React.FC<GCMCSimulationControlsProps> = ({
     externalPotentialType, setExternalPotentialType,
     typeRatio, setTypeRatio,
     densityWindow, setDensityWindow,
-    isDark = false,
-}) => {
+}: GCMCSimulationControlsProps<K>) {
     const [useCombiningRules, setUseCombiningRules] = useState(true);
     const inputMode = thermoInputMode;
     const setInputMode = setThermoInputMode;
-
-    const theme = {
-        background: isDark ? '#2d2d2d' : '#f8f9fa',
-        surface: isDark ? '#3d3d3d' : '#ffffff',
-        border: isDark ? '#555' : '#e0e0e0',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#999' : '#666',
-        accent: isDark ? '#6b9eff' : '#2563eb',
-        inputBg: isDark ? '#4a4a4a' : '#f3f4f6',
-    };
-
-    const sectionStyle: React.CSSProperties = {
-        marginBottom: '1rem',
-        paddingBottom: '1rem',
-        borderBottom: `1px solid ${theme.border}`,
-    };
-
-    const sectionTitleStyle: React.CSSProperties = {
-        fontSize: '0.7rem',
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '0.5px',
-        color: theme.textMuted,
-        marginBottom: '0.5rem',
-    };
-
-    const selectStyle: React.CSSProperties = {
-        width: '100%',
-        padding: '0.35rem 0.5rem',
-        fontSize: '0.8rem',
-        border: `1px solid ${theme.border}`,
-        borderRadius: '4px',
-        backgroundColor: theme.surface,
-        color: theme.text,
-        cursor: 'pointer',
-    };
 
     // Conversions: pressure (kPa) is the stored value
     // Concentration: c (mol/L) = P (Pa) / (R * T) = P (kPa) * 1000 / (R * T)
@@ -182,218 +203,139 @@ const GCMCSimulationControls: React.FC<GCMCSimulationControlsProps> = ({
     // Normalize move weights for display
     const totalWeight = moveWeights.displacement + moveWeights.insertion + moveWeights.deletion;
 
+    const typeLabel = (i: number) => (numTypes > 1 ? ` (${typeLabels[i]})` : '');
+    const charged = charges.some((q) => q !== 0);
+    // Without insertions/deletions the particle number is fixed and the
+    // reservoir pressure has no effect.
+    const exchanges = moveWeights.insertion + moveWeights.deletion > 0;
+
     return (
-        <div style={{
-            backgroundColor: theme.background,
-            padding: '1rem',
-            borderRadius: '8px',
-            border: `1px solid ${theme.border}`,
-            color: theme.text,
-            fontSize: '0.85rem',
-        }}>
-            {/* Thermodynamic State */}
-            <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>Thermodynamic State</div>
+        <>
+            <ControlGroup label="Conditions">
                 <SliderWithInput
                     label="Temperature"
                     value={temperature}
                     onChange={setTemperature}
                     min={10} max={500} step={5} decimals={0} unit="K"
-                    theme={theme}
                 />
-                {/* Input mode toggle */}
-                <div style={{ display: 'flex', gap: '0.2rem', marginBottom: '0.4rem' }}>
-                    {(['pressure', 'concentration', 'chemical-potential'] as InputMode[]).map((mode) => (
-                        <button
-                            key={mode}
-                            onClick={() => setInputMode(mode)}
-                            style={{
-                                padding: '0.2rem 0.4rem',
-                                border: 'none',
-                                borderRadius: '10px',
-                                fontSize: '0.65rem',
-                                fontWeight: inputMode === mode ? 600 : 400,
-                                cursor: 'pointer',
-                                backgroundColor: inputMode === mode ? theme.accent : theme.surface,
-                                color: inputMode === mode ? '#fff' : theme.textMuted,
-                            }}
-                        >
-                            {mode === 'pressure' ? 'P (kPa)' : mode === 'concentration' ? 'c (mol/L)' : 'μ (kJ/mol)'}
-                        </button>
-                    ))}
-                </div>
-
-                {pressures.map((P, i) => {
-                    if (inputMode === 'concentration') {
-                        return (
+                {exchanges ? (
+                    <>
+                        <SegmentedControl aria-label="Reservoir variable" value={inputMode} onChange={setInputMode} options={INPUT_MODES} />
+                        {pressures.map((P, i) =>
+                            inputMode === 'concentration' ? (
+                                <SliderWithInput
+                                    key={`conc-${i}`}
+                                    label={`Concentration${typeLabel(i)}`}
+                                    value={pressureToConc(P)}
+                                    onChange={(v) => updatePressure(i, concToPressure(v))}
+                                    min={0.001} max={10} step={0.01} decimals={3} unit="mol/L"
+                                />
+                            ) : inputMode === 'chemical-potential' ? (
+                                <SliderWithInput
+                                    key={`mu-${i}`}
+                                    label={`μ${typeLabel(i)}`}
+                                    value={pressureToMuEv(P, i) * EV_TO_KJMOL}
+                                    onChange={(v) => updatePressure(i, muEvToPressure(v / EV_TO_KJMOL, i))}
+                                    min={-60} max={0} step={0.5} decimals={1} unit="kJ/mol"
+                                />
+                            ) : (
+                                <SliderWithInput
+                                    key={`prs-${i}`}
+                                    label={`Pressure${typeLabel(i)}`}
+                                    value={P}
+                                    onChange={(v) => updatePressure(i, v)}
+                                    min={1} max={10000} step={50} decimals={0} unit="kPa"
+                                />
+                            ),
+                        )}
+                        {numTypes > 1 && (
                             <SliderWithInput
-                                key={`conc-${i}`}
-                                label={numTypes > 1 ? `c (${typeLabels[i]})` : 'Concentration'}
-                                value={pressureToConc(P)}
-                                onChange={(v) => updatePressure(i, concToPressure(v))}
-                                min={0.001} max={10} step={0.01} decimals={3} unit="mol/L"
-                                theme={theme}
+                                label={<>Initial fraction <TypePair colors={[typeColors[0]]} /> {typeLabels[0]}</>}
+                                value={typeRatio}
+                                onChange={setTypeRatio}
+                                min={0} max={1} step={0.1} decimals={1}
                             />
-                        );
-                    } else if (inputMode === 'chemical-potential') {
-                        return (
-                            <SliderWithInput
-                                key={`mu-${i}`}
-                                label={numTypes > 1 ? `μ (${typeLabels[i]})` : 'Chemical potential'}
-                                value={pressureToMuEv(P, i) * EV_TO_KJMOL}
-                                onChange={(v) => updatePressure(i, muEvToPressure(v / EV_TO_KJMOL, i))}
-                                min={-60} max={0} step={0.5} decimals={1} unit="kJ/mol"
-                                theme={theme}
-                            />
-                        );
-                    } else {
-                        return (
-                            <SliderWithInput
-                                key={`prs-${i}`}
-                                label={numTypes > 1 ? `P (${typeLabels[i]})` : 'Pressure'}
-                                value={P}
-                                onChange={(v) => updatePressure(i, v)}
-                                min={1} max={10000} step={50} decimals={0} unit="kPa"
-                                theme={theme}
-                            />
-                        );
-                    }
-                })}
-            </div>
-
-            {/* MC Parameters */}
-            <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>Monte Carlo Parameters</div>
-                <div style={{ marginBottom: '0.4rem' }}>
-                    <div style={{ fontSize: '0.75rem', color: theme.textMuted, marginBottom: '0.2rem' }}>Initial config</div>
-                    <select
-                        value={initLayout}
-                        onChange={(e) => setInitLayout(e.target.value as InitLayout)}
-                        style={selectStyle}
-                    >
-                        <option value="empty">Empty (start from vacuum)</option>
-                        <option value="random">Random</option>
-                        <option value="square-lattice">Square lattice</option>
-                        <option value="hex-lattice">Hexagonal lattice</option>
-                        <option value="ions-left">Neutral fluid + ions (left)</option>
-                    </select>
-                </div>
-                <SliderWithInput
-                    label="Max displacement"
-                    value={maxDisplacement}
-                    onChange={setMaxDisplacement}
-                    min={0.1} max={5.0} step={0.1} decimals={1} unit="Å"
-                    theme={theme}
-                />
-                <SliderWithInput
-                    label="Steps per frame"
-                    value={stepsPerFrame}
-                    onChange={(v) => setStepsPerFrame(Math.round(v))}
-                    min={1} max={500} step={10} decimals={0}
-                    theme={theme}
-                />
-                {numTypes > 1 && (
-                    <SliderWithInput
-                        label="Type ratio"
-                        value={typeRatio}
-                        onChange={setTypeRatio}
-                        min={0} max={1} step={0.1} decimals={1}
-                        theme={theme}
-                    />
+                        )}
+                    </>
+                ) : (
+                    <ControlHint>Fixed number of particles: this scenario only displaces them.</ControlHint>
                 )}
+                <SegmentedControl<K> aria-label="Box size" value={boxSize} onChange={setBoxSize} options={boxOptions} />
+            </ControlGroup>
 
-                {/* Move weights */}
-                <div style={{ marginTop: '0.5rem' }}>
-                    <div style={{ fontSize: '0.75rem', color: theme.textMuted, marginBottom: '0.25rem' }}>
-                        Move weights (disp / ins / del)
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
-                        {(['displacement', 'insertion', 'deletion'] as const).map((key) => (
-                            <input
-                                key={key}
-                                type="number"
-                                value={(moveWeights[key] / totalWeight * 100).toFixed(0)}
-                                onChange={(e) => {
-                                    const pct = parseFloat(e.target.value) || 0;
-                                    const newWeights = { ...moveWeights, [key]: pct / 100 };
-                                    setMoveWeights(newWeights);
-                                }}
-                                style={{
-                                    width: '45px',
-                                    padding: '0.2rem',
-                                    fontSize: '0.75rem',
-                                    border: `1px solid ${theme.border}`,
-                                    borderRadius: '3px',
-                                    backgroundColor: theme.inputBg,
-                                    color: theme.text,
-                                    textAlign: 'center',
-                                }}
-                                min={0}
-                                max={100}
-                                title={key}
+            {(isCustom || externalPotentialType !== 'none') && (
+                <ControlGroup label="External potential">
+                    {isCustom && (
+                        <Select
+                            aria-label="External potential"
+                            value={externalPotentialType}
+                            onChange={setExternalPotentialType}
+                            options={EXTERNAL_POTENTIALS}
+                        />
+                    )}
+                    {externalPotentialType !== 'none' && (
+                        <ToggleSwitch label="Show potential" checked={showExternalPotential} onChange={setShowExternalPotential} />
+                    )}
+                    {charged &&
+                        !isCustom &&
+                        charges.slice(0, numTypes).map((q, i) => (
+                            <SliderWithInput
+                                key={i}
+                                label={<>Charge <TypePair colors={[typeColors[i]]} /> {typeLabels[i]}</>}
+                                value={q}
+                                onChange={(v) => setCharges(charges.map((c, j) => (j === i ? v : c)))}
+                                min={-2} max={2} step={0.5} decimals={1} unit="e"
                             />
                         ))}
-                        <span style={{ fontSize: '0.7rem', color: theme.textMuted }}>%</span>
-                    </div>
-                </div>
-            </div>
+                    {charged && (chargeScale > 0 || isCustom) && (
+                        <SliderWithInput
+                            label="Ion–ion strength (1/ε)"
+                            value={chargeScale}
+                            onChange={setChargeScale}
+                            min={0} max={0.1} step={0.001} decimals={3}
+                        />
+                    )}
+                </ControlGroup>
+            )}
 
-            {/* Interactions */}
-            <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>Interactions</div>
+            <CollapsibleSection title="Interactions">
                 {Array.from({ length: Math.min(numTypes, 3) }, (_, i) => (
-                    <div key={i} style={{ marginBottom: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                            <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[i], borderRadius: '2px' }} />
-                            <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>{typeLabels[i]}</span>
-                        </div>
+                    <React.Fragment key={i}>
+                        <p style={pairLabel}>
+                            <TypePair colors={[typeColors[i]]} /> {typeLabels[i]}
+                        </p>
                         <SliderWithInput
                             label="ε (well depth)"
                             value={epsilonMatrix[i]?.[i] ?? 0.01}
                             onChange={(v) => updateEpsilon(i, i, v)}
                             min={0.001} max={0.1} step={0.001} decimals={4} unit="eV"
-                            theme={theme}
                         />
                         <SliderWithInput
                             label="σ (size)"
                             value={sigmaMatrix[i]?.[i] ?? 3.4}
                             onChange={(v) => updateSigma(i, i, v)}
                             min={1} max={8} step={0.1} decimals={1} unit="Å"
-                            theme={theme}
                         />
-                        <SliderWithInput
-                            label="Charge"
-                            value={charges[i] ?? 0}
-                            onChange={(v) => {
-                                const newCharges = [...charges];
-                                newCharges[i] = v;
-                                setCharges(newCharges);
-                            }}
-                            min={-2} max={2} step={0.5} decimals={1} unit="e"
-                            theme={theme}
-                        />
-                    </div>
+                        {isCustom && (
+                            <SliderWithInput
+                                label="Charge"
+                                value={charges[i] ?? 0}
+                                onChange={(v) => setCharges(charges.map((c, j) => (j === i ? v : c)))}
+                                min={-2} max={2} step={0.5} decimals={1} unit="e"
+                            />
+                        )}
+                    </React.Fragment>
                 ))}
 
                 {numTypes > 1 && (
-                    <div style={{ marginTop: '0.5rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[0], borderRadius: '2px' }} />
-                                <span style={{ fontSize: '0.75rem', color: theme.textMuted }}>-</span>
-                                <div style={{ width: '10px', height: '10px', backgroundColor: typeColors[1], borderRadius: '2px' }} />
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.7rem', cursor: 'pointer', marginLeft: 'auto' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={useCombiningRules}
-                                    onChange={(e) => setUseCombiningRules(e.target.checked)}
-                                    style={{ margin: 0 }}
-                                />
-                                Combining rules
-                            </label>
-                        </div>
-                        {!useCombiningRules && (
+                    <>
+                        <p style={pairLabel}>
+                            <TypePair colors={[typeColors[0], typeColors[1]]} /> {typeLabels[0]}–{typeLabels[1]}
+                        </p>
+                        <ToggleSwitch label="Combining rules" checked={useCombiningRules} onChange={setUseCombiningRules} />
+                        {useCombiningRules ? (
+                            <ControlHint>Cross terms follow ε = √(ε₁ε₂) and σ = (σ₁ + σ₂)/2.</ControlHint>
+                        ) : (
                             <>
                                 <SliderWithInput
                                     label="ε (cross)"
@@ -403,7 +345,6 @@ const GCMCSimulationControls: React.FC<GCMCSimulationControlsProps> = ({
                                         updateInteractionParameter('epsilon', 1, 0, v);
                                     }}
                                     min={0.001} max={0.1} step={0.001} decimals={4} unit="eV"
-                                    theme={theme}
                                 />
                                 <SliderWithInput
                                     label="σ (cross)"
@@ -413,84 +354,76 @@ const GCMCSimulationControls: React.FC<GCMCSimulationControlsProps> = ({
                                         updateInteractionParameter('sigma', 1, 0, v);
                                     }}
                                     min={1} max={8} step={0.1} decimals={1} unit="Å"
-                                    theme={theme}
                                 />
                             </>
                         )}
-                    </div>
+                    </>
                 )}
 
                 <SliderWithInput
-                    label="Cutoff radius"
+                    label="Cutoff"
                     value={cutoffRadius}
                     onChange={setCutoffRadius}
                     min={3} max={20} step={0.5} decimals={1} unit="Å"
-                    theme={theme}
+                />
+            </CollapsibleSection>
+
+            <CollapsibleSection title="Monte Carlo moves">
+                <Select label="Start from" value={initLayout} onChange={setInitLayout} options={INIT_LAYOUTS} />
+                <SliderWithInput
+                    label="Max displacement"
+                    value={maxDisplacement}
+                    onChange={setMaxDisplacement}
+                    min={0.1} max={5.0} step={0.1} decimals={1} unit="Å"
                 />
                 <SliderWithInput
-                    label="Charge scaling (1/ε)"
-                    value={chargeScale}
-                    onChange={setChargeScale}
-                    min={0} max={0.1} step={0.001} decimals={3}
-                    theme={theme}
+                    label="Steps per frame"
+                    value={stepsPerFrame}
+                    onChange={(v) => setStepsPerFrame(Math.round(v))}
+                    min={1} max={500} step={10} decimals={0}
                 />
-            </div>
+                <div style={{ display: 'grid', gap: '0.25rem' }}>
+                    <span style={{ fontSize: 'var(--viz-font-sm)' }}>Move mix (%)</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.375rem' }}>
+                        {(['displacement', 'insertion', 'deletion'] as const).map((key) => (
+                            <label key={key} style={{ display: 'grid', gap: '0.125rem', fontSize: 'var(--viz-font-xs)', color: 'var(--viz-muted)' }}>
+                                <input
+                                    type="number"
+                                    value={((moveWeights[key] / totalWeight) * 100).toFixed(0)}
+                                    onChange={(e) => {
+                                        const pct = parseFloat(e.target.value) || 0;
+                                        setMoveWeights({ ...moveWeights, [key]: pct / 100 });
+                                    }}
+                                    min={0}
+                                    max={100}
+                                    style={weightInputStyle}
+                                />
+                                {key === 'displacement' ? 'Displace' : key === 'insertion' ? 'Insert' : 'Delete'}
+                            </label>
+                        ))}
+                    </div>
+                </div>
+            </CollapsibleSection>
 
-            {/* External Potential */}
-            <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>External Potential</div>
-                <select
-                    value={externalPotentialType}
-                    onChange={(e) => setExternalPotentialType(e.target.value as ExternalPotentialType)}
-                    style={selectStyle}
-                >
-                    <option value="none">None</option>
-                    <option value="cylindrical-pore">Cylindrical Pore</option>
-                    <option value="slit-pore">Slit Pore</option>
-                    <option value="zeolite">Zeolite</option>
-                    <option value="charged-surface">Charged Surface</option>
-                    <option value="potential-gradient">Potential Gradient</option>
-                </select>
-            </div>
-
-            {/* Visualization */}
-            <div style={{ marginBottom: '0.5rem' }}>
-                <div style={sectionTitleStyle}>Visualization</div>
+            <CollapsibleSection title="Display">
                 <SliderWithInput
-                    label="Particle scale"
+                    label="Particle size"
                     value={visualScale}
                     onChange={setVisualScale}
                     min={1} max={10} step={0.5} decimals={1}
-                    theme={theme}
                 />
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', marginTop: '0.4rem' }}>
-                    <input
-                        type="checkbox"
-                        checked={showTrialMoves}
-                        onChange={(e) => setShowTrialMoves(e.target.checked)}
-                        style={{ margin: 0 }}
-                    />
-                    Show trial moves
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                    <input
-                        type="checkbox"
-                        checked={showExternalPotential}
-                        onChange={(e) => setShowExternalPotential(e.target.checked)}
-                        style={{ margin: 0 }}
-                    />
-                    Show external potential
-                </label>
+                <ToggleSwitch label="Trial moves" checked={showTrialMoves} onChange={setShowTrialMoves} />
                 <SliderWithInput
                     label="Profile window"
                     value={densityWindow}
                     onChange={(v) => setDensityWindow(Math.round(v))}
                     min={50} max={5000} step={50} decimals={0} unit="samples"
-                    theme={theme}
                 />
-            </div>
-        </div>
+            </CollapsibleSection>
+        </>
     );
-};
+}
 
-export default GCMCSimulationControls;
+// Memoised: the page re-renders every frame as particle counts sync, but
+// these props only change when a setting does.
+export default React.memo(GCMCSimulationControls) as typeof GCMCSimulationControls;

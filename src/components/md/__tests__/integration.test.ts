@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 /**
  * Tests for MD integrator energy conservation
  * Verifies that NVE (microcanonical) ensemble conserves total energy

@@ -1,35 +1,34 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { AnalyticsEngine } from './Analytics';
+import { canvasFont, type VizTheme } from '../shared/viz';
+import { SegmentedControl, ToggleSwitch } from '../shared/controls';
+import styles from '../shared/sim/SimPlot.module.css';
 
 interface AnalyticsPlotProps {
     analytics: AnalyticsEngine | null;
     particleData: any;
-    width?: number;
-    isDark?: boolean;
+    theme: VizTheme;
     typeLabels?: string[];
-    typeColors?: string[];
+    /** Per-type colours (hex), matching the particles. */
+    typeColors: string[];
 }
+
+const METRICS = [
+    { value: 'temperature', label: 'T' , title: 'Temperature' },
+    { value: 'pressure', label: 'P', title: 'Pressure' },
+    { value: 'energy_combined', label: 'Energy' },
+    { value: 'gr_combined', label: 'g(r)', title: 'Radial distribution function' },
+] as const;
 
 const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
     analytics,
     particleData,
-    width: containerWidth,
-    isDark = false,
+    theme: viz,
     typeLabels = ['Type 0', 'Type 1'],
-    typeColors = ['rgba(255, 165, 0, 0.8)', 'rgba(0, 0, 255, 0.8)']
+    typeColors,
 }) => {
-    // Convert rgba to solid colors for plot lines
-    const getPlotColor = (rgba: string): string => {
-        // Extract RGB values and return as solid color
-        const match = rgba.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-        if (match) {
-            return `rgb(${match[1]}, ${match[2]}, ${match[3]})`;
-        }
-        return rgba;
-    };
-
-    const color0 = getPlotColor(typeColors[0]); // Type 0 (e.g., orange)
-    const color1 = getPlotColor(typeColors[1]); // Type 1 (e.g., blue)
+    const color0 = typeColors[0];
+    const color1 = typeColors[1] ?? typeColors[0];
     const plotCanvasRef = useRef<HTMLCanvasElement>(null);
     const [selectedMetric, setSelectedMetric] = useState<string>('temperature');
     const [useLogScale, setUseLogScale] = useState<boolean>(false);
@@ -55,21 +54,17 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
     const energyLegendAreas = useRef<Array<{ key: string; x: number; y: number; width: number; height: number }>>([]);
     const grLegendAreas = useRef<Array<{ key: string; x: number; y: number; width: number; height: number }>>([]);
 
-    // Theme colors
+    // Plot colours from the site tokens; series slots follow the palette order.
     const theme = {
-        background: isDark ? '#1a1a1a' : '#ffffff',
-        surface: isDark ? '#2d2d2d' : '#f8f9fa',
-        border: isDark ? '#444' : '#e9ecef',
-        text: isDark ? '#e0e0e0' : '#374151',
-        textMuted: isDark ? '#888' : '#6b7280',
-        axis: isDark ? '#666' : '#666666',
-        grid: isDark ? '#333' : '#e5e7eb',
-        // Data colors
-        lineBlue: '#3b82f6',
-        lineOrange: '#f97316',
-        lineBlack: isDark ? '#e0e0e0' : '#1f2937',
-        lineRed: '#dc2626',
+        background: viz.canvas,
+        text: viz.text,
+        textMuted: viz.muted,
+        axis: viz.axis,
+        grid: viz.grid,
+        lineBlue: viz.series[0],
+        lineRed: viz.series[1],
     };
+    const font = (px: number) => canvasFont(viz, px);
 
     // Render analytics plot
     const renderAnalyticsPlot = () => {
@@ -95,13 +90,23 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
 
         const width = displayWidth;
         const height = displayHeight;
-        const padding = { top: 45, right: 20, bottom: 35, left: 50 };
+        const padding = { top: 28, right: 20, bottom: 35, left: 50 };
         const plotWidth = width - padding.left - padding.right;
         const plotHeight = height - padding.top - padding.bottom;
 
         // Clear canvas
         ctx.fillStyle = theme.background;
         ctx.fillRect(0, 0, width, height);
+
+        // Empty state until the simulation has produced data
+        const tSeries = analytics.getCollectiveVariable('temperature');
+        if (!tSeries || tSeries.values.length < 2) {
+            ctx.font = font(13);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = theme.textMuted;
+            ctx.fillText('Run the simulation to plot temperature, pressure, energy and g(r).', width / 2, height / 2);
+            return;
+        }
 
         // Check if this is a combined view
         const isCombinedRDF = selectedMetric === 'gr_combined';
@@ -149,7 +154,7 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             }
 
             // Y-axis ticks
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             ctx.textAlign = 'right';
             ctx.fillStyle = theme.textMuted;
             for (let i = 0; i <= numYTicks; i++) {
@@ -160,9 +165,9 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
 
             // Energy curves
             const energyCurves = [
-                { key: 'kinetic', values: kineticValues, color: '#ef4444', label: 'Kinetic' },      // Red
-                { key: 'potential', values: potentialValues, color: '#3b82f6', label: 'Potential' },  // Blue
-                { key: 'totalEnergy', values: totalValues, color: isDark ? '#e0e0e0' : '#1f2937', label: 'Total' }, // Black
+                { key: 'kinetic', values: kineticValues, color: viz.series[1], label: 'Kinetic' },
+                { key: 'potential', values: potentialValues, color: viz.series[0], label: 'Potential' },
+                { key: 'totalEnergy', values: totalValues, color: viz.text, label: 'Total' },
             ];
 
             energyCurves.forEach(({ key, values, color, label }) => {
@@ -183,13 +188,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             // Store legend hit areas for click detection
             const legendX = width - padding.right - 70;
             const legendY = padding.top + 5;
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             energyLegendAreas.current = energyCurves.map(({ key, color, label }, i) => {
                 const y = legendY + i * 14;
                 const isVisible = visibleSeries[key];
 
                 // Draw line (dimmed if not visible)
-                ctx.strokeStyle = isVisible ? color : (isDark ? '#555' : '#ccc');
+                ctx.strokeStyle = isVisible ? color : viz.border;
                 ctx.lineWidth = label === 'Total' ? 2.5 : 1.5;
                 ctx.beginPath();
                 ctx.moveTo(legendX, y);
@@ -205,13 +210,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             });
 
             // Title
-            ctx.font = '13px Arial';
+            ctx.font = font(13);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.text;
-            ctx.fillText('Energy', width / 2, 20);
+            ctx.fillText('Energy (eV)', width / 2, 16);
 
             // X-axis label
-            ctx.font = '11px Arial';
+            ctx.font = font(11);
             ctx.fillStyle = theme.textMuted;
             ctx.fillText('Time Steps', width / 2, height - 5);
 
@@ -258,7 +263,7 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             // X-axis ticks
             ctx.strokeStyle = theme.axis;
             ctx.lineWidth = 1;
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.textMuted;
 
@@ -282,8 +287,8 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
 
             // Draw each g(r) curve using actual particle colors
             // Mix colors for cross-term (0-1)
-            const mixedColor = isDark ? '#a855f7' : '#8b5cf6'; // Purple for mixed
-            const totalColor = isDark ? '#e0e0e0' : '#1f2937'; // Black/white for total
+            const mixedColor = viz.series[2];
+            const totalColor = viz.text;
             // Use particle type labels for legend
             const label0 = typeLabels[0] || 'Type 0';
             const label1 = typeLabels[1] || 'Type 1';
@@ -314,13 +319,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             // Draw legend with hit areas for click detection
             const legendX = width - padding.right - 70;
             const legendY = padding.top + 5;
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             grLegendAreas.current = curves.map(({ key, color, label }, i) => {
                 const y = legendY + i * 14;
                 const isVisible = visibleSeries[key];
 
                 // Draw line (dimmed if not visible)
-                ctx.strokeStyle = isVisible ? color : (isDark ? '#555' : '#ccc');
+                ctx.strokeStyle = isVisible ? color : viz.border;
                 ctx.lineWidth = label === 'Total' ? 2.5 : 1.5;
                 ctx.beginPath();
                 ctx.moveTo(legendX, y);
@@ -336,13 +341,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             });
 
             // Title
-            ctx.font = '13px Arial';
+            ctx.font = font(13);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.text;
-            ctx.fillText('Radial Distribution Functions g(r)', width / 2, 20);
+            ctx.fillText('Radial distribution function g(r)', width / 2, 16);
 
             // X-axis label
-            ctx.font = '11px Arial';
+            ctx.font = font(11);
             ctx.fillStyle = theme.textMuted;
             ctx.fillText('Distance r (Å)', width / 2, height - 5);
 
@@ -378,7 +383,7 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             ctx.stroke();
 
             // X-axis ticks
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.textMuted;
 
@@ -411,13 +416,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
                 'gr_0-1': 'Orange-Blue',
                 'gr_1-1': 'Blue-Blue'
             };
-            ctx.font = '13px Arial';
+            ctx.font = font(13);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.text;
-            ctx.fillText(`g(r) - ${typeMap[selectedMetric] || 'Total'}`, width / 2, 20);
+            ctx.fillText(`g(r) - ${typeMap[selectedMetric] || 'Total'}`, width / 2, 16);
 
             // X-axis label
-            ctx.font = '11px Arial';
+            ctx.font = font(11);
             ctx.fillStyle = theme.textMuted;
             ctx.fillText('Distance r (Å)', width / 2, height - 5);
 
@@ -472,7 +477,7 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
             }
 
             // Y-axis labels
-            ctx.font = '10px Arial';
+            ctx.font = font(10);
             ctx.textAlign = 'right';
             ctx.fillStyle = theme.textMuted;
             ctx.fillText(maxValue.toFixed(2), padding.left - 5, padding.top + 3);
@@ -506,13 +511,13 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
 
             // Title
             const title = useLogScale ? `log₁₀(${cv.name}) (${cv.unit})` : `${cv.name} (${cv.unit})`;
-            ctx.font = '13px Arial';
+            ctx.font = font(13);
             ctx.textAlign = 'center';
             ctx.fillStyle = theme.text;
-            ctx.fillText(title, width / 2, 20);
+            ctx.fillText(title, width / 2, 16);
 
             // X-axis label
-            ctx.font = '11px Arial';
+            ctx.font = font(11);
             ctx.fillStyle = theme.textMuted;
             ctx.fillText('Time Steps', width / 2, height - 5);
         }
@@ -547,119 +552,41 @@ const AnalyticsPlot: React.FC<AnalyticsPlotProps> = ({
     useEffect(() => {
         const interval = setInterval(renderAnalyticsPlot, 100);
         return () => clearInterval(interval);
-    }, [analytics, selectedMetric, useLogScale, isDark, containerWidth, color0, color1, visibleSeries]);
+    }, [analytics, selectedMetric, useLogScale, viz, color0, color1, visibleSeries]);
 
-    const selectStyle = {
-        padding: '0.25rem 0.5rem',
-        border: `1px solid ${theme.border}`,
-        borderRadius: '4px',
-        backgroundColor: isDark ? '#3d3d3d' : 'rgba(255,255,255,0.95)',
-        color: theme.text,
-        fontSize: '0.75rem',
-        cursor: 'pointer',
-    };
-
-    const badgeStyle = {
-        padding: '0.25rem 0.5rem',
-        backgroundColor: isDark ? 'rgba(45,45,45,0.95)' : 'rgba(255,255,255,0.95)',
-        borderRadius: '4px',
-        border: `1px solid ${theme.border}`,
-        fontSize: '0.75rem',
-        color: theme.text,
-    };
+    const snapshot = analytics?.getLatestSnapshot();
+    const interactive = selectedMetric === 'energy_combined' || selectedMetric === 'gr_combined';
 
     return (
-        <div style={{
-            position: 'relative',
-            backgroundColor: theme.surface,
-            padding: '0.75rem',
-            borderRadius: '8px',
-            border: `1px solid ${theme.border}`,
-            height: '280px',
-            width: containerWidth ? `${containerWidth}px` : '100%',
-            maxWidth: containerWidth ? `${containerWidth}px` : '100%',
-            boxSizing: 'border-box',
-        }}>
-            {/* Overlay controls at the top */}
-            <div style={{
-                position: 'absolute',
-                top: '0.75rem',
-                left: '0.75rem',
-                right: '0.75rem',
-                zIndex: 10,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                flexWrap: 'wrap',
-                gap: '0.5rem',
-                pointerEvents: 'none',
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', pointerEvents: 'auto' }}>
-                    <select
-                        value={selectedMetric}
-                        onChange={(e) => setSelectedMetric(e.target.value)}
-                        style={selectStyle}
-                    >
-                        <option value="temperature">Temperature</option>
-                        <option value="pressure">Pressure</option>
-                        <option value="energy_combined">Energy</option>
-                        <option value="gr_combined">g(r)</option>
-                    </select>
-                    {!selectedMetric.startsWith('gr_') && (
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            fontSize: '0.75rem',
-                            color: theme.text,
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={useLogScale}
-                                onChange={(e) => setUseLogScale(e.target.checked)}
-                            />
-                            Log
-                        </label>
-                    )}
-                </div>
-
-                {/* Metrics overlay */}
-                <div style={{ display: 'flex', gap: '0.4rem', pointerEvents: 'auto' }}>
-                    <div style={badgeStyle}>
-                        <span style={{ color: theme.textMuted }}>N: </span>
-                        <span style={{ fontWeight: '600', fontFamily: 'monospace' }}>
-                            {particleData ? particleData.count : 0}
-                        </span>
-                    </div>
-                    <div style={badgeStyle}>
-                        <span style={{ color: theme.textMuted }}>T: </span>
-                        <span style={{ fontWeight: '600', fontFamily: 'monospace' }}>
-                            {analytics?.getLatestSnapshot()?.temperature?.toFixed(2) || '0.00'}
-                        </span>
-                    </div>
-                    <div style={badgeStyle}>
-                        <span style={{ color: theme.textMuted }}>E: </span>
-                        <span style={{ fontWeight: '600', fontFamily: 'monospace' }}>
-                            {analytics?.getLatestSnapshot()?.totalEnergy?.toFixed(1) || '0.0'}
-                        </span>
-                    </div>
-                </div>
+        <div className={styles.plot}>
+            <div className={styles.bar}>
+                <SegmentedControl<string>
+                    aria-label="Quantity to plot"
+                    value={selectedMetric}
+                    onChange={setSelectedMetric}
+                    options={METRICS}
+                    className={styles.metrics}
+                />
+                {!selectedMetric.startsWith('gr_') && (
+                    <ToggleSwitch label="Log" checked={useLogScale} onChange={setUseLogScale} />
+                )}
+                <dl className={styles.readouts}>
+                    <dt>N</dt>
+                    <dd>{particleData ? particleData.count : 0}</dd>
+                    <dt>T</dt>
+                    <dd>{snapshot?.temperature?.toFixed(0) ?? '0'} K</dd>
+                    <dt>E</dt>
+                    <dd>{snapshot?.totalEnergy?.toFixed(1) ?? '0.0'} eV</dd>
+                </dl>
             </div>
-
-            {/* Full-size canvas */}
             <canvas
                 ref={plotCanvasRef}
                 onClick={handleCanvasClick}
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: '100%',
-                    borderRadius: '8px',
-                    cursor: (selectedMetric === 'energy_combined' || selectedMetric === 'gr_combined') ? 'pointer' : 'default',
-                }}
+                className={styles.canvas}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
+                aria-label="Simulation analytics plot"
             />
+            {interactive && <p className={styles.hint}>Click a legend entry to hide or show that curve.</p>}
         </div>
     );
 };

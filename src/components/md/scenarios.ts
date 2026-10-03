@@ -1,12 +1,14 @@
 import { BoundaryType } from './BoundaryConditions';
 import { FieldPreset } from './VectorField';
 import { ElectricFieldPreset } from './ElectricField';
+import { ThermostatType } from './Thermostats';
 
-export type SimulationScenario = 'custom' | 'argon' | 'nacl' | 'mixing';
+export type SimulationScenario = 'custom' | 'argon' | 'condensation' | 'nacl' | 'ion-field' | 'mixing';
 
 export interface ParticleTypeConfig {
     label: string;      // e.g., "Na⁺", "Cl⁻", "Ar"
-    color: string;      // CSS color string
+    /** Index into the --viz-series palette (theme.series). */
+    colorSlot: number;
 }
 
 export interface ScenarioConfig {
@@ -29,6 +31,7 @@ export interface ScenarioConfig {
     masses: number[];           // amu per type
     charges: number[];          // elementary charge per type
     chargeScale: number;        // Coulomb interaction multiplier (0 = off)
+    thermostat?: ThermostatType; // default: Langevin
 }
 
 // Argon parameters
@@ -49,7 +52,7 @@ const CL_MASS = 35.45;      // amu
 export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
     custom: {
         name: 'Custom',
-        description: 'Configure your own simulation',
+        description: 'Start from a molten salt and change anything, including drawing your own potential.',
         numParticles: 250,
         temperature: 1000,
         orangeRatio: 0.5,
@@ -60,8 +63,8 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         eFieldStrength: 0,
         initLayout: 'random',
         particleTypes: [
-            { label: 'Na⁺', color: 'rgba(255, 165, 0, 0.8)' },
-            { label: 'Cl⁻', color: 'rgba(0, 100, 255, 0.8)' },
+            { label: 'Na⁺', colorSlot: 1 },
+            { label: 'Cl⁻', colorSlot: 0 },
         ],
         epsilonMatrix: [
             [NA_EPSILON, NA_CL_EPSILON],
@@ -77,7 +80,7 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
     },
     argon: {
         name: 'Argon',
-        description: 'Liquid argon - single component LJ fluid',
+        description: 'Argon just above its triple point: a single-component Lennard-Jones fluid.',
         numParticles: 100,
         temperature: 90,  // K - just above triple point (84K)
         orangeRatio: 1.0, // All same type
@@ -88,8 +91,8 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         eFieldStrength: 0,
         initLayout: 'random',
         particleTypes: [
-            { label: 'Ar', color: 'rgba(128, 128, 255, 0.8)' },
-            { label: 'Ar', color: 'rgba(128, 128, 255, 0.8)' },
+            { label: 'Ar', colorSlot: 0 },
+            { label: 'Ar', colorSlot: 0 },
         ],
         epsilonMatrix: [
             [AR_EPSILON, AR_EPSILON],
@@ -103,9 +106,38 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         charges: [0, 0],
         chargeScale: 0,
     },
+    condensation: {
+        name: 'Condensation',
+        description: 'Argon gas cooled well below its critical temperature (≈55 K in 2D) condenses into droplets.',
+        numParticles: 160,
+        temperature: 35,
+        orangeRatio: 1.0,
+        boundaryType: BoundaryType.PERIODIC,
+        fieldPreset: 'none',
+        eFieldPreset: 'none',
+        fieldStrength: 50,
+        eFieldStrength: 0,
+        initLayout: 'random',
+        particleTypes: [
+            { label: 'Ar', colorSlot: 0 },
+            { label: 'Ar', colorSlot: 0 },
+        ],
+        epsilonMatrix: [
+            [AR_EPSILON, AR_EPSILON],
+            [AR_EPSILON, AR_EPSILON],
+        ],
+        sigmaMatrix: [
+            [AR_SIGMA, AR_SIGMA],
+            [AR_SIGMA, AR_SIGMA],
+        ],
+        masses: [AR_MASS, AR_MASS],
+        charges: [0, 0],
+        chargeScale: 0,
+        thermostat: ThermostatType.LANGEVIN,
+    },
     nacl: {
         name: 'NaCl',
-        description: 'Molten salt with Coulomb interactions',
+        description: 'Molten sodium chloride: Coulomb forces order the ions into alternating shells (see g(r)).',
         numParticles: 250,
         temperature: 1200,  // K - above melting point (1074K)
         orangeRatio: 0.5,   // Equal Na+ and Cl-
@@ -116,8 +148,8 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         eFieldStrength: 0,
         initLayout: 'random',
         particleTypes: [
-            { label: 'Na⁺', color: 'rgba(255, 165, 0, 0.8)' },
-            { label: 'Cl⁻', color: 'rgba(0, 100, 255, 0.8)' },
+            { label: 'Na⁺', colorSlot: 1 },
+            { label: 'Cl⁻', colorSlot: 0 },
         ],
         epsilonMatrix: [
             [NA_EPSILON, NA_CL_EPSILON],
@@ -131,9 +163,38 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         charges: [1.0, -1.0],  // Na+ and Cl-
         chargeScale: 1.0,
     },
+    'ion-field': {
+        name: 'Ions in a field',
+        description: 'A uniform electric field pushes cations right and anions left; walls stop them, so charge separates.',
+        numParticles: 120,
+        temperature: 1500,
+        orangeRatio: 0.5,
+        boundaryType: BoundaryType.REFLECTIVE,
+        fieldPreset: 'none',
+        eFieldPreset: 'uniform-right',
+        fieldStrength: 50,
+        eFieldStrength: 40,
+        initLayout: 'random',
+        particleTypes: [
+            { label: 'Na⁺', colorSlot: 1 },
+            { label: 'Cl⁻', colorSlot: 0 },
+        ],
+        epsilonMatrix: [
+            [NA_EPSILON, NA_CL_EPSILON],
+            [NA_CL_EPSILON, CL_EPSILON],
+        ],
+        sigmaMatrix: [
+            [NA_SIGMA, (NA_SIGMA + CL_SIGMA) / 2],
+            [(NA_SIGMA + CL_SIGMA) / 2, CL_SIGMA],
+        ],
+        masses: [NA_MASS, CL_MASS],
+        charges: [1.0, -1.0],
+        // Screened (as if in a solvent) so the field can pull ion pairs apart.
+        chargeScale: 0.15,
+    },
     mixing: {
         name: 'Mixing',
-        description: 'Two separated fluids diffusing',
+        description: 'Two fluids start side by side and diffuse into each other.',
         numParticles: 120,
         temperature: 150,
         orangeRatio: 0.5,
@@ -144,8 +205,8 @@ export const SCENARIOS: Record<SimulationScenario, ScenarioConfig> = {
         eFieldStrength: 0,
         initLayout: 'separated-lr',
         particleTypes: [
-            { label: 'A', color: 'rgba(255, 100, 100, 0.8)' },
-            { label: 'B', color: 'rgba(100, 100, 255, 0.8)' },
+            { label: 'A', colorSlot: 1 },
+            { label: 'B', colorSlot: 0 },
         ],
         epsilonMatrix: [
             [AR_EPSILON, AR_EPSILON * 0.7],  // Weaker cross-interaction promotes mixing

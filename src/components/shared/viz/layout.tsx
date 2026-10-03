@@ -158,3 +158,33 @@ export function VizPanelSplit({ children }: { children: React.ReactNode }) {
         </div>
     );
 }
+
+export interface VizCanvasFitProps extends React.HTMLAttributes<HTMLDivElement> {
+    /** Intrinsic drawing size; the frame keeps this aspect ratio. */
+    width: number;
+    height: number;
+    /** Vertical space (px) to leave for surrounding UI when capping height to the viewport. */
+    reserve?: number;
+}
+
+/**
+ * Scales a fixed-size drawing to the available width, and caps it so the
+ * whole thing fits in the viewport height. Children (a canvas) should fill
+ * it with width/height 100%.
+ */
+export function VizCanvasFit({ width, height, reserve = 240, style, ...rest }: VizCanvasFitProps) {
+    const aspect = width / height;
+    return (
+        <div
+            style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: `max(16rem, calc((100vh - ${reserve}px) * ${aspect.toFixed(4)}))`,
+                aspectRatio: `${width} / ${height}`,
+                margin: '0 auto',
+                ...style,
+            }}
+            {...rest}
+        />
+    );
+}

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useVizTheme, withAlpha, VizCanvasFit, VizPanel, VizPanelSection, VizPlotHeader, VizWorkbench } from './shared/viz';
+import { CollapsibleSection, ControlGroup, ControlHint, SegmentedControl, SliderWithInput, ToggleSwitch, VizButton } from './shared/controls';
 
 // Import modular systems
 import { BoundaryCondition, BoundaryType, createBoundaryCondition, type Bounds } from './md/BoundaryConditions';
@@ -14,58 +15,38 @@ import { ElectricField, createElectricField, ElectricFieldPreset } from './md/El
 import { SimulationScenario, SCENARIOS } from './md/scenarios';
 import { ARGON, BOLTZMANN_CONSTANT } from './md/constants';
 import SimulationControls from './md/SimulationControls';
-import SimulationToolbar from './md/SimulationToolbar';
 import AnalyticsPlot from './md/AnalyticsPlot';
-import { SimplifiedFieldControls } from './md/FieldControls';
 import { useSimulation } from './md/useSimulation';
 import { useCanvasRenderer } from './md/useCanvasRenderer';
 import { usePointerHandlers } from './md/usePointerHandlers';
 
-const MolecularDynamics = () => {
-    // Dark mode support
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
+/** Simulation box sizes in canvas pixels (5 px per Å). The canvas is
+ *  displayed scaled to fit, so the box size is independent of the window. */
+const BOX_SIZES = {
+    small: { width: 600, height: 360, label: 'Small', title: '120 × 72 Å' },
+    medium: { width: 800, height: 480, label: 'Medium', title: '160 × 96 Å' },
+    large: { width: 1000, height: 600, label: 'Large', title: '200 × 120 Å' },
+} as const;
+type BoxSize = keyof typeof BOX_SIZES;
+const BOX_OPTIONS = (Object.keys(BOX_SIZES) as BoxSize[]).map((k) => ({
+    value: k,
+    label: BOX_SIZES[k].label,
+    title: BOX_SIZES[k].title,
+}));
 
-    // Theme-aware colors
-    const theme = {
-        background: isDark ? '#1e1e1e' : '#ffffff',
-        surface: isDark ? '#2d2d2d' : '#f8f9fa',
-        border: isDark ? '#444' : '#ccc',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#888' : '#666',
-        canvasBg: isDark ? '#1a1a1a' : '#ffffff',
-    };
+const SCENARIO_OPTIONS = (Object.keys(SCENARIOS) as SimulationScenario[]).map((key) => ({
+    value: key,
+    label: SCENARIOS[key].name,
+    title: SCENARIOS[key].description,
+}));
 
-    // Resizable canvas (must be first)
-    const [canvasWidth, setCanvasWidth] = useState(800);
-    const [canvasHeight, setCanvasHeight] = useState(600);
-    
-    // Canvas and UI refs
+const MolecularDynamics: React.FC<{ title: string }> = ({ title }) => {
+    const theme = useVizTheme();
+    const isDark = theme.isDark;
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const animationFrameId = useRef<number>(0);
-    
-    // Canvas dimensions (use resizable values)
-    const [width, setWidth] = useState(800);
-    const [height, setHeight] = useState(600);
-    
-    // Initialize canvas size to match container
-    useEffect(() => {
-        if (containerRef.current) {
-            const containerRect = containerRef.current.getBoundingClientRect();
-            const initialWidth = Math.max(400, containerRect.width - 10); // Full container width minus padding
-            const initialHeight = Math.max(300, Math.min(600, initialWidth * 0.6)); // Maintain reasonable aspect ratio
-            
-            setCanvasWidth(initialWidth);
-            setCanvasHeight(initialHeight);
-        }
-    }, []);
-
-    // Update canvas size when resizable dimensions change
-    useEffect(() => {
-        setWidth(canvasWidth);
-        setHeight(canvasHeight);
-    }, [canvasWidth, canvasHeight]);
+    const [boxSize, setBoxSize] = useState<BoxSize>('medium');
+    const { width, height } = BOX_SIZES[boxSize];
 
     // Simulation parameters - using physical units (eV, Å, K, amu)
     const [temperature, setTemperature] = useState(1000);  // Kelvin (molten salt)
@@ -90,7 +71,10 @@ const MolecularDynamics = () => {
     // Type definitions and parameters - physical units
     const [numTypes] = useState(2);
     const [typeLabels, setTypeLabels] = useState(['Na⁺', 'Cl⁻']);
-    const [typeColors, setTypeColors] = useState(['rgba(255, 165, 0, 0.8)', 'rgba(0, 100, 255, 0.8)']);
+    // Palette slots per type; colours follow the theme.
+    const [typeColorSlots, setTypeColorSlots] = useState([1, 0]);
+    const plotColors = useMemo(() => typeColorSlots.map((s) => theme.series[s]), [typeColorSlots, theme]);
+    const typeColors = useMemo(() => plotColors.map((c) => withAlpha(c, 0.9)), [plotColors]);
     // LJ parameters: epsilon in eV, sigma in Å (NaCl-like defaults for ionic simulation)
     const [epsilonMatrix, setEpsilonMatrix] = useState([
         [0.1, 0.15],   // eV - Na-Na, Na-Cl (stronger cross-term for stability)
@@ -147,22 +131,6 @@ const MolecularDynamics = () => {
     const [showInteractions, setShowInteractions] = useState(false);
     const [showCutoffRadius, setShowCutoffRadius] = useState(false);
 
-    // Responsive layout
-    const [isMobile, setIsMobile] = useState(false);
-    const [showControls, setShowControls] = useState(true);
-
-    // Detect mobile viewport
-    useEffect(() => {
-        const checkMobile = () => {
-            const mobile = window.innerWidth < 768;
-            setIsMobile(mobile);
-            if (mobile) setShowControls(false);
-        };
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-    
     // Boundary and thermostat types
     const [boundaryType, setBoundaryType] = useState<BoundaryType>(BoundaryType.PERIODIC);
     const [thermostatType, setThermostatType] = useState<ThermostatType>(ThermostatType.LANGEVIN);
@@ -170,48 +138,6 @@ const MolecularDynamics = () => {
     // Particle type ratio (orange vs blue)
     const [orangeRatio, setOrangeRatio] = useState(0.5); // 50% orange, 50% blue
     
-    // These are now handled by the sub-components
-    
-    // Resize handle
-    const [isResizing, setIsResizing] = useState(false);
-    const resizeStartPos = useRef({ x: 0, y: 0 });
-    const resizeStartSize = useRef({ width: 0, height: 0 });
-    
-    const handleResizeStart = (e: React.MouseEvent) => {
-        setIsResizing(true);
-        resizeStartPos.current = { x: e.clientX, y: e.clientY };
-        resizeStartSize.current = { width: canvasWidth, height: canvasHeight };
-        e.preventDefault();
-    };
-    
-    const handleResizeMove = (e: MouseEvent) => {
-        if (!isResizing) return;
-        
-        const deltaX = e.clientX - resizeStartPos.current.x;
-        const deltaY = e.clientY - resizeStartPos.current.y;
-        
-        const newWidth = Math.max(400, Math.min(1200, resizeStartSize.current.width + deltaX));
-        const newHeight = Math.max(300, Math.min(800, resizeStartSize.current.height + deltaY));
-        
-        setCanvasWidth(newWidth);
-        setCanvasHeight(newHeight);
-    };
-    
-    const handleResizeEnd = () => {
-        setIsResizing(false);
-    };
-    
-    useEffect(() => {
-        if (isResizing) {
-            document.addEventListener('mousemove', handleResizeMove);
-            document.addEventListener('mouseup', handleResizeEnd);
-            return () => {
-                document.removeEventListener('mousemove', handleResizeMove);
-                document.removeEventListener('mouseup', handleResizeEnd);
-            };
-        }
-    }, [isResizing]);
-
     // Quasi-random generation moved to ParticleData.ts module
 
 
@@ -276,10 +202,11 @@ const MolecularDynamics = () => {
         setEFieldPreset(config.eFieldPreset);
         setEFieldStrength(config.eFieldStrength);
         setInitLayout(config.initLayout);
+        setThermostatType(config.thermostat ?? ThermostatType.LANGEVIN);
 
         // Apply particle type labels and colors
         setTypeLabels(config.particleTypes.map(t => t.label));
-        setTypeColors(config.particleTypes.map(t => t.color));
+        setTypeColorSlots(config.particleTypes.map(t => t.colorSlot));
 
         // Apply LJ and charge parameters
         setEpsilonMatrix(config.epsilonMatrix);
@@ -447,21 +374,18 @@ const MolecularDynamics = () => {
 
     // Animation loop moved to useCanvasRenderer hook
 
-    // Add a method to update interaction parameters for different type pairs
-    const updateInteractionParameter = (paramType, type1, type2, value) => {
-        // This provides an API to modify individual interaction parameters
-        if (paramType === 'epsilon') {
-            const newMatrix = [...epsilonMatrix];
-            newMatrix[type1][type2] = value;
-            newMatrix[type2][type1] = value; // Ensure symmetry
-            setEpsilonMatrix(newMatrix);
-        } else if (paramType === 'sigma') {
-            const newMatrix = [...sigmaMatrix];
-            newMatrix[type1][type2] = value;
-            newMatrix[type2][type1] = value; // Ensure symmetry
-            setSigmaMatrix(newMatrix);
-        }
-    };
+    // Set one pair parameter, keeping the matrix symmetric. Functional
+    // updates so several calls in one event compose correctly.
+    const updateInteractionParameter = useCallback((paramType: string, type1: number, type2: number, value: number) => {
+        const update = (m: number[][]) => {
+            const next = m.map((row) => [...row]);
+            next[type1][type2] = value;
+            next[type2][type1] = value;
+            return next;
+        };
+        if (paramType === 'epsilon') setEpsilonMatrix(update);
+        else if (paramType === 'sigma') setSigmaMatrix(update);
+    }, []);
 
     // Use the simulation hook for physics and particle management
     const { particleData, setParticleData, initializeParticles, velocityVerlet, minimizeStep, stepCount } = useSimulation({
@@ -562,71 +486,167 @@ const MolecularDynamics = () => {
         onVectorFieldUpdate: updateFieldVisualization,
     });
 
-    return (
-        <div style={{
-            width: '100%',
-            maxWidth: '1400px',
-            margin: '0 auto',
-            minHeight: '100vh',
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 300px',
-            gap: '1rem',
-            padding: '1rem',
-            boxSizing: 'border-box'
-        }}>
-            {/* Main content: Toolbar + Canvas + Plot */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
-                <div style={{ width: '100%', maxWidth: `${canvasWidth + 20}px` }}>
-                    {/* Unified toolbar */}
-                    <SimulationToolbar
-                        running={running}
-                        setRunning={setRunning}
-                        onReset={initializeParticles}
-                        minimizing={minimizing}
-                        onMinimize={runMinimization}
-                        scenario={scenario}
-                        onScenarioChange={applyScenario}
-                        time={analytics ? analytics.getCurrentTime() * 0.01018 : 0}
-                        stepCount={stepCount}
-                        isDrawMode={fieldPreset === 'draw'}
-                        setIsDrawMode={(mode) => setFieldPreset(mode ? 'draw' : 'none')}
-                        brushRadius={brushRadius}
-                        setBrushRadius={setBrushRadius}
-                        fieldStrength={fieldStrength}
-                        setFieldStrength={setFieldStrength}
-                        showField={showField}
-                        setShowField={setShowField}
-                        fieldChargeMode={fieldChargeMode}
-                        setFieldChargeMode={setFieldChargeMode}
-                        onClearField={() => {
-                            if (vectorFieldRef.current) {
-                                vectorFieldRef.current.clear();
-                                updateFieldVisualization();
-                            }
-                        }}
-                        isDark={isDark}
-                    />
+    const hasField = fieldPreset !== 'none' && fieldPreset !== 'draw';
+    const hasEField = eFieldPreset !== 'none';
+    const reapplyField = (strength: number) => {
+        if (vectorFieldRef.current) {
+            applyFieldPreset(vectorFieldRef.current, fieldPreset, { strength, width: 15, shape: fieldShape });
+            updateFieldVisualization();
+        }
+    };
 
-                    {/* Canvas container with floating controls */}
-                    <div ref={containerRef} style={{
-                        width: `${canvasWidth + 10}px`,
-                        height: `${canvasHeight + 10}px`,
-                        backgroundColor: theme.canvasBg,
-                        position: 'relative',
-                        padding: '5px',
-                        margin: '0.5rem auto 0',
-                        borderRadius: '8px',
-                        border: `1px solid ${theme.border}`,
-                    }}>
+    const sidebar = (
+        <VizPanel stack>
+            <ControlGroup label="Scenario" hint={SCENARIOS[scenario].description}>
+                <SegmentedControl aria-label="Scenario" columns={2} value={scenario} onChange={applyScenario} options={SCENARIO_OPTIONS} />
+            </ControlGroup>
+
+            {(hasField || hasEField) && (
+                <ControlGroup label="External field">
+                    {hasField && (
+                        <>
+                            <SliderWithInput
+                                label="Barrier strength"
+                                value={fieldStrength}
+                                onChange={(v) => {
+                                    setFieldStrength(v);
+                                    reapplyField(v);
+                                }}
+                                min={10} max={200} step={10} decimals={0}
+                            />
+                            <ToggleSwitch label="Show barriers" checked={showField} onChange={setShowField} />
+                        </>
+                    )}
+                    {hasEField && (
+                        <>
+                            <SliderWithInput
+                                label="Electric field"
+                                value={eFieldStrength}
+                                onChange={(v) => {
+                                    setEFieldStrength(v);
+                                    electricFieldRef.current?.applyPreset(eFieldPreset, v);
+                                }}
+                                min={0} max={200} step={5} decimals={0}
+                                unit="mV/Å"
+                            />
+                            <ToggleSwitch label="Show field arrows" checked={showEField} onChange={setShowEField} />
+                        </>
+                    )}
+                </ControlGroup>
+            )}
+
+            <SimulationControls<BoxSize>
+                theme={theme}
+                boxSize={boxSize}
+                setBoxSize={setBoxSize}
+                boxOptions={BOX_OPTIONS}
+                numParticles={numParticles}
+                setNumParticles={setNumParticles}
+                temperature={temperature}
+                setTemperature={setTemperature}
+                timeStep={timeStep}
+                setTimeStep={setTimeStep}
+                stepsPerFrame={stepsPerFrame}
+                setStepsPerFrame={setStepsPerFrame}
+                orangeRatio={orangeRatio}
+                setOrangeRatio={setOrangeRatio}
+                boundaryType={boundaryType}
+                setBoundaryType={setBoundaryType}
+                thermostatType={thermostatType}
+                setThermostatType={setThermostatType}
+                chargeScale={chargeScale}
+                setChargeScale={setChargeScale}
+                visualScale={visualScale}
+                setVisualScale={setVisualScale}
+                charges={charges}
+                setCharges={setCharges}
+                typeLabels={typeLabels}
+                setTypeLabels={setTypeLabels}
+                typeColors={plotColors}
+                typeColorSlots={typeColorSlots}
+                setTypeColorSlots={setTypeColorSlots}
+                epsilonMatrix={epsilonMatrix}
+                sigmaMatrix={sigmaMatrix}
+                updateInteractionParameter={updateInteractionParameter}
+                numTypes={numTypes}
+                showCells={showCells}
+                setShowCells={setShowCells}
+                showInteractions={showInteractions}
+                setShowInteractions={setShowInteractions}
+                showCutoffRadius={showCutoffRadius}
+                setShowCutoffRadius={setShowCutoffRadius}
+                cutoffRadius={cutoffRadius}
+                setCutoffRadius={setCutoffRadius}
+            />
+
+            {scenario === 'custom' && (
+                <CollapsibleSection title="Draw a potential">
+                    <ToggleSwitch
+                        label="Draw on the canvas"
+                        checked={fieldPreset === 'draw'}
+                        onChange={(on) => setFieldPreset(on ? 'draw' : 'none')}
+                    />
+                    {fieldPreset === 'draw' && (
+                        <>
+                            <ControlHint>Left-drag to attract, right-drag to repel.</ControlHint>
+                            <SliderWithInput label="Brush size" value={brushRadius} onChange={setBrushRadius} min={2} max={30} step={1} decimals={0} />
+                            <SliderWithInput label="Strength" value={fieldStrength} onChange={setFieldStrength} min={10} max={200} step={10} decimals={0} />
+                            <ToggleSwitch label="Show drawn field" checked={showField} onChange={setShowField} />
+                            <ToggleSwitch label="Acts on charge (+/−)" checked={fieldChargeMode} onChange={setFieldChargeMode} />
+                            <VizButton
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => {
+                                    vectorFieldRef.current?.clear();
+                                    updateFieldVisualization();
+                                }}
+                            >
+                                Clear drawing
+                            </VizButton>
+                        </>
+                    )}
+                </CollapsibleSection>
+            )}
+        </VizPanel>
+    );
+
+    const time = analytics ? analytics.getCurrentTime() * 0.01018 : 0;
+
+    return (
+        <VizWorkbench sidebar={sidebar}>
+            <VizPanel flush>
+                <VizPanelSection style={{ display: 'grid', gap: '0.75rem' }}>
+                    <VizPlotHeader
+                        title={title}
+                        readout={`${time.toFixed(2)} ps · ${stepCount.toLocaleString()} steps`}
+                    />
+                    <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                        <VizButton variant="primary" style={{ minWidth: '5.5rem' }} onClick={() => setRunning(!running)}>
+                            {running ? 'Pause' : 'Run'}
+                        </VizButton>
+                        <VizButton variant="secondary" onClick={initializeParticles}>
+                            Reset
+                        </VizButton>
+                        <VizButton
+                            variant="secondary"
+                            onClick={runMinimization}
+                            disabled={minimizing || running}
+                            title="Relax the structure to a local energy minimum"
+                        >
+                            {minimizing ? 'Minimising…' : 'Minimise energy'}
+                        </VizButton>
+                    </div>
+                    <VizCanvasFit width={width} height={height} reserve={330}>
                         <canvas
                             ref={canvasRef}
+                            aria-label="Molecular dynamics simulation; drag particles to move them"
                             style={{
                                 display: 'block',
-                                width: `${width}px`,
-                                height: `${height}px`,
-                                backgroundColor: theme.canvasBg,
-                                borderRadius: '4px',
-                                touchAction: 'none'
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: 'var(--viz-radius)',
+                                touchAction: 'none',
+                                cursor: fieldPreset === 'draw' ? 'crosshair' : 'grab',
                             }}
                             onPointerDown={handlePointerDown}
                             onPointerMove={handlePointerMove}
@@ -634,149 +654,19 @@ const MolecularDynamics = () => {
                             onPointerCancel={handlePointerUp}
                             onContextMenu={handleContextMenu}
                         />
-
-                        {/* Floating field controls inside canvas (only for preset scenarios) */}
-                        {scenario !== 'custom' && (
-                            <SimplifiedFieldControls
-                                fieldPreset={fieldPreset}
-                                fieldStrength={fieldStrength}
-                                setFieldStrength={setFieldStrength}
-                                eFieldPreset={eFieldPreset}
-                                eFieldStrength={eFieldStrength}
-                                setEFieldStrength={setEFieldStrength}
-                                showField={showField}
-                                setShowField={setShowField}
-                                showEField={showEField}
-                                setShowEField={setShowEField}
-                                onFieldStrengthChange={(newStrength) => {
-                                    if (vectorFieldRef.current) {
-                                        applyFieldPreset(vectorFieldRef.current, fieldPreset, {
-                                            strength: newStrength,
-                                            width: 15,
-                                            shape: fieldShape,
-                                        });
-                                        updateFieldVisualization();
-                                    }
-                                }}
-                                onEFieldStrengthChange={(newStrength) => {
-                                    if (electricFieldRef.current) {
-                                        electricFieldRef.current.applyPreset(eFieldPreset, newStrength);
-                                    }
-                                }}
-                                isDark={isDark}
-                            />
-                        )}
-
-                        {/* Resize handle */}
-                        <div
-                            onMouseDown={handleResizeStart}
-                            style={{
-                                position: 'absolute',
-                                bottom: '2px',
-                                right: '2px',
-                                width: '12px',
-                                height: '12px',
-                                cursor: 'se-resize',
-                                opacity: 0.3,
-                                pointerEvents: 'auto',
-                                backgroundImage: `linear-gradient(135deg, transparent 50%, ${isDark ? '#888' : '#999'} 50%)`,
-                            }}
-                            title="Drag to resize"
-                        />
-                    </div>
-                </div>
-                
-                {/* Analytics Plot */}
-                <AnalyticsPlot
-                    analytics={analytics}
-                    particleData={particleData}
-                    width={canvasWidth + 10}
-                    isDark={isDark}
-                    typeLabels={typeLabels}
-                    typeColors={typeColors}
-                />
-            </div>
-            
-            {/* Controls - collapsible on mobile */}
-            {isMobile && (
-                <button
-                    onClick={() => setShowControls(!showControls)}
-                    style={{
-                        position: 'fixed',
-                        bottom: '1rem',
-                        right: '1rem',
-                        zIndex: 1000,
-                        padding: '0.75rem 1rem',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                        fontSize: '0.9rem'
-                    }}
-                >
-                    {showControls ? 'Close' : 'Controls'}
-                </button>
-            )}
-
-            {(showControls || !isMobile) && (
-                <div style={{
-                    ...(isMobile ? {
-                        position: 'fixed',
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        width: '300px',
-                        maxWidth: '85vw',
-                        zIndex: 999,
-                        backgroundColor: theme.background,
-                        boxShadow: isDark ? '-4px 0 16px rgba(0,0,0,0.4)' : '-4px 0 16px rgba(0,0,0,0.15)',
-                        overflowY: 'auto'
-                    } : {})
-                }}>
-                    <SimulationControls
-                        numParticles={numParticles}
-                        setNumParticles={setNumParticles}
-                        temperature={temperature}
-                        setTemperature={setTemperature}
-                        timeStep={timeStep}
-                        setTimeStep={setTimeStep}
-                        stepsPerFrame={stepsPerFrame}
-                        setStepsPerFrame={setStepsPerFrame}
-                        orangeRatio={orangeRatio}
-                        setOrangeRatio={setOrangeRatio}
-                        boundaryType={boundaryType}
-                        setBoundaryType={setBoundaryType}
-                        thermostatType={thermostatType}
-                        setThermostatType={setThermostatType}
-                        chargeScale={chargeScale}
-                        setChargeScale={setChargeScale}
-                        visualScale={visualScale}
-                        setVisualScale={setVisualScale}
-                        charges={charges}
-                        setCharges={setCharges}
+                    </VizCanvasFit>
+                </VizPanelSection>
+                <VizPanelSection>
+                    <AnalyticsPlot
+                        analytics={analytics}
+                        particleData={particleData}
+                        theme={theme}
                         typeLabels={typeLabels}
-                        setTypeLabels={setTypeLabels}
-                        typeColors={typeColors}
-                        setTypeColors={setTypeColors}
-                        epsilonMatrix={epsilonMatrix}
-                        sigmaMatrix={sigmaMatrix}
-                        updateInteractionParameter={updateInteractionParameter}
-                        numTypes={numTypes}
-                        showCells={showCells}
-                        setShowCells={setShowCells}
-                        showInteractions={showInteractions}
-                        setShowInteractions={setShowInteractions}
-                        showCutoffRadius={showCutoffRadius}
-                        setShowCutoffRadius={setShowCutoffRadius}
-                        cutoffRadius={cutoffRadius}
-                        setCutoffRadius={setCutoffRadius}
-                        isDark={isDark}
+                        typeColors={plotColors}
                     />
-                </div>
-            )}
-        </div>
+                </VizPanelSection>
+            </VizPanel>
+        </VizWorkbench>
     );
 };
 

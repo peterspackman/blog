@@ -3,11 +3,7 @@ import { ParticleData } from './ParticleData';
 import { VectorField, FieldPreset } from './VectorField';
 import { ElectricField, ElectricFieldPreset } from './ElectricField';
 import { NeighborList } from './NeighborList';
-
-interface Theme {
-    canvasBg: string;
-    [key: string]: string;
-}
+import type { VizTheme } from '../shared/viz';
 
 interface UseCanvasRendererProps {
     canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -16,7 +12,7 @@ interface UseCanvasRendererProps {
     height: number;
     running: boolean;
     isDark: boolean;
-    theme: Theme;
+    theme: VizTheme;
     coordinateScale: number;
     visualScale: number;
     baseParticleRadius: number;
@@ -83,9 +79,8 @@ export function useCanvasRenderer({
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
 
-        // Set display size (CSS)
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        // Display size comes from CSS (the canvas scales to fit its frame);
+        // pointer handlers convert back to simulation pixels.
 
         // Set actual size in memory (scaled for DPI)
         canvas.width = width * dpr;
@@ -154,8 +149,8 @@ export function useCanvasRenderer({
             // Reset transform and apply DPI scaling
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            ctx.strokeStyle = isDark ? '#444' : '#000000';
-            ctx.fillStyle = theme.canvasBg;
+            ctx.strokeStyle = theme.border;
+            ctx.fillStyle = theme.canvas;
             ctx.fillRect(0, 0, width, height);
 
             // Draw vector field background (stretched to fill canvas)
@@ -303,8 +298,9 @@ export function useCanvasRenderer({
                 ctx.setLineDash([]);
             }
 
-            ctx.strokeStyle = isDark ? '#555' : '#000000';
-            ctx.lineWidth = 0.5;
+            // A ring in the canvas colour keeps overlapping particles distinct.
+            ctx.strokeStyle = theme.canvas;
+            ctx.lineWidth = 1;
 
             // Initialize flash tracking arrays if needed
             if (!flashTimersRef.current || flashTimersRef.current.length < particleData.count) {
@@ -418,8 +414,8 @@ export function useCanvasRenderer({
                     }
 
                     // Reset styles
-                    ctx.lineWidth = 0.5;
-                    ctx.strokeStyle = isDark ? '#555' : '#000000';
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = theme.canvas;
                 }
             }
 

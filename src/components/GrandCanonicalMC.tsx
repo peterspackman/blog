@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useColorMode } from '@docusaurus/theme-common';
+import { useVizTheme, withAlpha, VizCanvasFit, VizPanel, VizPanelSection, VizPlotHeader, VizWorkbench } from './shared/viz';
+import { ControlGroup, SegmentedControl, VizButton } from './shared/controls';
+import simStyles from './shared/sim/SimPlot.module.css';
 
 import { GCMCScenario, GCMC_SCENARIOS, GCMCScenarioConfig } from './gcmc/scenarios';
 import { ExternalPotentialType, createExternalPotential, ExternalPotential } from './gcmc/ExternalPotentials';
@@ -20,45 +22,36 @@ function pressureToMu(P_kPa: number, T: number, mass_amu: number, sigma: number)
 import { GCMCAnalyticsEngine } from './gcmc/GCMCAnalytics';
 import { useGCMCSimulation } from './gcmc/useGCMCSimulation';
 import { useGCMCCanvasRenderer } from './gcmc/useGCMCCanvasRenderer';
-import GCMCSimulationToolbar from './gcmc/GCMCSimulationToolbar';
 import GCMCSimulationControls from './gcmc/GCMCSimulationControls';
 import GCMCAnalyticsPlot from './gcmc/GCMCAnalyticsPlot';
 
-const GrandCanonicalMC = () => {
-    const { colorMode } = useColorMode();
-    const isDark = colorMode === 'dark';
+/** Simulation box sizes in canvas pixels (5 px per Å). The canvas is
+ *  displayed scaled to fit, so the box size is independent of the window. */
+const BOX_SIZES = {
+    small: { width: 600, height: 360, label: 'Small', title: '120 × 72 Å' },
+    medium: { width: 800, height: 480, label: 'Medium', title: '160 × 96 Å' },
+    large: { width: 1000, height: 600, label: 'Large', title: '200 × 120 Å' },
+} as const;
+type BoxSize = keyof typeof BOX_SIZES;
+const BOX_OPTIONS = (Object.keys(BOX_SIZES) as BoxSize[]).map((k) => ({
+    value: k,
+    label: BOX_SIZES[k].label,
+    title: BOX_SIZES[k].title,
+}));
 
-    const theme = {
-        background: isDark ? '#1e1e1e' : '#ffffff',
-        surface: isDark ? '#2d2d2d' : '#f8f9fa',
-        border: isDark ? '#444' : '#ccc',
-        text: isDark ? '#e0e0e0' : '#333',
-        textMuted: isDark ? '#888' : '#666',
-        canvasBg: isDark ? '#1a1a1a' : '#ffffff',
-    };
+const SCENARIO_OPTIONS = (Object.keys(GCMC_SCENARIOS) as GCMCScenario[]).map((key) => ({
+    value: key,
+    label: GCMC_SCENARIOS[key].name,
+    title: GCMC_SCENARIOS[key].description,
+}));
 
-    // Canvas sizing
-    const [canvasWidth, setCanvasWidth] = useState(800);
-    const [canvasHeight, setCanvasHeight] = useState(600);
+const GrandCanonicalMC: React.FC<{ title: string }> = ({ title }) => {
+    const theme = useVizTheme();
+    const isDark = theme.isDark;
+
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [width, setWidth] = useState(800);
-    const [height, setHeight] = useState(600);
-
-    useEffect(() => {
-        if (containerRef.current) {
-            const rect = containerRef.current.getBoundingClientRect();
-            const w = Math.max(400, rect.width - 10);
-            const h = Math.max(300, Math.min(600, w * 0.6));
-            setCanvasWidth(w);
-            setCanvasHeight(h);
-        }
-    }, []);
-
-    useEffect(() => {
-        setWidth(canvasWidth);
-        setHeight(canvasHeight);
-    }, [canvasWidth, canvasHeight]);
+    const [boxSize, setBoxSize] = useState<BoxSize>('medium');
+    const { width, height } = BOX_SIZES[boxSize];
 
     // Coordinate scale: pixels per Angstrom
     const coordinateScale = 5.0;
@@ -82,13 +75,13 @@ const GrandCanonicalMC = () => {
 
     // When T changes: if in concentration mode, adjust P to hold c constant.
     // c = P*1000/(R*T), so P_new = c * R * T_new / 1000 = P_old * T_new / T_old
-    const setTemperature = (newT: number) => {
+    const setTemperature = useCallback((newT: number) => {
         if (thermoInputMode === 'concentration' && temperature > 0 && newT > 0) {
             const ratio = newT / temperature;
             setPressures(prev => prev.map(p => p * ratio));
         }
         setTemperatureRaw(newT);
-    };
+    }, [thermoInputMode, temperature]);
     const [initLayout, setInitLayout] = useState(initConfig.initLayout);
     const [maxDisplacement, setMaxDisplacement] = useState(initConfig.maxDisplacement);
     const [stepsPerFrame, setStepsPerFrame] = useState(100);
@@ -99,7 +92,10 @@ const GrandCanonicalMC = () => {
 
     // Particle types
     const [typeLabels, setTypeLabels] = useState(initConfig.particleTypes.map(t => t.label));
-    const [typeColors, setTypeColors] = useState(initConfig.particleTypes.map(t => t.color));
+    // Palette slots per type; colours follow the theme.
+    const [typeColorSlots, setTypeColorSlots] = useState(initConfig.particleTypes.map(t => t.colorSlot));
+    const plotColors = useMemo(() => typeColorSlots.map((slot) => theme.series[slot]), [typeColorSlots, theme]);
+    const typeColors = useMemo(() => plotColors.map((c) => withAlpha(c, 0.9)), [plotColors]);
     const numTypes = initConfig.particleTypes.length;
 
     // Interaction parameters
@@ -128,24 +124,14 @@ const GrandCanonicalMC = () => {
     const [showExternalPotential, setShowExternalPotential] = useState(true);
     const [densityWindow, setDensityWindow] = useState(500);
 
-    const handleSetDensityWindow = (w: number) => {
-        setDensityWindow(w);
-        analytics.setDensityWindow(w);
-    };
 
-    // Mobile
-    const [isMobile, setIsMobile] = useState(false);
-    const [showControls, setShowControls] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
 
     // Analytics
     const [analytics] = useState(() => new GCMCAnalyticsEngine());
+    const handleSetDensityWindow = useCallback((w: number) => {
+        setDensityWindow(w);
+        analytics.setDensityWindow(w);
+    }, [analytics]);
 
     // Create external potential when type changes
     useEffect(() => {
@@ -221,7 +207,7 @@ const GrandCanonicalMC = () => {
         setCutoffRadius(config.cutoffRadius);
         setTypeRatio(config.typeRatio);
         setTypeLabels(config.particleTypes.map(t => t.label));
-        setTypeColors(config.particleTypes.map(t => t.color));
+        setTypeColorSlots(config.particleTypes.map(t => t.colorSlot));
         setEpsilonMatrix(config.epsilonMatrix);
         setSigmaMatrix(config.sigmaMatrix);
         setMasses(config.masses);
@@ -282,186 +268,104 @@ const GrandCanonicalMC = () => {
         deletion: 0,
     };
 
-    // Resize handle
-    const [isResizing, setIsResizing] = useState(false);
-    const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
+    const pct = (x: number) => `${(x * 100).toFixed(0)}%`;
 
-    const handleResizeStart = useCallback((e: React.MouseEvent) => {
-        e.preventDefault();
-        setIsResizing(true);
-        resizeStartRef.current = { x: e.clientX, y: e.clientY, w: canvasWidth, h: canvasHeight };
-    }, [canvasWidth, canvasHeight]);
-
-    useEffect(() => {
-        if (!isResizing) return;
-        const handleMouseMove = (e: MouseEvent) => {
-            const dx = e.clientX - resizeStartRef.current.x;
-            const dy = e.clientY - resizeStartRef.current.y;
-            setCanvasWidth(Math.max(400, resizeStartRef.current.w + dx));
-            setCanvasHeight(Math.max(200, resizeStartRef.current.h + dy));
-        };
-        const handleMouseUp = () => setIsResizing(false);
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-        return () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [isResizing]);
+    const sidebar = (
+        <VizPanel stack>
+            <ControlGroup label="Scenario" hint={GCMC_SCENARIOS[scenario].description}>
+                <SegmentedControl aria-label="Scenario" columns={2} value={scenario} onChange={handleScenarioChange} options={SCENARIO_OPTIONS} />
+            </ControlGroup>
+            <GCMCSimulationControls<BoxSize>
+                isCustom={scenario === 'custom'}
+                boxSize={boxSize}
+                setBoxSize={setBoxSize}
+                boxOptions={BOX_OPTIONS}
+                temperature={temperature}
+                setTemperature={setTemperature}
+                pressures={pressures}
+                setPressures={setPressures}
+                thermoInputMode={thermoInputMode}
+                setThermoInputMode={setThermoInputMode}
+                initLayout={initLayout}
+                setInitLayout={setInitLayout}
+                maxDisplacement={maxDisplacement}
+                setMaxDisplacement={setMaxDisplacement}
+                stepsPerFrame={stepsPerFrame}
+                setStepsPerFrame={setStepsPerFrame}
+                moveWeights={moveWeights}
+                setMoveWeights={setMoveWeights}
+                epsilonMatrix={epsilonMatrix}
+                sigmaMatrix={sigmaMatrix}
+                updateInteractionParameter={updateInteractionParameter}
+                numTypes={numTypes}
+                typeLabels={typeLabels}
+                typeColors={plotColors}
+                cutoffRadius={cutoffRadius}
+                setCutoffRadius={setCutoffRadius}
+                masses={masses}
+                charges={charges}
+                setCharges={setCharges}
+                chargeScale={chargeScale}
+                setChargeScale={setChargeScale}
+                visualScale={visualScale}
+                setVisualScale={setVisualScale}
+                showExternalPotential={showExternalPotential}
+                setShowExternalPotential={setShowExternalPotential}
+                showTrialMoves={showTrialMoves}
+                setShowTrialMoves={setShowTrialMoves}
+                externalPotentialType={externalPotentialType}
+                setExternalPotentialType={setExternalPotentialType}
+                typeRatio={typeRatio}
+                setTypeRatio={setTypeRatio}
+                densityWindow={densityWindow}
+                setDensityWindow={handleSetDensityWindow}
+            />
+        </VizPanel>
+    );
 
     return (
-        <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : '1fr 300px',
-            gap: '1rem',
-            padding: '1rem',
-            maxWidth: '1400px',
-            margin: '0 auto',
-        }}>
-            {/* Main area */}
-            <div style={{ minWidth: 0 }}>
-                <GCMCSimulationToolbar
-                    running={running}
-                    setRunning={setRunning}
-                    onReset={handleReset}
-                    scenario={scenario}
-                    onScenarioChange={handleScenarioChange}
-                    stepCount={stepCount}
-                    particleCount={particleData?.count ?? 0}
-                    acceptanceRates={acceptanceRates}
-                    isDark={isDark}
-                />
-
-                {/* Canvas container */}
-                <div ref={containerRef} style={{
-                    width: `${canvasWidth}px`,
-                    height: `${canvasHeight}px`,
-                    position: 'relative',
-                    margin: '0.5rem auto 0',
-                    borderRadius: '4px',
-                    overflow: 'hidden',
-                }}>
-                    <canvas
-                        ref={canvasRef}
-                        style={{
-                            display: 'block',
-                            width: `${width}px`,
-                            height: `${height}px`,
-                            touchAction: 'none',
-                        }}
+        <VizWorkbench sidebar={sidebar}>
+            <VizPanel flush>
+                <VizPanelSection style={{ display: 'grid', gap: '0.75rem' }}>
+                    <VizPlotHeader
+                        title={title}
+                        readout={`N = ${particleData?.count ?? 0} · ${stepCount.toLocaleString()} steps`}
                     />
-                    {/* Resize handle */}
-                    <div
-                        onMouseDown={handleResizeStart}
-                        style={{
-                            position: 'absolute',
-                            bottom: '2px',
-                            right: '2px',
-                            width: '12px',
-                            height: '12px',
-                            cursor: 'se-resize',
-                            opacity: 0.3,
-                            pointerEvents: 'auto',
-                            backgroundImage: `linear-gradient(135deg, transparent 50%, ${isDark ? '#888' : '#999'} 50%)`,
-                        }}
-                        title="Drag to resize"
-                    />
-                </div>
-
-                {/* Analytics */}
-                <GCMCAnalyticsPlot
-                    analytics={analytics}
-                    width={canvasWidth}
-                    isDark={isDark}
-                    typeLabels={typeLabels}
-                    typeColors={typeColors}
-                    numTypes={numTypes}
-                />
-            </div>
-
-            {/* Controls sidebar */}
-            {isMobile && (
-                <button
-                    onClick={() => setShowControls(!showControls)}
-                    style={{
-                        position: 'fixed',
-                        bottom: '1rem',
-                        right: '1rem',
-                        zIndex: 1000,
-                        padding: '0.75rem 1rem',
-                        backgroundColor: '#007bff',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                        fontSize: '0.9rem',
-                    }}
-                >
-                    {showControls ? 'Close' : 'Controls'}
-                </button>
-            )}
-
-            {(showControls || !isMobile) && (
-                <div style={{
-                    ...(isMobile ? {
-                        position: 'fixed',
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        width: '300px',
-                        maxWidth: '85vw',
-                        zIndex: 999,
-                        backgroundColor: theme.background,
-                        boxShadow: isDark ? '-4px 0 16px rgba(0,0,0,0.4)' : '-4px 0 16px rgba(0,0,0,0.15)',
-                        overflowY: 'auto',
-                    } : {}),
-                }}>
-                    <GCMCSimulationControls
-                        temperature={temperature}
-                        setTemperature={setTemperature}
-                        pressures={pressures}
-                        setPressures={setPressures}
-                        thermoInputMode={thermoInputMode}
-                        setThermoInputMode={setThermoInputMode}
-                        initLayout={initLayout}
-                        setInitLayout={setInitLayout}
-                        maxDisplacement={maxDisplacement}
-                        setMaxDisplacement={setMaxDisplacement}
-                        stepsPerFrame={stepsPerFrame}
-                        setStepsPerFrame={setStepsPerFrame}
-                        moveWeights={moveWeights}
-                        setMoveWeights={setMoveWeights}
-                        epsilonMatrix={epsilonMatrix}
-                        sigmaMatrix={sigmaMatrix}
-                        updateInteractionParameter={updateInteractionParameter}
-                        numTypes={numTypes}
+                    <div style={{ display: 'flex', gap: '0.375rem 1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.375rem' }}>
+                            <VizButton variant="primary" style={{ minWidth: '5.5rem' }} onClick={() => setRunning(!running)}>
+                                {running ? 'Pause' : 'Run'}
+                            </VizButton>
+                            <VizButton variant="secondary" onClick={handleReset}>
+                                Reset
+                            </VizButton>
+                        </div>
+                        <div className={simStyles.stats} title="Acceptance rates of each move type">
+                            <span>Accepted:</span>
+                            <span>displace <b>{pct(acceptanceRates.displacement)}</b></span>
+                            <span>insert <b>{pct(acceptanceRates.insertion)}</b></span>
+                            <span>delete <b>{pct(acceptanceRates.deletion)}</b></span>
+                        </div>
+                    </div>
+                    <VizCanvasFit width={width} height={height} reserve={330}>
+                        <canvas
+                            ref={canvasRef}
+                            aria-label="Grand canonical Monte Carlo simulation"
+                            style={{ display: 'block', width: '100%', height: '100%', borderRadius: 'var(--viz-radius)' }}
+                        />
+                    </VizCanvasFit>
+                </VizPanelSection>
+                <VizPanelSection>
+                    <GCMCAnalyticsPlot
+                        analytics={analytics}
+                        theme={theme}
                         typeLabels={typeLabels}
-                        typeColors={typeColors}
-                        cutoffRadius={cutoffRadius}
-                        setCutoffRadius={setCutoffRadius}
-                        masses={masses}
-                        charges={charges}
-                        setCharges={setCharges}
-                        chargeScale={chargeScale}
-                        setChargeScale={setChargeScale}
-                        visualScale={visualScale}
-                        setVisualScale={setVisualScale}
-                        showExternalPotential={showExternalPotential}
-                        setShowExternalPotential={setShowExternalPotential}
-                        showTrialMoves={showTrialMoves}
-                        setShowTrialMoves={setShowTrialMoves}
-                        externalPotentialType={externalPotentialType}
-                        setExternalPotentialType={setExternalPotentialType}
-                        typeRatio={typeRatio}
-                        setTypeRatio={setTypeRatio}
-                        densityWindow={densityWindow}
-                        setDensityWindow={handleSetDensityWindow}
-                        isDark={isDark}
+                        typeColors={plotColors}
+                        numTypes={numTypes}
                     />
-                </div>
-            )}
-        </div>
+                </VizPanelSection>
+            </VizPanel>
+        </VizWorkbench>
     );
 };
 

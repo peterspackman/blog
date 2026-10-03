@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { GCMCParticleData } from './GCMCParticleData';
 import { MCTrialResult } from './MCEngine';
 import { ExternalPotential } from './ExternalPotentials';
+import { withAlpha, type VizTheme } from '../shared/viz';
 
-interface Theme {
-    canvasBg: string;
-    [key: string]: string;
-}
+const hexRgb = (hex: string): [number, number, number] => {
+    const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
 
 interface UseGCMCCanvasRendererProps {
     canvasRef: React.RefObject<HTMLCanvasElement>;
@@ -15,7 +16,7 @@ interface UseGCMCCanvasRendererProps {
     height: number;
     running: boolean;
     isDark: boolean;
-    theme: Theme;
+    theme: VizTheme;
     coordinateScale: number;
     visualScale: number;
     sigmaMatrix: number[][];       // sigma per type pair -- used for particle radii
@@ -70,8 +71,7 @@ export function useGCMCCanvasRenderer({
         if (!canvas) return;
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) return;
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        // Display size comes from CSS (the canvas scales to fit its frame).
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
@@ -91,6 +91,9 @@ export function useGCMCCanvasRenderer({
     const getExternalPotentialCanvas = (): HTMLCanvasElement | null => {
         if (!externalPotential || !showExternalPotential) return null;
 
+        const wellRgb = hexRgb(theme.negative);
+        const barrierRgb = hexRgb(theme.positive);
+        const wallRgb = hexRgb(theme.border);
         const cacheKey = `${boxWidth},${boxHeight},${width},${height},${isDark}`;
         if (extPotCacheKeyRef.current === cacheKey && extPotCanvasRef.current) {
             return extPotCanvasRef.current;
@@ -117,18 +120,18 @@ export function useGCMCCanvasRenderer({
                     if (Math.abs(e) > Math.abs(energy)) energy = e;
                 }
 
+                // Wells use the 'negative' token, barriers 'positive', hard walls the border colour.
                 let r = 0, g = 0, b = 0, a = 0;
                 if (energy > 1e5) {
-                    if (isDark) { r = 55; g = 55; b = 65; a = 220; }
-                    else { r = 175; g = 175; b = 185; a = 200; }
+                    [r, g, b] = wallRgb;
+                    a = 210;
                 } else if (energy < -1e-6) {
                     const intensity = Math.min(1, Math.abs(energy) / 0.03);
-                    if (isDark) { r = 30; g = 60; b = 140; }
-                    else { r = 60; g = 120; b = 220; }
+                    [r, g, b] = wellRgb;
                     a = Math.floor(intensity * 120);
                 } else if (energy > 1e-6 && energy < 1e5) {
                     const intensity = Math.min(1, energy / 0.05);
-                    r = 220; g = 80; b = 60;
+                    [r, g, b] = barrierRgb;
                     a = Math.floor(intensity * 100);
                 }
 
@@ -193,7 +196,7 @@ export function useGCMCCanvasRenderer({
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             // Clear
-            ctx.fillStyle = theme.canvasBg;
+            ctx.fillStyle = theme.canvas;
             ctx.fillRect(0, 0, width, height);
 
             // Draw external potential overlay (cached offscreen canvas)
@@ -205,13 +208,14 @@ export function useGCMCCanvasRenderer({
             }
 
             // Border (matches MD: single thin border at canvas edge)
-            ctx.strokeStyle = isDark ? '#444' : '#000';
+            ctx.strokeStyle = theme.border;
             ctx.lineWidth = 1;
             ctx.strokeRect(0, 0, width, height);
 
             // Draw particles with sigma-based radii
-            ctx.strokeStyle = isDark ? '#555' : '#000';
-            ctx.lineWidth = 0.5;
+            // A ring in the canvas colour keeps overlapping particles distinct.
+            ctx.strokeStyle = theme.canvas;
+            ctx.lineWidth = 1;
 
             for (let i = 0; i < data.count; i++) {
                 const px = data.positions[i * 2] * coordinateScale;
@@ -248,14 +252,14 @@ export function useGCMCCanvasRenderer({
                     ctx.beginPath();
                     ctx.arc(px, py, ringRadius, 0, Math.PI * 2);
                     ctx.strokeStyle = flash.accepted
-                        ? `rgba(16, 185, 129, ${alpha * 0.8})`
-                        : `rgba(239, 68, 68, ${alpha * 0.6})`;
+                        ? withAlpha(theme.success, alpha * 0.8)
+                        : withAlpha(theme.danger, alpha * 0.6);
                     ctx.lineWidth = flash.accepted ? 2.5 : 1.5;
                     ctx.stroke();
 
                     if (flash.accepted) {
                         const s = 4 * alpha;
-                        ctx.strokeStyle = `rgba(16, 185, 129, ${alpha * 0.6})`;
+                        ctx.strokeStyle = withAlpha(theme.success, alpha * 0.6);
                         ctx.lineWidth = 2;
                         ctx.beginPath();
                         ctx.moveTo(px - s, py); ctx.lineTo(px + s, py);
@@ -267,14 +271,14 @@ export function useGCMCCanvasRenderer({
                     ctx.beginPath();
                     ctx.arc(px, py, ringRadius, 0, Math.PI * 2);
                     ctx.strokeStyle = flash.accepted
-                        ? `rgba(239, 68, 68, ${alpha * 0.8})`
-                        : `rgba(156, 163, 175, ${alpha * 0.4})`;
+                        ? withAlpha(theme.danger, alpha * 0.8)
+                        : withAlpha(theme.muted, alpha * 0.4);
                     ctx.lineWidth = flash.accepted ? 2.5 : 1.5;
                     ctx.stroke();
 
                     if (flash.accepted) {
                         const s = 4 * alpha;
-                        ctx.strokeStyle = `rgba(239, 68, 68, ${alpha * 0.6})`;
+                        ctx.strokeStyle = withAlpha(theme.danger, alpha * 0.6);
                         ctx.lineWidth = 2;
                         ctx.beginPath();
                         ctx.moveTo(px - s, py - s); ctx.lineTo(px + s, py + s);
@@ -285,8 +289,8 @@ export function useGCMCCanvasRenderer({
                     ctx.beginPath();
                     ctx.arc(px, py, flashRadius * 1.4, 0, Math.PI * 2);
                     ctx.strokeStyle = flash.accepted
-                        ? `rgba(16, 185, 129, ${alpha * 0.6})`
-                        : `rgba(239, 68, 68, ${alpha * 0.4})`;
+                        ? withAlpha(theme.success, alpha * 0.6)
+                        : withAlpha(theme.danger, alpha * 0.4);
                     ctx.lineWidth = 1.5;
                     ctx.stroke();
                 }

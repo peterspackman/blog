@@ -20,6 +20,17 @@ interface UsePointerHandlersProps {
     onVectorFieldUpdate: () => void;
 }
 
+/**
+ * Pointer position in simulation pixels. The canvas is drawn at its
+ * simulation size but displayed scaled to fit, so CSS offsets need scaling.
+ */
+function toCanvasPixels(e: React.PointerEvent): [number, number] {
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const dpr = window.devicePixelRatio || 1;
+    const scale = canvas.clientWidth > 0 ? canvas.width / dpr / canvas.clientWidth : 1;
+    return [e.nativeEvent.offsetX * scale, e.nativeEvent.offsetY * scale];
+}
+
 export function usePointerHandlers({
     canvasRef,
     particleData,
@@ -96,9 +107,7 @@ export function usePointerHandlers({
         // Capture pointer for reliable drag tracking
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-        // Use nativeEvent.offsetX/Y which are already relative to the target element
-        const screenX = e.nativeEvent.offsetX;
-        const screenY = e.nativeEvent.offsetY;
+        const [screenX, screenY] = toCanvasPixels(e);
 
         // Potential field drawing mode
         if (fieldPreset === 'draw') {
@@ -142,9 +151,7 @@ export function usePointerHandlers({
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
         if (!canvasRef.current) return;
 
-        // Use nativeEvent.offsetX/Y which are already relative to the target element
-        const screenX = e.nativeEvent.offsetX;
-        const screenY = e.nativeEvent.offsetY;
+        const [screenX, screenY] = toCanvasPixels(e);
 
         // Potential field drawing mode: continue painting
         if (isDrawingRef.current && activeDrawFieldRef.current === 'potential' && fieldPreset === 'draw') {
