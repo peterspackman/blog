@@ -174,14 +174,44 @@
   border-left: 1px solid var(--viz-border);
 }
 
+.splitEqual {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
 @container (max-width: 40rem) {
-  .split {
+  .split,
+  .splitEqual {
     grid-template-columns: minmax(0, 1fr);
   }
   .split > .panelSection + .panelSection {
     border-left: 0;
     border-top: 1px solid var(--viz-border);
   }
+}
+
+/* Heading row of one section of a split card: label, detail, view tabs */
+.sectionHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem 0.75rem;
+  margin-bottom: 0.625rem;
+  min-height: 2rem;
+}
+
+.sectionTitle {
+  font-size: var(--viz-font-md);
+  font-weight: 600;
+  margin: 0;
+}
+
+.sectionDetail {
+  margin-left: 0.5rem;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--viz-font-sm);
+  font-weight: 400;
+  color: var(--viz-muted);
 }
 
 /* Title row inside a plot card: page title left, live readout right */

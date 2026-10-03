@@ -150,11 +150,36 @@ export function VizPlotHeader({ title, readout }: { title: React.ReactNode; read
     );
 }
 
-/** Two VizPanelSections side by side in a flush VizPanel; stacks when narrow. */
-export function VizPanelSplit({ children }: { children: React.ReactNode }) {
+/**
+ * Two VizPanelSections side by side in a flush VizPanel; stacks when the card
+ * is narrow. `equal` gives both halves the same width (e.g. real | reciprocal
+ * space); otherwise the second section keeps its natural width.
+ */
+export function VizPanelSplit({ equal, children }: { equal?: boolean; children: React.ReactNode }) {
     return (
         <div className={styles.splitWrap}>
-            <div className={styles.split}>{children}</div>
+            <div className={clsx(styles.split, equal && styles.splitEqual)}>{children}</div>
+        </div>
+    );
+}
+
+/** Heading row for one section of a split card: label, small detail, actions (tabs). */
+export function VizSectionHeader({
+    title,
+    detail,
+    actions,
+}: {
+    title: React.ReactNode;
+    detail?: React.ReactNode;
+    actions?: React.ReactNode;
+}) {
+    return (
+        <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>
+                {title}
+                {detail && <span className={styles.sectionDetail}>{detail}</span>}
+            </h2>
+            {actions}
         </div>
     );
 }

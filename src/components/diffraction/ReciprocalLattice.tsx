@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
+import { canvasFont, useVizTheme, withAlpha } from '../shared/viz';
 import type { CrystalStructure, Reflection } from './physics';
 import { isAllowedReflection, calculateStructureFactor, calculateReciprocalLattice, calculateDSpacing, calculateTwoTheta, CU_K_ALPHA } from './physics';
 import type { ControlTheme } from '../shared/controls';
-import styles from './DiffractionVisualization.module.css';
+import { VizButton } from '../shared/controls';
 
 export interface ReciprocalLatticeProps {
     width: number;
@@ -227,6 +228,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     showIndexingCircles = false,
     onShowIndexingCirclesChange,
 }) => {
+    const viz = useVizTheme();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const glCanvasRef = useRef<HTMLCanvasElement>(null);
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -243,7 +245,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
     const [isAnimating, setIsAnimating] = useState(false);
     const animationRef = useRef<number>(0);
 
-    const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
+    const isDark = viz.isDark;
 
     // Zone axis [u,v,w] - reflections (h,k,l) are in the zone if h*u + k*v + l*w = 0
     // Guard against [0,0,0] which would produce NaN in projections
@@ -639,19 +641,19 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
         // Detector edge label — circle edge = twoThetaMax
         ctx.fillStyle = theme.textMuted;
-        ctx.font = '9px "Segoe UI", system-ui, sans-serif';
+        ctx.font = canvasFont(viz, 9);
         ctx.textAlign = 'center';
         ctx.fillText(`2θ_max=${twoThetaMax}°`, centerX, centerY - maxRadius * zoom + 12);
 
         // Title
         ctx.fillStyle = theme.text;
-        ctx.font = 'bold 11px "Segoe UI", system-ui, sans-serif';
+        ctx.font = canvasFont(viz, 11, "sans", 600);
         ctx.textAlign = 'left';
         const modeText = powderSmear > 0.5 ? 'Powder' : `Zone ${zoneLabel}`;
         ctx.fillText(`${modeText}`, 10, 15);
 
         // Info
-        ctx.font = '10px "Segoe UI", system-ui, sans-serif';
+        ctx.font = canvasFont(viz, 10);
         ctx.fillStyle = theme.textMuted;
         ctx.textAlign = 'right';
         const spotCountText = spotData.length > 4000 ? `⚠️ ${spotData.length}` : `${spotData.length}`;
@@ -692,12 +694,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             // Draw indexing circles for each d-spacing family
             ctx.lineWidth = 1.5;
             const colors = [
-                'rgba(220, 60, 60, 0.6)',   // red
-                'rgba(60, 140, 60, 0.6)',   // green
-                'rgba(60, 60, 200, 0.6)',   // blue
-                'rgba(180, 120, 40, 0.6)',  // orange
-                'rgba(120, 60, 180, 0.6)',  // purple
-                'rgba(60, 160, 160, 0.6)',  // teal
+                ...viz.series.slice(0, 6).map((c) => withAlpha(c, 0.6)),
             ];
 
             let colorIdx = 0;
@@ -715,7 +712,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
                     // Label with {hkl}
                     ctx.fillStyle = color;
-                    ctx.font = 'bold 9px "Segoe UI", system-ui, sans-serif';
+                    ctx.font = canvasFont(viz, 9, "sans", 600);
                     ctx.textAlign = 'left';
                     // Position label at different angles to avoid overlap
                     const labelAngle = -Math.PI / 4 + (colorIdx * 0.3);
@@ -740,15 +737,15 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                 const pixelX = centerX + (spot.x - pan.x) * zoom;
                 const pixelY = centerY + (spot.y - pan.y) * zoom;
 
-                ctx.strokeStyle = '#e67700';
+                ctx.strokeStyle = viz.series[1];
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(pixelX, pixelY, spot.radius * zoom + 6, 0, 2 * Math.PI);
                 ctx.stroke();
 
                 // Label
-                ctx.fillStyle = '#e67700';
-                ctx.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
+                ctx.fillStyle = viz.series[1];
+                ctx.font = canvasFont(viz, 10, "sans", 600);
                 ctx.textAlign = 'left';
                 ctx.fillText(`(${spot.h},${spot.k},${spot.l})`, pixelX + spot.radius * zoom + 8, pixelY + 4);
             }
@@ -833,7 +830,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         // For simplicity, use the maximum extent to estimate the circle radius
         const qMaxRadius = qMax * scale;
         if (qMaxRadius > 10 && qMaxRadius < plotSize) {
-            ctx.strokeStyle = isDark ? 'rgba(255, 180, 100, 0.5)' : 'rgba(200, 100, 50, 0.5)';
+            ctx.strokeStyle = withAlpha(viz.series[1], 0.55);
             ctx.lineWidth = 1.5;
             ctx.setLineDash([6, 4]);
             ctx.beginPath();
@@ -842,8 +839,8 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             ctx.setLineDash([]);
 
             // Label for 2θ max circle
-            ctx.font = '9px "Segoe UI", system-ui, sans-serif';
-            ctx.fillStyle = isDark ? 'rgba(255, 180, 100, 0.8)' : 'rgba(180, 80, 30, 0.8)';
+            ctx.font = canvasFont(viz, 9);
+            ctx.fillStyle = viz.series[1];
             ctx.textAlign = 'left';
             ctx.fillText(`2θ=${twoThetaMax}°`, centerX + qMaxRadius * 0.7 + 5, centerY - qMaxRadius * 0.7);
         }
@@ -889,7 +886,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             }
 
             if (isOrigin) {
-                ctx.fillStyle = isDark ? '#888' : '#666';
+                ctx.fillStyle = viz.muted;
                 ctx.beginPath();
                 ctx.arc(x, y, 4, 0, 2 * Math.PI);
                 ctx.fill();
@@ -903,7 +900,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                 const opacity = 0.3 + normalizedIntensity * 0.7;
 
                 if (isSelected) {
-                    ctx.strokeStyle = isDark ? '#fbbf24' : '#d97706';
+                    ctx.strokeStyle = viz.series[1];
                     ctx.lineWidth = 2;
                     ctx.beginPath();
                     ctx.arc(x, y, radius + 3, 0, 2 * Math.PI);
@@ -912,19 +909,19 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
 
                 // Use rgba for intensity-based darkness
                 ctx.fillStyle = isDark
-                    ? `rgba(107, 158, 255, ${opacity})`
-                    : `rgba(37, 99, 235, ${opacity})`;
+                    ? withAlpha(viz.accent, opacity)
+                    : withAlpha(viz.accent, opacity);
                 ctx.beginPath();
                 ctx.arc(x, y, radius, 0, 2 * Math.PI);
                 ctx.fill();
             } else if (isAllowed && !withinTwoThetaLimit) {
                 // Beyond 2θ limit - show as faded
-                ctx.fillStyle = isDark ? 'rgba(107, 158, 255, 0.2)' : 'rgba(37, 99, 235, 0.2)';
+                ctx.fillStyle = withAlpha(viz.accent, 0.2);
                 ctx.beginPath();
                 ctx.arc(x, y, 3, 0, 2 * Math.PI);
                 ctx.fill();
             } else if (showAbsences && withinTwoThetaLimit) {
-                ctx.fillStyle = isDark ? 'rgba(180, 180, 180, 0.25)' : 'rgba(100, 100, 100, 0.25)';
+                ctx.fillStyle = withAlpha(viz.muted, 0.3);
                 ctx.beginPath();
                 ctx.arc(x, y, 2.5, 0, 2 * Math.PI);
                 ctx.fill();
@@ -932,7 +929,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
         }
 
         // Info text
-        ctx.font = '10px "Segoe UI", system-ui, sans-serif';
+        ctx.font = canvasFont(viz, 10);
         ctx.fillStyle = theme.textMuted;
         ctx.textAlign = 'right';
         ctx.fillText(`${points.length} reflections`, width - 10, height - 10);
@@ -949,7 +946,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             const iLabel = intensity > 0 ? `I=${intensity.toFixed(1)}` : '';
             const lines = [label, dLabel, twoThetaLabel, iLabel].filter(Boolean);
 
-            ctx.font = 'bold 10px "Segoe UI", system-ui, sans-serif';
+            ctx.font = canvasFont(viz, 10, "sans", 600);
             const maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
             const padX = 6, padY = 4;
             const lineHeight = 14;
@@ -963,7 +960,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             if (tx + tooltipW > width) tx = hp.x - tooltipW - 12;
             if (ty < 0) ty = hp.y + 12;
 
-            ctx.fillStyle = isDark ? 'rgba(50, 50, 50, 0.92)' : 'rgba(255, 255, 255, 0.92)';
+            ctx.fillStyle = withAlpha(viz.surface, 0.92);
             ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
             ctx.lineWidth = 1;
             ctx.beginPath();
@@ -974,7 +971,7 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
             ctx.fillStyle = theme.text;
             ctx.textAlign = 'left';
             for (let i = 0; i < lines.length; i++) {
-                ctx.font = i === 0 ? 'bold 10px "Segoe UI", system-ui, sans-serif' : '10px "Segoe UI", system-ui, sans-serif';
+                ctx.font = canvasFont(viz, 10, 'sans', i === 0 ? 600 : 400);
                 ctx.fillText(lines[i], tx + padX, ty + padY + (i + 1) * lineHeight - 3);
             }
         }
@@ -1238,27 +1235,18 @@ export const ReciprocalLattice: React.FC<ReciprocalLatticeProps> = ({
                     }}
                 />
                 {/* Inline controls */}
-                <div className={styles.detectorOverlayControls}>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onShowIndexingCirclesChange?.(!showIndexingCircles);
-                        }}
-                        className={`${styles.detectorOverlayButton} ${showIndexingCircles ? styles.detectorOverlayButtonActive : ''}`}
-                        title="Toggle indexing circles"
-                    >
-                        Index
-                    </button>
-                    <button
+                <div style={{ position: 'absolute', top: '0.375rem', right: '0.375rem' }}>
+                    <VizButton
+                        size="sm"
+                        variant={powderSmear > 0.5 ? 'primary' : 'secondary'}
                         onClick={(e) => {
                             e.stopPropagation();
                             handlePowderToggle();
                         }}
-                        className={`${styles.detectorOverlayButton} ${powderSmear > 0.5 ? styles.detectorOverlayButtonActive : ''}`}
-                        title={powderSmear > 0.5 ? 'Reset to single crystal' : 'Animate to powder pattern'}
+                        title={powderSmear > 0.5 ? 'Back to a single crystal' : 'Average over orientations to form powder rings'}
                     >
-                        {isAnimating ? '...' : (powderSmear > 0.5 ? 'Crystal' : 'Powder')}
-                    </button>
+                        {isAnimating ? 'Rotating…' : powderSmear > 0.5 ? 'Single crystal' : 'Powder'}
+                    </VizButton>
                 </div>
             </div>
         );

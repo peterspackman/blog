@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
+import { canvasFont, useVizTheme, withAlpha } from '../shared/viz';
 import type { CrystalStructure } from './physics';
 import {
     calculateDSpacing,
@@ -247,6 +248,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
     displayMode = 'magnitude',
     showAtoms = true,
 }) => {
+    const viz = useVizTheme();
     const containerRef = useRef<HTMLDivElement>(null);
     const glCanvasRef = useRef<HTMLCanvasElement>(null);
     const overlayCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -538,8 +540,8 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
 
             ctx.clearRect(0, 0, width, height);
 
-            const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
-            const bgAlpha = isDark ? 'rgba(30,30,30,0.7)' : 'rgba(255,255,255,0.7)';
+            const isDark = viz.isDark;
+            const bgAlpha = withAlpha(viz.surface, 0.75);
 
             // Atoms - show atoms near the slice plane, tiled across the entire view
             if (showAtoms) {
@@ -601,7 +603,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
 
             // Helper to draw text with a semi-transparent background pill
             const drawLabel = (text: string, x: number, y: number, align: CanvasTextAlign = 'left') => {
-                ctx.font = '9px sans-serif';
+                ctx.font = canvasFont(viz, 9);
                 const metrics = ctx.measureText(text);
                 const padX = 4, padY = 2;
                 const tw = metrics.width;
@@ -696,7 +698,7 @@ export const ElectronDensity: React.FC<ElectronDensityProps> = React.memo(({
 
             // Colorbar labels
             ctx.fillStyle = theme.text;
-            ctx.font = '8px sans-serif';
+            ctx.font = canvasFont(viz, 8);
             ctx.textAlign = 'center';
             const barCenterX = lx + lw / 2;
 

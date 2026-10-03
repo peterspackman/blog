@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
+import { canvasFont, useVizTheme, withAlpha } from '../shared/viz';
 import * as echarts from 'echarts';
 import type { Reflection } from './physics';
 import { formatHKL } from './physics';
@@ -61,6 +62,7 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
     showMarkers = true,
     theme,
 }) => {
+    const viz = useVizTheme();
     const chartRef = useRef<HTMLDivElement>(null);
     const chartInstanceRef = useRef<echarts.ECharts | null>(null);
     const onSelectRef = useRef(onSelectReflection);
@@ -111,7 +113,7 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
         const chart = chartInstanceRef.current;
         if (!chart) return;
 
-        const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
+        const isDark = viz.isDark;
 
         // Generate broadened pattern
         const patternData = generateBroadenedPattern(
@@ -138,10 +140,10 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
             smooth: false,
             lineStyle: {
                 width: 1.5,
-                color: isDark ? '#6b9eff' : '#2563eb',
+                color: viz.accent,
             },
             areaStyle: {
-                color: isDark ? 'rgba(107, 158, 255, 0.2)' : 'rgba(37, 99, 235, 0.15)',
+                color: withAlpha(viz.accent, 0.18),
             },
             symbol: 'none',
             animation: false,
@@ -161,9 +163,9 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                         symbolSize: isSelected ? 14 : 8,
                         itemStyle: {
                             color: isSelected
-                                ? (isDark ? '#fbbf24' : '#d97706')
-                                : (isDark ? '#6b9eff' : '#2563eb'),
-                            borderColor: isDark ? '#fff' : '#333',
+                                ? viz.series[1]
+                                : viz.accent,
+                            borderColor: viz.text,
                             borderWidth: 1,
                         },
                         h: r.h, k: r.k, l: r.l,
@@ -239,7 +241,7 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                 splitLine: {
                     show: true,
                     lineStyle: {
-                        color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                        color: viz.grid,
                     },
                 },
                 nameTextStyle: {
@@ -267,7 +269,7 @@ export const PowderPattern: React.FC<PowderPatternProps> = ({
                 splitLine: {
                     show: true,
                     lineStyle: {
-                        color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                        color: viz.grid,
                     },
                 },
                 nameTextStyle: {

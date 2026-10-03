@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import type { ControlTheme } from '../shared/controls';
+import { canvasFont, withAlpha, type VizTheme } from '../shared/viz';
 import type { ColormapType } from './types';
 
 export interface FourierDisplayProps {
@@ -10,7 +10,7 @@ export interface FourierDisplayProps {
     colormap: ColormapType;
     gamma: number;
     label: string;
-    theme: ControlTheme;
+    theme: VizTheme;
 }
 
 const VERTEX_SHADER = `
@@ -314,12 +314,11 @@ export const FourierDisplay: React.FC<FourierDisplayProps> = React.memo(({
             }
             ctx.clearRect(0, 0, width, height);
 
-            const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
-            const bgAlpha = isDark ? 'rgba(30,30,30,0.7)' : 'rgba(255,255,255,0.7)';
+            const bgAlpha = withAlpha(theme.surface, 0.75);
             const getColor = COLORMAP_JS[colormap];
 
             // Label top-left
-            ctx.font = '10px sans-serif';
+            ctx.font = canvasFont(theme, 11);
             const labelMetrics = ctx.measureText(label);
             ctx.fillStyle = bgAlpha;
             ctx.fillRect(4, 4, labelMetrics.width + 8, 16);
@@ -342,12 +341,12 @@ export const FourierDisplay: React.FC<FourierDisplayProps> = React.memo(({
                 ctx.fillStyle = `rgb(${r},${g},${b})`;
                 ctx.fillRect(lx, ly + i, lw, 1);
             }
-            ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)';
+            ctx.strokeStyle = theme.border;
             ctx.lineWidth = 1;
             ctx.strokeRect(lx, ly, lw, lh);
 
             ctx.fillStyle = theme.text;
-            ctx.font = '8px sans-serif';
+            ctx.font = canvasFont(theme, 9);
             ctx.textAlign = 'center';
             const barCenterX = lx + lw / 2;
             ctx.fillText('high', barCenterX, ly - 4);
@@ -365,10 +364,9 @@ export const FourierDisplay: React.FC<FourierDisplayProps> = React.memo(({
                 position: 'relative',
                 width,
                 height,
-                borderRadius: '4px',
-                border: `1px solid ${theme.border}`,
+                borderRadius: 'var(--viz-radius)',
                 overflow: 'hidden',
-                backgroundColor: theme.surface || theme.inputBg,
+                backgroundColor: theme.canvas,
             }}
         >
             <canvas

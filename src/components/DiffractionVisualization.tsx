@@ -1,7 +1,18 @@
-import React, { useState, useMemo, useRef, useLayoutEffect, useEffect } from 'react';
-import { useVizTheme } from './shared/viz';
+import React, { useState, useMemo, useEffect } from 'react';
+import Admonition from '@theme/Admonition';
 import BrowserOnly from '@docusaurus/BrowserOnly';
-import styles from './diffraction/DiffractionVisualization.module.css';
+import {
+    useContainerSize,
+    useVizTheme,
+    VizExplanation,
+    VizPanel,
+    VizPanelSection,
+    VizPanelSplit,
+    VizPlotHeader,
+    VizSectionHeader,
+    VizWorkbench,
+} from './shared/viz';
+import { SegmentedControl, SliderWithInput, ToggleSwitch } from './shared/controls';
 
 import { PowderPattern } from './diffraction/PowderPattern';
 import { ReciprocalLattice } from './diffraction/ReciprocalLattice';
@@ -30,41 +41,30 @@ function generateFormFactorPoints(element: string, numPoints = 8): ControlPoint[
     return points;
 }
 
-// Hook to measure container dimensions
-function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
-    const [size, setSize] = useState({ width: 400, height: 400 });
-
-    useLayoutEffect(() => {
-        const updateSize = () => {
-            if (ref.current) {
-                const rect = ref.current.getBoundingClientRect();
-                setSize({
-                    width: Math.max(200, Math.floor(rect.width)),
-                    height: Math.max(200, Math.floor(rect.height)),
-                });
-            }
-        };
-
-        updateSize();
-
-        const resizeObserver = new ResizeObserver(updateSize);
-        if (ref.current) {
-            resizeObserver.observe(ref.current);
-        }
-
-        return () => resizeObserver.disconnect();
-    }, [ref]);
-
-    return size;
-}
-
 interface DiffractionVisualizationProps {
-    className?: string;
+    title: string;
 }
 
-const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = ({
-    className,
-}) => {
+const REAL_VIEWS = [
+    { value: 'density' as const, label: 'Density', title: 'Electron density on a plane through the cell' },
+    { value: '3d' as const, label: '3D', title: 'Rotating 3D structure' },
+];
+const RECIPROCAL_VIEWS = [
+    { value: 'lattice' as const, label: 'Lattice', title: 'Reciprocal-lattice layer perpendicular to the zone axis' },
+    { value: 'detector' as const, label: 'Detector', title: 'What a flat detector records' },
+    { value: 'pxrd' as const, label: 'Powder', title: 'Powder diffraction pattern' },
+];
+const SLICE_PRESETS = [
+    { value: 0, label: '0' },
+    { value: 0.25, label: '¼' },
+    { value: 0.5, label: '½' },
+];
+const DENSITY_MODES = [
+    { value: 'magnitude' as const, label: '|ρ|', title: 'Magnitude' },
+    { value: 'signed' as const, label: '±ρ', title: 'Signed (shows Fourier ripples)' },
+];
+
+const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = ({ title }) => {
     // Dark mode support
     const vizTheme = useVizTheme();
     const isDark = vizTheme.isDark;
@@ -98,12 +98,10 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
     const [realSpaceView, setRealSpaceView] = useState<'3d' | 'density'>('density');
     const [reciprocalView, setReciprocalView] = useState<'lattice' | 'detector' | 'pxrd'>('lattice');
 
-    // Container refs for measuring dimensions
-    const realSpaceContentRef = useRef<HTMLDivElement>(null);
-    const reciprocalContentRef = useRef<HTMLDivElement>(null);
-
-    const realSpaceSize = useContainerSize(realSpaceContentRef);
-    const reciprocalSize = useContainerSize(reciprocalContentRef);
+    // Each half measures its own width; views are square and capped to the viewport.
+    const [realSpaceRef, realSpaceSize] = useContainerSize();
+    const [reciprocalRef, reciprocalSize] = useContainerSize();
+    const viewportCap = typeof window !== 'undefined' ? window.innerHeight - 300 : 560;
 
     // Get current structure
     const structure = useMemo(
@@ -162,348 +160,241 @@ const DiffractionVisualizationInner: React.FC<DiffractionVisualizationProps> = (
         });
     }, [baseReflections, noise]);
 
-    // Calculate viewer sizes (square, based on smaller dimension with some padding)
-    const viewer3DSize = Math.min(realSpaceSize.width - 16, realSpaceSize.height - 16);
-    const densityViewSize = Math.min(realSpaceSize.width - 16, realSpaceSize.height - 16);
+    const realSize = Math.max(200, Math.min(realSpaceSize.width, viewportCap));
+    const recipSquare = Math.max(200, Math.min(reciprocalSize.width, viewportCap));
+    // The powder pattern is a plot, not an image: use the full width at 4:3.
+    const recipWidth = reciprocalView === 'pxrd' ? Math.max(200, reciprocalSize.width) : recipSquare;
+    const recipHeight = reciprocalView === 'pxrd' ? Math.min(recipSquare, Math.round(recipWidth * 0.75)) : recipSquare;
+    const sliceLabel = `[${zoneAxis.join('')}] · d = ${slicePosition.toFixed(2)}`;
 
-    // Calculate reciprocal view sizes
-    // PXRD uses 4:3 aspect ratio, reciprocal lattice uses square
-    // For lattice/detector views, use square (min of width/height)
-    // For PXRD, use full width with 4:3 aspect ratio
-    const reciprocalSquareSize = Math.min(reciprocalSize.width - 16, reciprocalSize.height - 16);
-    const reciprocalViewWidth = reciprocalView === 'pxrd'
-        ? reciprocalSize.width - 16
-        : reciprocalSquareSize;
-    const reciprocalViewHeight = reciprocalView === 'pxrd'
-        ? Math.min(reciprocalSize.height - 16, Math.round((reciprocalSize.width - 16) * 0.75))
-        : reciprocalSquareSize;
+    const sidebar = (
+        <VizPanel stack>
+            <DiffractionControls
+                structureId={structureId}
+                onStructureChange={setStructureId}
+                structure={structure}
+                wavelength={wavelength}
+                onWavelengthChange={setWavelength}
+                twoThetaMax={twoThetaMax}
+                onTwoThetaMaxChange={setTwoThetaMax}
+                peakWidth={peakWidth}
+                onPeakWidthChange={setPeakWidth}
+                showPeakMarkers={showPeakMarkers}
+                onShowPeakMarkersChange={setShowPeakMarkers}
+                zoneAxis={zoneAxis}
+                onZoneAxisChange={setZoneAxis}
+                maxIndex={maxIndex}
+                onMaxIndexChange={setMaxIndex}
+                showAbsences={showAbsences}
+                onShowAbsencesChange={setShowAbsences}
+                realSpaceView={realSpaceView}
+                reciprocalView={reciprocalView}
+                detectorDistance={detectorDistance}
+                onDetectorDistanceChange={setDetectorDistance}
+                showIndexingCircles={showIndexingCircles}
+                onShowIndexingCirclesChange={setShowIndexingCircles}
+                noise={noise}
+                onNoiseChange={setNoise}
+                bFactor={bFactor}
+                onBFactorChange={setBFactor}
+                showBonds={showBonds}
+                onShowBondsChange={setShowBonds}
+                showLabels={showLabels}
+                onShowLabelsChange={setShowLabels}
+                formFactors={formFactors}
+                onFormFactorsChange={setFormFactors}
+                theme={theme}
+            />
+        </VizPanel>
+    );
 
     return (
-        <div className={`${styles.container} ${className || ''}`}>
-            <h2 className={styles.title}>X-ray Diffraction Simulator</h2>
-
-            {/* Main three-column grid layout */}
-            <div className={styles.mainGrid}>
-                {/* LEFT: Real Space Panel (tabbed: 3D / Density) */}
-                <div className={styles.realSpacePanel}>
-                    <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>
-                            Real Space
-                            {realSpaceView === 'density' && (
-                                <span style={{ fontWeight: 400, fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7 }}>
-                                    [{zoneAxis.join('')}] d={slicePosition.toFixed(2)}
-                                </span>
-                            )}
-                        </h3>
-                        <div className={styles.viewTabs}>
-                            <button
-                                className={`${styles.viewTab} ${realSpaceView === '3d' ? styles.viewTabActive : ''}`}
-                                onClick={() => setRealSpaceView('3d')}
-                            >
-                                3D
-                            </button>
-                            <button
-                                className={`${styles.viewTab} ${realSpaceView === 'density' ? styles.viewTabActive : ''}`}
-                                onClick={() => setRealSpaceView('density')}
-                            >
-                                Density
-                            </button>
-                        </div>
-                    </div>
-                    <div className={styles.panelContent} ref={realSpaceContentRef}>
-                        <div className={styles.viewerContainer}>
-                            {realSpaceView === '3d' ? (
-                                viewer3DSize > 100 && (
-                                    <Viewer3D
-                                        width={viewer3DSize}
-                                        height={viewer3DSize}
-                                        structure={structure}
-                                        representation={showBonds ? 'ball+stick' : 'spacefill'}
-                                        showUnitCell={true}
-                                        showAxes={showLabels}
-                                        supercell={[2, 2, 2]}
-                                        supercellOrigin={[-1, -1, -1]}
-                                        slicePlane={{
-                                            zoneAxis: zoneAxis,
-                                            position: slicePosition,
-                                            showPlane: true,
-                                        }}
-                                        millerPlanes={selectedReflection ? {
-                                            hkl: selectedReflection,
-                                            structure: structure,
-                                        } : undefined}
-                                        autoRotate={true}
-                                        theme={theme}
-                                    />
-                                )
-                            ) : (
-                                densityViewSize > 100 && (
-                                    <ElectronDensity
-                                        width={densityViewSize}
-                                        height={densityViewSize}
-                                        structure={structure}
-                                        wavelength={wavelength}
-                                        slicePosition={slicePosition}
-                                        zoneAxis={zoneAxis}
-                                        maxHKL={maxIndex}
-                                        twoThetaMax={twoThetaMax}
-                                        detectorLimited={detectorLimited}
-                                        theme={theme}
-                                        formFactors={formFactors}
-                                        bFactor={bFactor}
-                                        noise={noise}
-                                        displayMode={densityDisplayMode}
-                                        showAtoms={showAtomsOnSlice}
-                                    />
-                                )
-                            )}
-                        </div>
-                        {/* Slice controls - inside panelContent, right below canvas */}
-                        {realSpaceView === 'density' && (
-                            <div className={styles.sliceControls}>
-                                <span className={styles.sliceLabel}>[{zoneAxis.join('')}] slice:</span>
-                                <input
-                                    type="range"
-                                    className={styles.sliceSlider}
-                                    min={0}
-                                    max={1}
-                                    step={0.01}
-                                    value={slicePosition}
-                                    onChange={(e) => setSlicePosition(parseFloat(e.target.value))}
-                                />
-                                <span className={styles.sliceValue}>{slicePosition.toFixed(2)}</span>
-                                <div className={styles.sliceButtons}>
-                                    <button
-                                        className={`${styles.sliceButton} ${slicePosition === 0 ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setSlicePosition(0)}
-                                    >
-                                        0
-                                    </button>
-                                    <button
-                                        className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.25) < 0.01 ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setSlicePosition(0.25)}
-                                    >
-                                        1/4
-                                    </button>
-                                    <button
-                                        className={`${styles.sliceButton} ${Math.abs(slicePosition - 0.5) < 0.01 ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setSlicePosition(0.5)}
-                                    >
-                                        1/2
-                                    </button>
-                                </div>
-                                <div className={styles.displayModeToggle}>
-                                    <button
-                                        className={`${styles.sliceButton} ${densityDisplayMode === 'magnitude' ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setDensityDisplayMode('magnitude')}
-                                        title="Show |ρ|"
-                                    >
-                                        |ρ|
-                                    </button>
-                                    <button
-                                        className={`${styles.sliceButton} ${densityDisplayMode === 'signed' ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setDensityDisplayMode('signed')}
-                                        title="Show ρ (signed)"
-                                    >
-                                        ±ρ
-                                    </button>
-                                </div>
-                                <div className={styles.displayModeToggle}>
-                                    <button
-                                        className={`${styles.sliceButton} ${showAtomsOnSlice ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setShowAtomsOnSlice(!showAtomsOnSlice)}
-                                        title="Show atom positions"
-                                    >
-                                        Atoms
-                                    </button>
-                                    <button
-                                        className={`${styles.sliceButton} ${detectorLimited ? styles.sliceButtonActive : ''}`}
-                                        onClick={() => setDetectorLimited(!detectorLimited)}
-                                        title={detectorLimited
-                                            ? `Only using reflections within 2θ≤${twoThetaMax}° (as measured by detector)`
-                                            : 'Using all reflections up to max index (ideal)'
-                                        }
-                                    >
-                                        {detectorLimited ? `2θ≤${twoThetaMax}°` : 'Ideal'}
-                                    </button>
-                                </div>
+        <>
+            <VizWorkbench sidebar={sidebar}>
+                <VizPanel flush>
+                    <VizPanelSection style={{ paddingBottom: 0 }}>
+                        <VizPlotHeader
+                            title={title}
+                            readout={`${structure.name} · λ = ${wavelength.toFixed(4)} Å`}
+                        />
+                    </VizPanelSection>
+                    <VizPanelSplit equal>
+                        <VizPanelSection>
+                            <VizSectionHeader
+                                title="Real space"
+                                detail={realSpaceView === 'density' ? sliceLabel : undefined}
+                                actions={
+                                    <SegmentedControl<'3d' | 'density'> aria-label="Real-space view" value={realSpaceView} onChange={setRealSpaceView} options={REAL_VIEWS} />
+                                }
+                            />
+                            <div ref={realSpaceRef} style={{ display: 'grid', justifyItems: 'center', gap: '0.75rem' }}>
+                                {realSpaceSize.width > 0 &&
+                                    (realSpaceView === '3d' ? (
+                                        <Viewer3D
+                                            width={realSize}
+                                            height={realSize}
+                                            structure={structure}
+                                            representation={showBonds ? 'ball+stick' : 'spacefill'}
+                                            showUnitCell={true}
+                                            showAxes={showLabels}
+                                            supercell={[2, 2, 2]}
+                                            supercellOrigin={[-1, -1, -1]}
+                                            slicePlane={{ zoneAxis, position: slicePosition, showPlane: true }}
+                                            millerPlanes={selectedReflection ? { hkl: selectedReflection, structure } : undefined}
+                                            autoRotate={true}
+                                            theme={theme}
+                                        />
+                                    ) : (
+                                        <ElectronDensity
+                                            width={realSize}
+                                            height={realSize}
+                                            structure={structure}
+                                            wavelength={wavelength}
+                                            slicePosition={slicePosition}
+                                            zoneAxis={zoneAxis}
+                                            maxHKL={maxIndex}
+                                            twoThetaMax={twoThetaMax}
+                                            detectorLimited={detectorLimited}
+                                            theme={theme}
+                                            formFactors={formFactors}
+                                            bFactor={bFactor}
+                                            noise={noise}
+                                            displayMode={densityDisplayMode}
+                                            showAtoms={showAtomsOnSlice}
+                                        />
+                                    ))}
+                                {realSpaceView === 'density' && (
+                                    <div style={{ width: '100%', maxWidth: realSize, display: 'grid', gap: '0.5rem' }}>
+                                        <SliderWithInput
+                                            label="Slice position"
+                                            value={slicePosition}
+                                            onChange={setSlicePosition}
+                                            min={0} max={1} step={0.01} decimals={2}
+                                        />
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                                            <SegmentedControl<number>
+                                                aria-label="Slice preset"
+                                                value={slicePosition}
+                                                onChange={setSlicePosition}
+                                                options={SLICE_PRESETS}
+                                            />
+                                            <SegmentedControl<'magnitude' | 'signed'>
+                                                aria-label="Density display"
+                                                value={densityDisplayMode}
+                                                onChange={setDensityDisplayMode}
+                                                options={DENSITY_MODES}
+                                            />
+                                        </div>
+                                        <ToggleSwitch label="Atom positions" checked={showAtomsOnSlice} onChange={setShowAtomsOnSlice} />
+                                        <ToggleSwitch
+                                            label={`Only reflections the detector sees (2θ ≤ ${twoThetaMax}°)`}
+                                            checked={detectorLimited}
+                                            onChange={setDetectorLimited}
+                                        />
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                </div>
+                        </VizPanelSection>
 
-                {/* RIGHT: Reciprocal Space Panel (tabbed) */}
-                <div className={styles.reciprocalPanel}>
-                    <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>
-                            Reciprocal Space
-                            {reciprocalView !== 'pxrd' && (
-                                <span style={{ fontWeight: 400, fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7 }}>
-                                    [{zoneAxis.join('')}]
-                                </span>
-                            )}
-                        </h3>
-                        <div className={styles.viewTabs}>
-                            <button
-                                className={`${styles.viewTab} ${reciprocalView === 'lattice' ? styles.viewTabActive : ''}`}
-                                onClick={() => setReciprocalView('lattice')}
-                            >
-                                Lattice
-                            </button>
-                            <button
-                                className={`${styles.viewTab} ${reciprocalView === 'detector' ? styles.viewTabActive : ''}`}
-                                onClick={() => setReciprocalView('detector')}
-                            >
-                                Detector
-                            </button>
-                            <button
-                                className={`${styles.viewTab} ${reciprocalView === 'pxrd' ? styles.viewTabActive : ''}`}
-                                onClick={() => setReciprocalView('pxrd')}
-                            >
-                                PXRD
-                            </button>
-                        </div>
-                    </div>
-                    <div className={styles.panelContent} ref={reciprocalContentRef}>
-                        <div className={styles.viewerContainer}>
-                            {reciprocalView === 'pxrd' ? (
-                                <PowderPattern
-                                    width={reciprocalViewWidth}
-                                    height={reciprocalViewHeight}
-                                    reflections={reflections}
-                                    wavelength={wavelength}
-                                    peakWidth={peakWidth}
-                                    twoThetaRange={[5, twoThetaMax]}
-                                    selectedReflection={selectedReflection}
-                                    onSelectReflection={setSelectedReflection}
-                                    showMarkers={showPeakMarkers}
-                                    theme={theme}
-                                />
-                            ) : (
-                                <ReciprocalLattice
-                                    width={reciprocalViewWidth}
-                                    height={reciprocalViewHeight}
-                                    structure={structure}
-                                    reflections={reflections}
-                                    zoneAxis={zoneAxis}
-                                    maxIndex={maxIndex}
-                                    showAbsences={showAbsences}
-                                    selectedReflection={selectedReflection}
-                                    onSelectReflection={setSelectedReflection}
-                                    theme={theme}
-                                    viewMode={reciprocalView === 'detector' ? 'detector' : 'reciprocal'}
-                                    wavelength={wavelength}
-                                    detectorDistance={detectorDistance}
-                                    twoThetaMax={twoThetaMax}
-                                    bFactor={bFactor}
-                                    showIndexingCircles={showIndexingCircles}
-                                    onShowIndexingCirclesChange={setShowIndexingCircles}
-                                />
-                            )}
-                        </div>
-                    </div>
-                </div>
+                        <VizPanelSection>
+                            <VizSectionHeader
+                                title="Reciprocal space"
+                                detail={reciprocalView !== 'pxrd' ? `[${zoneAxis.join('')}]` : undefined}
+                                actions={
+                                    <SegmentedControl<'lattice' | 'detector' | 'pxrd'> aria-label="Reciprocal-space view" value={reciprocalView} onChange={setReciprocalView} options={RECIPROCAL_VIEWS} />
+                                }
+                            />
+                            <div ref={reciprocalRef} style={{ display: 'grid', justifyItems: 'center' }}>
+                                {reciprocalSize.width > 0 &&
+                                    (reciprocalView === 'pxrd' ? (
+                                        <PowderPattern
+                                            width={recipWidth}
+                                            height={recipHeight}
+                                            reflections={reflections}
+                                            wavelength={wavelength}
+                                            peakWidth={peakWidth}
+                                            twoThetaRange={[5, twoThetaMax]}
+                                            selectedReflection={selectedReflection}
+                                            onSelectReflection={setSelectedReflection}
+                                            showMarkers={showPeakMarkers}
+                                            theme={theme}
+                                        />
+                                    ) : (
+                                        <ReciprocalLattice
+                                            width={recipSquare}
+                                            height={recipSquare}
+                                            structure={structure}
+                                            reflections={reflections}
+                                            zoneAxis={zoneAxis}
+                                            maxIndex={maxIndex}
+                                            showAbsences={showAbsences}
+                                            selectedReflection={selectedReflection}
+                                            onSelectReflection={setSelectedReflection}
+                                            theme={theme}
+                                            viewMode={reciprocalView === 'detector' ? 'detector' : 'reciprocal'}
+                                            wavelength={wavelength}
+                                            detectorDistance={detectorDistance}
+                                            twoThetaMax={twoThetaMax}
+                                            bFactor={bFactor}
+                                            showIndexingCircles={showIndexingCircles}
+                                            onShowIndexingCirclesChange={setShowIndexingCircles}
+                                        />
+                                    ))}
+                            </div>
+                        </VizPanelSection>
+                    </VizPanelSplit>
+                </VizPanel>
+            </VizWorkbench>
 
-                {/* SETTINGS Panel */}
-                <div className={styles.settingsPanel}>
-                    <DiffractionControls
-                        structureId={structureId}
-                        onStructureChange={setStructureId}
-                        structure={structure}
-                        wavelength={wavelength}
-                        onWavelengthChange={setWavelength}
-                        twoThetaMax={twoThetaMax}
-                        onTwoThetaMaxChange={setTwoThetaMax}
-                        peakWidth={peakWidth}
-                        onPeakWidthChange={setPeakWidth}
-                        showPeakMarkers={showPeakMarkers}
-                        onShowPeakMarkersChange={setShowPeakMarkers}
-                        zoneAxis={zoneAxis}
-                        onZoneAxisChange={setZoneAxis}
-                        maxIndex={maxIndex}
-                        onMaxIndexChange={setMaxIndex}
-                        showAbsences={showAbsences}
-                        onShowAbsencesChange={setShowAbsences}
-                        reciprocalView={reciprocalView}
-                        detectorDistance={detectorDistance}
-                        onDetectorDistanceChange={setDetectorDistance}
-                        showIndexingCircles={showIndexingCircles}
-                        onShowIndexingCirclesChange={setShowIndexingCircles}
-                        noise={noise}
-                        onNoiseChange={setNoise}
-                        bFactor={bFactor}
-                        onBFactorChange={setBFactor}
-                        showBonds={showBonds}
-                        onShowBondsChange={setShowBonds}
-                        showLabels={showLabels}
-                        onShowLabelsChange={setShowLabels}
-                        formFactors={formFactors}
-                        onFormFactorsChange={setFormFactors}
-                        theme={theme}
-                    />
-                </div>
-            </div>
-
-            {/* Explanation section */}
-            <div className={styles.explanationContainer}>
-                <h3 className={styles.explanationTitle}>
-                    X-ray Diffraction and Crystal Structure
-                </h3>
-                <p className={styles.explanationText}>
-                    X-ray diffraction reveals the atomic arrangement in crystals through
-                    the interference of scattered X-rays. This simulation shows the
-                    relationship between real-space structure, reciprocal space, and
-                    the resulting diffraction pattern.
+            <VizExplanation
+                aside={
+                    <>
+                        <Admonition type="tip" title="Try this">
+                            Compare NaCl (face-centred) with diamond to see different systematic absences, then step the
+                            density slice through the cell to watch atoms come in and out of the plane.
+                        </Admonition>
+                        <Admonition type="info" title="Click a reflection">
+                            Selecting a spot in reciprocal space or a peak in the powder pattern highlights its lattice
+                            planes in the 3D view.
+                        </Admonition>
+                    </>
+                }
+            >
+                <h2>X-ray diffraction and crystal structure</h2>
+                <p>
+                    X-rays scattered by the electrons in a crystal interfere, so they only emerge in particular
+                    directions. Those directions map out the reciprocal lattice; their intensities encode where the atoms
+                    are. The density view rebuilds the electron density from the reflections by an inverse Fourier sum.
                 </p>
-
-                <h4>Key equations:</h4>
-                <ul className={styles.explanationList}>
-                    <li className={styles.explanationListItem}>
-                        <strong>Bragg's Law:</strong>{' '}
-                        <MathFormula math="n\lambda = 2d\sin\theta" inline={true} />
-                        {' '} determines which angles produce diffraction peaks
+                <ul>
+                    <li>
+                        <strong>Bragg's law</strong> <MathFormula math="n\lambda = 2d\sin\theta" inline /> sets the angle of
+                        each reflection.
                     </li>
-                    <li className={styles.explanationListItem}>
-                        <strong>d-spacing (cubic):</strong>{' '}
-                        <MathFormula
-                            math="d_{hkl} = \frac{a}{\sqrt{h^2 + k^2 + l^2}}"
-                            inline={true}
-                        />
+                    <li>
+                        <strong>d-spacing</strong> for a cubic cell:{' '}
+                        <MathFormula math="d_{hkl} = \frac{a}{\sqrt{h^2 + k^2 + l^2}}" inline />
                     </li>
-                    <li className={styles.explanationListItem}>
-                        <strong>Structure factor:</strong>{' '}
-                        <MathFormula
-                            math="F_{hkl} = \sum_j f_j \exp[2\pi i(hx_j + ky_j + lz_j)]"
-                            inline={true}
-                        />
+                    <li>
+                        <strong>Structure factor</strong>{' '}
+                        <MathFormula math="F_{hkl} = \sum_j f_j \exp[2\pi i(hx_j + ky_j + lz_j)]" inline /> sets each
+                        intensity, <MathFormula math="I \propto |F_{hkl}|^2" inline />.
                     </li>
                 </ul>
-
-                <h4>Systematic absences:</h4>
-                <p className={styles.explanationText}>
-                    Some reflections are forbidden due to crystal symmetry. For FCC lattices
-                    (like NaCl), reflections are only allowed when h, k, l are all odd or
-                    all even. These <em>systematic absences</em> are shown as crossed circles
-                    in the reciprocal lattice view.
+                <h3>Systematic absences</h3>
+                <p>
+                    Lattice centring and symmetry make some structure factors cancel exactly. In a face-centred lattice
+                    like NaCl, reflections only appear when h, k and l are all odd or all even; the missing ones are
+                    drawn as crossed circles in the reciprocal-lattice view.
                 </p>
-
-                <div className={styles.explanationNote}>
-                    <strong>Try it:</strong> Compare NaCl (FCC) with Diamond to see
-                    different systematic absence patterns. Use the Density tab to explore
-                    electron density at different planes through the unit cell.
-                </div>
-            </div>
-        </div>
+            </VizExplanation>
+        </>
     );
 };
 
 // Wrap with BrowserOnly for SSR safety
-const DiffractionVisualization: React.FC<DiffractionVisualizationProps> = (props) => {
-    return (
-        <BrowserOnly fallback={<div>Loading visualization...</div>}>
-            {() => <DiffractionVisualizationInner {...props} />}
-        </BrowserOnly>
-    );
-};
+const DiffractionVisualization: React.FC<DiffractionVisualizationProps> = (props) => (
+    <BrowserOnly fallback={<div style={{ minHeight: 560 }} />}>{() => <DiffractionVisualizationInner {...props} />}</BrowserOnly>
+);
 
 export default DiffractionVisualization;

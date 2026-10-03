@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
-import type { ControlTheme } from '../shared/controls';
+import type { VizTheme } from '../shared/viz';
+import { VizButton } from '../shared/controls';
 import type { InputMode } from './types';
 import type { TilingOptions } from './symmetry';
 import {
@@ -23,7 +24,7 @@ export interface InputPanelProps {
     brushRadius: number;
     cellAngle: number;
     cellRatio: number;
-    theme: ControlTheme;
+    theme: VizTheme;
     /** When provided (GPU mode), called with rawBuffer on mouseUp instead of full CPU regeneration. */
     onRawBufferUpdate?: (raw: Float32Array) => void;
 }
@@ -386,9 +387,9 @@ export const InputPanel: React.FC<InputPanelProps> = React.memo(({
                 position: 'relative',
                 width,
                 height,
-                borderRadius: '4px',
-                border: `1px solid ${theme.border}`,
+                borderRadius: 'var(--viz-radius)',
                 overflow: 'hidden',
+                // Intensity image: black is zero signal in both themes.
                 backgroundColor: '#000',
             }}
         >
@@ -440,44 +441,18 @@ export const InputPanel: React.FC<InputPanelProps> = React.memo(({
                 style={{ display: 'none' }}
             />
             {mode === 'draw' && (
-                <button
-                    onClick={handleClear}
-                    style={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        padding: '2px 8px',
-                        fontSize: '0.7rem',
-                        border: `1px solid ${theme.border}`,
-                        borderRadius: '3px',
-                        backgroundColor: theme.surface || theme.inputBg,
-                        color: theme.text,
-                        cursor: 'pointer',
-                        zIndex: 2,
-                    }}
-                >
-                    Clear
-                </button>
+                <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 2 }}>
+                    <VizButton variant="secondary" size="sm" onClick={handleClear}>
+                        Clear
+                    </VizButton>
+                </div>
             )}
             {mode === 'upload' && !data && (
-                <button
-                    onClick={triggerUpload}
-                    style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        padding: '8px 16px',
-                        fontSize: '0.85rem',
-                        border: `1px solid ${theme.border}`,
-                        borderRadius: '4px',
-                        backgroundColor: theme.surface || theme.inputBg,
-                        color: theme.text,
-                        cursor: 'pointer',
-                    }}
-                >
-                    Choose Image...
-                </button>
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}>
+                    <VizButton variant="secondary" onClick={triggerUpload}>
+                        Choose an image…
+                    </VizButton>
+                </div>
             )}
         </div>
     );

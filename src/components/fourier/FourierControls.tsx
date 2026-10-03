@@ -2,7 +2,11 @@ import React from 'react';
 import {
     SliderWithInput,
     CollapsibleSection,
-    type ControlTheme,
+    SegmentedControl,
+    Select,
+    ToggleSwitch,
+    ControlGroup,
+    ControlHint,
 } from '../shared/controls';
 import type { InputMode, PatternType, DisplayMode, ColormapType, PackShape, PackPacking } from './types';
 import { GROUP_LIST } from './symmetry';
@@ -72,7 +76,6 @@ export interface FourierControlsProps {
     onCellAngleChange: (a: number) => void;
     cellRatio: number;
     onCellRatioChange: (r: number) => void;
-    theme: ControlTheme;
 }
 
 const INPUT_MODES: { value: InputMode; label: string }[] = [
@@ -81,22 +84,22 @@ const INPUT_MODES: { value: InputMode; label: string }[] = [
     { value: 'upload', label: 'Upload' },
 ];
 
-const PATTERN_TYPES: { value: PatternType; label: string }[] = [
+export const PATTERN_TYPES: { value: PatternType; label: string }[] = [
     { value: 'rectangle', label: 'Rectangle' },
-    { value: 'doubleSlit', label: 'Double Slit' },
+    { value: 'doubleSlit', label: 'Double slit' },
     { value: 'circle', label: 'Circle' },
     { value: 'grating', label: 'Grating' },
     { value: 'gaussian', label: 'Gaussian' },
-    { value: 'pointSources', label: 'Point Sources' },
+    { value: 'pointSources', label: 'Point sources' },
     { value: 'rhombus', label: 'Rhombus' },
-    { value: 'packedShapes', label: 'Packed Shapes' },
+    { value: 'packedShapes', label: 'Packed shapes' },
 ];
 
-const DISPLAY_MODES: { value: DisplayMode; label: string }[] = [
-    { value: 'magnitude', label: '|F|' },
-    { value: 'phase', label: 'Phase' },
-    { value: 'real', label: 'Re' },
-    { value: 'imaginary', label: 'Im' },
+const DISPLAY_MODES: { value: DisplayMode; label: string; title: string }[] = [
+    { value: 'magnitude', label: '|F|', title: 'Magnitude (log scale)' },
+    { value: 'phase', label: 'Phase', title: 'Phase arg F' },
+    { value: 'real', label: 'Re', title: 'Real part' },
+    { value: 'imaginary', label: 'Im', title: 'Imaginary part' },
 ];
 
 const COLORMAPS: { value: ColormapType; label: string }[] = [
@@ -105,41 +108,22 @@ const COLORMAPS: { value: ColormapType; label: string }[] = [
     { value: 'magma', label: 'Magma' },
 ];
 
-const selectStyle = (theme: ControlTheme): React.CSSProperties => ({
-    width: '100%',
-    padding: '0.3rem 0.4rem',
-    fontSize: '0.8rem',
-    border: `1px solid ${theme.border}`,
-    borderRadius: '3px',
-    backgroundColor: theme.inputBg,
-    color: theme.text,
-    marginBottom: '0.6rem',
-});
+const PACK_SHAPES: { value: PackShape; label: string }[] = [
+    { value: 'circle', label: 'Circle' },
+    { value: 'square', label: 'Square' },
+    { value: 'rhombus', label: 'Rhombus' },
+];
 
-const buttonGroupStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '2px',
-    marginBottom: '0.6rem',
-};
+const PACKINGS: { value: PackPacking; label: string }[] = [
+    { value: 'square', label: 'Square' },
+    { value: 'hex', label: 'Hexagonal' },
+];
 
-const buttonStyle = (active: boolean, theme: ControlTheme): React.CSSProperties => ({
-    flex: 1,
-    padding: '0.3rem 0.4rem',
-    fontSize: '0.7rem',
-    fontWeight: 500,
-    border: 'none',
-    borderRadius: '3px',
-    backgroundColor: active ? (theme.accent || '#2563eb') : (theme.inputBg),
-    color: active ? '#fff' : theme.text,
-    cursor: 'pointer',
-});
-
-const labelStyle = (theme: ControlTheme): React.CSSProperties => ({
-    fontSize: '0.75rem',
-    color: theme.textMuted,
-    marginBottom: '0.25rem',
-    display: 'block',
-});
+const RESOLUTIONS: { value: number; label: string }[] = [
+    { value: 256, label: '256²' },
+    { value: 512, label: '512²' },
+    { value: 1024, label: '1024²' },
+];
 
 export const FourierControls: React.FC<FourierControlsProps> = ({
     inputMode,
@@ -202,114 +186,61 @@ export const FourierControls: React.FC<FourierControlsProps> = ({
     onCellAngleChange,
     cellRatio,
     onCellRatioChange,
-    theme,
 }) => {
     return (
-        <div style={{
-            padding: '0.6rem',
-            fontSize: '0.85rem',
-            color: theme.text,
-            backgroundColor: theme.background || theme.surface,
-            borderRadius: '6px',
-            border: `1px solid ${theme.border}`,
-        }}>
-            {/* Input Section */}
-            <div style={{ marginBottom: '0.75rem' }}>
-                <span style={labelStyle(theme)}>Input Mode</span>
-                <div style={buttonGroupStyle}>
-                    {INPUT_MODES.map(m => (
-                        <button
-                            key={m.value}
-                            style={buttonStyle(inputMode === m.value, theme)}
-                            onClick={() => onInputModeChange(m.value)}
-                        >
-                            {m.label}
-                        </button>
-                    ))}
-                </div>
+        <>
+            <ControlGroup label="Input">
+                <SegmentedControl aria-label="Input mode" value={inputMode} onChange={onInputModeChange} options={INPUT_MODES} />
 
                 {inputMode === 'pattern' && (
                     <>
-                        <span style={labelStyle(theme)}>Pattern</span>
-                        <select
-                            value={patternType}
-                            onChange={e => onPatternTypeChange(e.target.value as PatternType)}
-                            style={selectStyle(theme)}
-                        >
-                            {PATTERN_TYPES.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                            ))}
-                        </select>
-
-                        {/* Pattern-specific sliders */}
+                        <Select aria-label="Pattern" value={patternType} onChange={onPatternTypeChange} options={PATTERN_TYPES} />
                         {patternType === 'rectangle' && (
                             <>
-                                <SliderWithInput label="Width" value={rectWidth} onChange={onRectWidthChange} min={0.02} max={0.5} step={0.01} theme={theme} />
-                                <SliderWithInput label="Height" value={rectHeight} onChange={onRectHeightChange} min={0.02} max={0.5} step={0.01} theme={theme} />
+                                <SliderWithInput label="Width" value={rectWidth} onChange={onRectWidthChange} min={0.02} max={0.5} step={0.01} />
+                                <SliderWithInput label="Height" value={rectHeight} onChange={onRectHeightChange} min={0.02} max={0.5} step={0.01} />
                             </>
                         )}
                         {patternType === 'doubleSlit' && (
                             <>
-                                <SliderWithInput label="Slit Width" value={slitWidth} onChange={onSlitWidthChange} min={0.01} max={0.1} step={0.005} decimals={3} theme={theme} />
-                                <SliderWithInput label="Separation" value={slitSeparation} onChange={onSlitSeparationChange} min={0.05} max={0.4} step={0.01} theme={theme} />
+                                <SliderWithInput label="Slit width" value={slitWidth} onChange={onSlitWidthChange} min={0.01} max={0.1} step={0.005} decimals={3} />
+                                <SliderWithInput label="Separation" value={slitSeparation} onChange={onSlitSeparationChange} min={0.05} max={0.4} step={0.01} />
                             </>
                         )}
                         {patternType === 'circle' && (
-                            <SliderWithInput label="Radius" value={circleRadius} onChange={onCircleRadiusChange} min={0.02} max={0.5} step={0.01} theme={theme} />
+                            <SliderWithInput label="Radius" value={circleRadius} onChange={onCircleRadiusChange} min={0.02} max={0.5} step={0.01} />
                         )}
                         {patternType === 'grating' && (
                             <>
-                                <SliderWithInput label="Frequency" value={gratingFrequency} onChange={onGratingFrequencyChange} min={2} max={40} step={1} decimals={0} theme={theme} />
-                                <SliderWithInput label="Angle" value={gratingAngle} onChange={onGratingAngleChange} min={0} max={180} step={1} decimals={0} unit="deg" theme={theme} />
+                                <SliderWithInput label="Frequency" value={gratingFrequency} onChange={onGratingFrequencyChange} min={2} max={40} step={1} decimals={0} />
+                                <SliderWithInput label="Angle" value={gratingAngle} onChange={onGratingAngleChange} min={0} max={180} step={1} decimals={0} unit="°" />
                             </>
                         )}
                         {patternType === 'gaussian' && (
                             <>
-                                <SliderWithInput label="Sigma X" value={sigmaX} onChange={onSigmaXChange} min={0.02} max={0.3} step={0.01} theme={theme} />
-                                <SliderWithInput label="Sigma Y" value={sigmaY} onChange={onSigmaYChange} min={0.02} max={0.3} step={0.01} theme={theme} />
+                                <SliderWithInput label="σ (x)" value={sigmaX} onChange={onSigmaXChange} min={0.02} max={0.3} step={0.01} />
+                                <SliderWithInput label="σ (y)" value={sigmaY} onChange={onSigmaYChange} min={0.02} max={0.3} step={0.01} />
                             </>
                         )}
                         {patternType === 'pointSources' && (
                             <>
-                                <SliderWithInput label="Count" value={pointCount} onChange={onPointCountChange} min={1} max={8} step={1} decimals={0} theme={theme} />
-                                <SliderWithInput label="Spacing" value={pointSpacing} onChange={onPointSpacingChange} min={0.05} max={0.4} step={0.01} theme={theme} />
+                                <SliderWithInput label="Count" value={pointCount} onChange={onPointCountChange} min={1} max={8} step={1} decimals={0} />
+                                <SliderWithInput label="Spacing" value={pointSpacing} onChange={onPointSpacingChange} min={0.05} max={0.4} step={0.01} />
                             </>
                         )}
                         {patternType === 'rhombus' && (
                             <>
-                                <SliderWithInput label="Width" value={rhombusWidth} onChange={onRhombusWidthChange} min={0.05} max={0.8} step={0.01} theme={theme} />
-                                <SliderWithInput label="Height" value={rhombusHeight} onChange={onRhombusHeightChange} min={0.05} max={0.8} step={0.01} theme={theme} />
+                                <SliderWithInput label="Width" value={rhombusWidth} onChange={onRhombusWidthChange} min={0.05} max={0.8} step={0.01} />
+                                <SliderWithInput label="Height" value={rhombusHeight} onChange={onRhombusHeightChange} min={0.05} max={0.8} step={0.01} />
                             </>
                         )}
                         {patternType === 'packedShapes' && (
                             <>
-                                <span style={labelStyle(theme)}>Shape</span>
-                                <div style={buttonGroupStyle}>
-                                    {(['circle', 'square', 'rhombus'] as PackShape[]).map(s => (
-                                        <button
-                                            key={s}
-                                            style={buttonStyle(packShape === s, theme)}
-                                            onClick={() => onPackShapeChange(s)}
-                                        >
-                                            {s[0].toUpperCase() + s.slice(1)}
-                                        </button>
-                                    ))}
-                                </div>
-                                <span style={labelStyle(theme)}>Packing</span>
-                                <div style={buttonGroupStyle}>
-                                    {(['square', 'hex'] as PackPacking[]).map(p => (
-                                        <button
-                                            key={p}
-                                            style={buttonStyle(packPacking === p, theme)}
-                                            onClick={() => onPackPackingChange(p)}
-                                        >
-                                            {p[0].toUpperCase() + p.slice(1)}
-                                        </button>
-                                    ))}
-                                </div>
-                                <SliderWithInput label="Element Size" value={packElementSize} onChange={onPackElementSizeChange} min={0.01} max={0.1} step={0.005} decimals={3} theme={theme} />
-                                <SliderWithInput label="Spacing" value={packSpacing} onChange={onPackSpacingChange} min={0.03} max={0.2} step={0.005} decimals={3} theme={theme} />
-                                <SliderWithInput label="Envelope Radius" value={packEnvelopeRadius} onChange={onPackEnvelopeRadiusChange} min={0.1} max={0.5} step={0.01} theme={theme} />
+                                <SegmentedControl aria-label="Element shape" value={packShape} onChange={onPackShapeChange} options={PACK_SHAPES} />
+                                <SegmentedControl aria-label="Packing" value={packPacking} onChange={onPackPackingChange} options={PACKINGS} />
+                                <SliderWithInput label="Element size" value={packElementSize} onChange={onPackElementSizeChange} min={0.01} max={0.1} step={0.005} decimals={3} />
+                                <SliderWithInput label="Spacing" value={packSpacing} onChange={onPackSpacingChange} min={0.03} max={0.2} step={0.005} decimals={3} />
+                                <SliderWithInput label="Envelope radius" value={packEnvelopeRadius} onChange={onPackEnvelopeRadiusChange} min={0.1} max={0.5} step={0.01} />
                             </>
                         )}
                     </>
@@ -317,150 +248,41 @@ export const FourierControls: React.FC<FourierControlsProps> = ({
 
                 {inputMode === 'draw' && (
                     <>
-                        <SliderWithInput
-                            label="Tiles"
-                            value={tiles}
-                            onChange={onTilesChange}
-                            min={1}
-                            max={12}
-                            step={1}
-                            decimals={0}
-                            theme={theme}
-                        />
-                        <SliderWithInput
-                            label="Brush Size"
-                            value={brushRadius}
-                            onChange={onBrushRadiusChange}
-                            min={1}
-                            max={12}
-                            step={1}
-                            decimals={0}
-                            theme={theme}
-                        />
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            fontSize: '0.8rem',
-                            color: theme.text,
-                            cursor: 'pointer',
-                            marginBottom: '0.5rem',
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={symmetryEnabled}
-                                onChange={e => onSymmetryEnabledChange(e.target.checked)}
-                                style={{ accentColor: theme.accent || '#2563eb' }}
-                            />
-                            Apply symmetry
-                        </label>
-                        {symmetryEnabled && (
-                            <>
-                                <span style={labelStyle(theme)}>Wallpaper Group</span>
-                                <select
-                                    value={wallpaperGroup}
-                                    onChange={e => onWallpaperGroupChange(e.target.value)}
-                                    style={selectStyle(theme)}
-                                >
-                                    {GROUP_LIST.map(g => (
-                                        <option key={g} value={g}>{g}</option>
-                                    ))}
-                                </select>
-                            </>
-                        )}
-                        <SliderWithInput
-                            label="Cell Angle"
-                            value={cellAngle}
-                            onChange={onCellAngleChange}
-                            min={45}
-                            max={135}
-                            step={1}
-                            decimals={0}
-                            unit="°"
-                            theme={theme}
-                        />
-                        <SliderWithInput
-                            label="Cell Ratio"
-                            value={cellRatio}
-                            onChange={onCellRatioChange}
-                            min={0.3}
-                            max={3.0}
-                            step={0.05}
-                            theme={theme}
-                        />
+                        <ControlHint>Paint on the input; strokes repeat across the tiled cell.</ControlHint>
+                        <SliderWithInput label="Brush size" value={brushRadius} onChange={onBrushRadiusChange} min={1} max={12} step={1} decimals={0} />
+                        <SliderWithInput label="Tiles" value={tiles} onChange={onTilesChange} min={1} max={12} step={1} decimals={0} />
                     </>
                 )}
 
-                {inputMode === 'upload' && (
-                    <p style={{ fontSize: '0.75rem', color: theme.textMuted, margin: '0.25rem 0' }}>
-                        Click the left panel to choose an image file.
-                    </p>
-                )}
-            </div>
+                {inputMode === 'upload' && <ControlHint>Click the input panel to choose an image file.</ControlHint>}
+            </ControlGroup>
 
-            {/* Display Section */}
-            <div style={{ marginBottom: '0.75rem' }}>
-                <span style={labelStyle(theme)}>FT Display</span>
-                <div style={buttonGroupStyle}>
-                    {DISPLAY_MODES.map(m => (
-                        <button
-                            key={m.value}
-                            style={buttonStyle(displayMode === m.value, theme)}
-                            onClick={() => onDisplayModeChange(m.value)}
-                        >
-                            {m.label}
-                        </button>
-                    ))}
-                </div>
+            {inputMode === 'draw' && (
+                <ControlGroup label="Symmetry">
+                    <ToggleSwitch label="Apply wallpaper symmetry" checked={symmetryEnabled} onChange={onSymmetryEnabledChange} />
+                    {symmetryEnabled && (
+                        <Select
+                            aria-label="Wallpaper group"
+                            value={wallpaperGroup}
+                            onChange={onWallpaperGroupChange}
+                            options={GROUP_LIST.map((g) => ({ value: g, label: g }))}
+                        />
+                    )}
+                    <SliderWithInput label="Cell angle" value={cellAngle} onChange={onCellAngleChange} min={45} max={135} step={1} decimals={0} unit="°" />
+                    <SliderWithInput label="Cell ratio" value={cellRatio} onChange={onCellRatioChange} min={0.3} max={3.0} step={0.05} />
+                </ControlGroup>
+            )}
 
-                <span style={labelStyle(theme)}>Colormap</span>
-                <div style={buttonGroupStyle}>
-                    {COLORMAPS.map(c => (
-                        <button
-                            key={c.value}
-                            style={buttonStyle(colormap === c.value, theme)}
-                            onClick={() => onColormapChange(c.value)}
-                        >
-                            {c.label}
-                        </button>
-                    ))}
-                </div>
+            <ControlGroup label="Transform display">
+                <SegmentedControl aria-label="Quantity" value={displayMode} onChange={onDisplayModeChange} options={DISPLAY_MODES} />
+                <SegmentedControl aria-label="Colour map" value={colormap} onChange={onColormapChange} options={COLORMAPS} />
+                <SliderWithInput label="Gamma" value={gamma} onChange={onGammaChange} min={0.1} max={3.0} step={0.05} />
+            </ControlGroup>
 
-                <SliderWithInput
-                    label="Gamma"
-                    value={gamma}
-                    onChange={onGammaChange}
-                    min={0.1}
-                    max={3.0}
-                    step={0.05}
-                    theme={theme}
-                />
-            </div>
-
-            {/* Resolution (collapsed) */}
-            <CollapsibleSection title="Resolution" theme={theme}>
-                <span style={labelStyle(theme)}>FFT Size</span>
-                <div style={buttonGroupStyle}>
-                    <button
-                        style={buttonStyle(resolution === 256, theme)}
-                        onClick={() => onResolutionChange(256)}
-                    >
-                        256x256
-                    </button>
-                    <button
-                        style={buttonStyle(resolution === 512, theme)}
-                        onClick={() => onResolutionChange(512)}
-                    >
-                        512x512
-                    </button>
-                    <button
-                        style={buttonStyle(resolution === 1024, theme)}
-                        onClick={() => onResolutionChange(1024)}
-                    >
-                        1024x1024
-                    </button>
-                </div>
+            <CollapsibleSection title="Resolution">
+                <SegmentedControl<number> aria-label="FFT size" value={resolution} onChange={onResolutionChange} options={RESOLUTIONS} />
+                <ControlHint>Grid size of the FFT. Larger grids resolve finer detail but update more slowly.</ControlHint>
             </CollapsibleSection>
-        </div>
+        </>
     );
 };

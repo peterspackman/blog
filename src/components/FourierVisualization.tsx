@@ -1,45 +1,28 @@
-import React, { useState, useMemo, useRef, useLayoutEffect, useCallback, useEffect } from 'react';
-import { useVizTheme } from './shared/viz';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import BrowserOnly from '@docusaurus/BrowserOnly';
-import styles from './fourier/FourierVisualization.module.css';
+import Admonition from '@theme/Admonition';
+import {
+    useContainerSize,
+    useVizTheme,
+    VizExplanation,
+    VizPanel,
+    VizPanelSection,
+    VizPanelSplit,
+    VizPlotHeader,
+    VizSectionHeader,
+    VizWorkbench,
+} from './shared/viz';
+import { VizButton } from './shared/controls';
 
 import { InputPanel } from './fourier/InputPanel';
 import { FourierDisplay } from './fourier/FourierDisplay';
-import { FourierControls } from './fourier/FourierControls';
+import { FourierControls, PATTERN_TYPES } from './fourier/FourierControls';
 import { compute2DFFT, logNormalize, linearNormalize } from './fourier/fftCompute';
 import { generatePattern } from './fourier/patterns';
 import { FourierGPU } from './fourier/fourierGPU';
 import { DEFAULT_PARAMS, DEFAULT_DRAW_SETTINGS } from './fourier/types';
 import { getGroup, getDefaultLatticeParams, computeCellDims, getOpsAsFloats } from './fourier/symmetry';
 import type { InputMode, PatternType, DisplayMode, ColormapType, PackShape, PackPacking } from './fourier/types';
-import type { ControlTheme } from './shared/controls';
-
-function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
-    const [size, setSize] = useState({ width: 400, height: 400 });
-
-    useLayoutEffect(() => {
-        const updateSize = () => {
-            if (ref.current) {
-                const rect = ref.current.getBoundingClientRect();
-                setSize({
-                    width: Math.max(200, Math.floor(rect.width)),
-                    height: Math.max(200, Math.floor(rect.height)),
-                });
-            }
-        };
-
-        updateSize();
-
-        const resizeObserver = new ResizeObserver(updateSize);
-        if (ref.current) {
-            resizeObserver.observe(ref.current);
-        }
-
-        return () => resizeObserver.disconnect();
-    }, [ref]);
-
-    return size;
-}
 
 const PATTERN_HINTS: Record<PatternType, string> = {
     rectangle: 'A rectangle transforms to a sinc x sinc pattern (cross-shaped).',
@@ -53,14 +36,11 @@ const PATTERN_HINTS: Record<PatternType, string> = {
 };
 
 interface FourierVisualizationProps {
-    className?: string;
+    title: string;
 }
 
-const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ className }) => {
-    const vizTheme = useVizTheme();
-    const isDark = vizTheme.isDark;
-
-    const theme: ControlTheme = vizTheme.controls;
+const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ title }) => {
+    const theme = useVizTheme();
 
     // State
     const [inputMode, setInputMode] = useState<InputMode>('pattern');
@@ -135,14 +115,17 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
     const [interactiveData, setInteractiveData] = useState<Float32Array | null>(null);
 
     // Container refs & sizes (must be before GPU effect that depends on them)
-    const inputContentRef = useRef<HTMLDivElement>(null);
-    const outputContentRef = useRef<HTMLDivElement>(null);
+    // Fullscreen
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [inputContentRef, inputSize] = useContainerSize();
+    const [outputContentRef, outputSize] = useContainerSize();
 
-    const inputSize = useContainerSize(inputContentRef);
-    const outputSize = useContainerSize(outputContentRef);
-
-    const inputSquareSize = Math.min(inputSize.width - 16, inputSize.height - 16);
-    const outputSquareSize = Math.min(outputSize.width - 16, outputSize.height - 16);
+    // Square canvases fill their half of the card, capped so both fit on screen.
+    const viewportCap = typeof window !== 'undefined' ? window.innerHeight - (isFullscreen ? 140 : 300) : 600;
+    const squareFor = (w: number) => (w > 0 ? Math.max(200, Math.min(w, viewportCap)) : 0);
+    const inputSquareSize = squareFor(inputSize.width);
+    const outputSquareSize = squareFor(outputSize.width);
 
     // ── GPU path (pattern mode with WebGL 2 available) ──────────────────────
 
@@ -283,9 +266,6 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
         : displayMode === 'real' ? 'Re(F(k))'
         : 'Im(F(k))';
 
-    // Fullscreen
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [isFullscreen, setIsFullscreen] = useState(false);
 
     const prevResolutionRef = useRef(resolution);
 
@@ -328,241 +308,252 @@ const FourierVisualizationInner: React.FC<FourierVisualizationProps> = ({ classN
         return () => document.removeEventListener('keydown', handleKey);
     }, [isFullscreen]);
 
-    return (
-        <div
-            ref={containerRef}
-            className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''} ${className || ''}`}
-        >
-            <div className={styles.titleRow}>
-                <h2 className={styles.title}>Fourier Transform Visualizer</h2>
-                <button
-                    className={styles.fullscreenButton}
-                    onClick={toggleFullscreen}
-                    title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-                >
-                    {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                </button>
-            </div>
+    const patternLabel = PATTERN_TYPES.find((p) => p.value === patternType)?.label ?? patternType;
+    const inputLabel = inputMode === 'pattern' ? patternLabel : inputMode === 'draw' ? 'Drawing' : 'Uploaded image';
 
-            <div className={styles.mainGrid}>
-                {/* LEFT: Input Panel */}
-                <div className={styles.inputPanel}>
-                    <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>
-                            Input f(x,y)
-                        </h3>
-                    </div>
-                    <div className={styles.panelContent} ref={inputContentRef}>
-                        <div className={styles.viewerContainer}>
-                            {inputSquareSize > 100 && (
-                                useGPUPath && inputMode === 'pattern' ? (
-                                    <div style={{
-                                        position: 'relative',
-                                        width: inputSquareSize,
-                                        height: inputSquareSize,
-                                        borderRadius: '4px',
-                                        border: `1px solid ${theme.border}`,
-                                        overflow: 'hidden',
-                                        backgroundColor: '#000',
-                                    }}>
-                                        <canvas
-                                            ref={gpuInputCanvasRef}
-                                            width={inputSquareSize}
-                                            height={inputSquareSize}
-                                            style={{
+    return (
+        <>
+            <div
+                ref={containerRef}
+                style={
+                    isFullscreen
+                        ? {
+                              position: 'fixed',
+                              inset: 0,
+                              zIndex: 9999,
+                              overflow: 'auto',
+                              padding: '0.75rem',
+                              background: 'var(--ifm-background-color)',
+                          }
+                        : undefined
+                }
+            >
+                <VizWorkbench
+                    sidebar={
+                        <VizPanel stack>
+                <FourierControls
+                    inputMode={inputMode}
+                    onInputModeChange={setInputMode}
+                    patternType={patternType}
+                    onPatternTypeChange={setPatternType}
+                    displayMode={displayMode}
+                    onDisplayModeChange={setDisplayMode}
+                    colormap={colormap}
+                    onColormapChange={setColormap}
+                    gamma={gamma}
+                    onGammaChange={setGamma}
+                    resolution={resolution}
+                    onResolutionChange={setResolution}
+                    rectWidth={rectWidth}
+                    onRectWidthChange={setRectWidth}
+                    rectHeight={rectHeight}
+                    onRectHeightChange={setRectHeight}
+                    slitWidth={slitWidth}
+                    onSlitWidthChange={setSlitWidth}
+                    slitSeparation={slitSeparation}
+                    onSlitSeparationChange={setSlitSeparation}
+                    circleRadius={circleRadius}
+                    onCircleRadiusChange={setCircleRadius}
+                    gratingFrequency={gratingFrequency}
+                    onGratingFrequencyChange={setGratingFrequency}
+                    gratingAngle={gratingAngle}
+                    onGratingAngleChange={setGratingAngle}
+                    sigmaX={sigmaX}
+                    onSigmaXChange={setSigmaX}
+                    sigmaY={sigmaY}
+                    onSigmaYChange={setSigmaY}
+                    pointCount={pointCount}
+                    onPointCountChange={setPointCount}
+                    pointSpacing={pointSpacing}
+                    onPointSpacingChange={setPointSpacing}
+                    rhombusWidth={rhombusWidth}
+                    onRhombusWidthChange={setRhombusWidth}
+                    rhombusHeight={rhombusHeight}
+                    onRhombusHeightChange={setRhombusHeight}
+                    packShape={packShape}
+                    onPackShapeChange={setPackShape}
+                    packPacking={packPacking}
+                    onPackPackingChange={setPackPacking}
+                    packElementSize={packElementSize}
+                    onPackElementSizeChange={setPackElementSize}
+                    packSpacing={packSpacing}
+                    onPackSpacingChange={setPackSpacing}
+                    packEnvelopeRadius={packEnvelopeRadius}
+                    onPackEnvelopeRadiusChange={setPackEnvelopeRadius}
+                    wallpaperGroup={wallpaperGroup}
+                    onWallpaperGroupChange={handleWallpaperGroupChange}
+                    tiles={tiles}
+                    onTilesChange={setTiles}
+                    symmetryEnabled={symmetryEnabled}
+                    onSymmetryEnabledChange={setSymmetryEnabled}
+                    brushRadius={brushRadius}
+                    onBrushRadiusChange={setBrushRadius}
+                    cellAngle={cellAngle}
+                    onCellAngleChange={setCellAngle}
+                    cellRatio={cellRatio}
+                    onCellRatioChange={setCellRatio}
+                />
+                        </VizPanel>
+                    }
+                >
+                    <VizPanel flush>
+                        <VizPanelSection style={{ paddingBottom: 0 }}>
+                            <VizPlotHeader
+                                title={title}
+                                readout={
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        {inputLabel} · {resolution}×{resolution}
+                                        <VizButton variant="secondary" size="sm" onClick={toggleFullscreen}>
+                                            {isFullscreen ? 'Exit full screen' : 'Full screen'}
+                                        </VizButton>
+                                    </span>
+                                }
+                            />
+                        </VizPanelSection>
+                        <VizPanelSplit equal>
+                            <VizPanelSection>
+                                <VizSectionHeader title="Input f(x, y)" />
+                                <div ref={inputContentRef} style={{ display: 'grid', justifyItems: 'center', lineHeight: 0 }}>
+                                    {inputSquareSize > 0 && (
+                                        useGPUPath && inputMode === 'pattern' ? (
+                                            <div style={{
+                                                position: 'relative',
                                                 width: inputSquareSize,
                                                 height: inputSquareSize,
-                                            }}
-                                        />
-                                    </div>
-                                ) : (
-                                    <InputPanel
-                                        width={inputSquareSize}
-                                        height={inputSquareSize}
-                                        mode={inputMode}
-                                        data={activeData}
-                                        N={resolution}
-                                        onInteractiveData={handleInteractiveData}
-                                        wallpaperGroup={wallpaperGroup}
-                                        tiles={tiles}
-                                        symmetryEnabled={symmetryEnabled}
-                                        brushRadius={brushRadius}
-                                        cellAngle={cellAngle}
-                                        cellRatio={cellRatio}
-                                        theme={theme}
-                                        onRawBufferUpdate={useGPUPath ? handleRawBufferUpdate : undefined}
-                                    />
-                                )
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* CENTER: Output Panel */}
-                <div className={styles.outputPanel}>
-                    <div className={styles.panelHeader}>
-                        <h3 className={styles.panelTitle}>
-                            Fourier Transform F(k)
-                            <span style={{ fontWeight: 400, fontSize: '0.75rem', marginLeft: '0.5rem', opacity: 0.7 }}>
-                                {displayLabel}
-                            </span>
-                        </h3>
-                    </div>
-                    <div className={styles.panelContent} ref={outputContentRef}>
-                        <div className={styles.viewerContainer}>
-                            {outputSquareSize > 100 && (
-                                useGPUPath ? (
-                                    <div style={{
-                                        position: 'relative',
-                                        width: outputSquareSize,
-                                        height: outputSquareSize,
-                                        borderRadius: '4px',
-                                        border: `1px solid ${theme.border}`,
-                                        overflow: 'hidden',
-                                        backgroundColor: theme.surface || theme.inputBg,
-                                    }}>
-                                        <canvas
-                                            ref={gpuOutputCanvasRef}
-                                            width={outputSquareSize}
-                                            height={outputSquareSize}
-                                            style={{
+                                                borderRadius: 'var(--viz-radius)',
+                                                overflow: 'hidden',
+                                                // Intensity image: black is zero signal in both themes.
+                                                backgroundColor: '#000',
+                                            }}>
+                                                <canvas
+                                                    ref={gpuInputCanvasRef}
+                                                    width={inputSquareSize}
+                                                    height={inputSquareSize}
+                                                    style={{
+                                                        width: inputSquareSize,
+                                                        height: inputSquareSize,
+                                                    }}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <InputPanel
+                                                width={inputSquareSize}
+                                                height={inputSquareSize}
+                                                mode={inputMode}
+                                                data={activeData}
+                                                N={resolution}
+                                                onInteractiveData={handleInteractiveData}
+                                                wallpaperGroup={wallpaperGroup}
+                                                tiles={tiles}
+                                                symmetryEnabled={symmetryEnabled}
+                                                brushRadius={brushRadius}
+                                                cellAngle={cellAngle}
+                                                cellRatio={cellRatio}
+                                                theme={theme}
+                                                onRawBufferUpdate={useGPUPath ? handleRawBufferUpdate : undefined}
+                                            />
+                                        )
+                                    )}
+                                </div>
+                            </VizPanelSection>
+                            <VizPanelSection>
+                                <VizSectionHeader title="Transform F(k)" detail={displayLabel} />
+                                <div ref={outputContentRef} style={{ display: 'grid', justifyItems: 'center', lineHeight: 0 }}>
+                                    {outputSquareSize > 0 && (
+                                        useGPUPath ? (
+                                            <div style={{
+                                                position: 'relative',
                                                 width: outputSquareSize,
                                                 height: outputSquareSize,
-                                            }}
-                                        />
-                                        <canvas
-                                            ref={gpuOverlayCanvasRef}
-                                            width={outputSquareSize}
-                                            height={outputSquareSize}
-                                            style={{
-                                                position: 'absolute',
-                                                left: 0,
-                                                top: 0,
-                                                pointerEvents: 'none',
-                                            }}
-                                        />
-                                    </div>
-                                ) : (
-                                    <FourierDisplay
-                                        width={outputSquareSize}
-                                        height={outputSquareSize}
-                                        data={displayData}
-                                        N={resolution}
-                                        colormap={colormap}
-                                        gamma={gamma}
-                                        label={displayLabel}
-                                        theme={theme}
-                                    />
-                                )
+                                                borderRadius: 'var(--viz-radius)',
+                                                overflow: 'hidden',
+                                                backgroundColor: theme.canvas,
+                                            }}>
+                                                <canvas
+                                                    ref={gpuOutputCanvasRef}
+                                                    width={outputSquareSize}
+                                                    height={outputSquareSize}
+                                                    style={{
+                                                        width: outputSquareSize,
+                                                        height: outputSquareSize,
+                                                    }}
+                                                />
+                                                <canvas
+                                                    ref={gpuOverlayCanvasRef}
+                                                    width={outputSquareSize}
+                                                    height={outputSquareSize}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        left: 0,
+                                                        top: 0,
+                                                        pointerEvents: 'none',
+                                                    }}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <FourierDisplay
+                                                width={outputSquareSize}
+                                                height={outputSquareSize}
+                                                data={displayData}
+                                                N={resolution}
+                                                colormap={colormap}
+                                                gamma={gamma}
+                                                label={displayLabel}
+                                                theme={theme}
+                                            />
+                                        )
+                                    )}
+                                </div>
+                            </VizPanelSection>
+                        </VizPanelSplit>
+                    </VizPanel>
+                </VizWorkbench>
+            </div>
+
+            {!isFullscreen && (
+                <VizExplanation
+                    aside={
+                        <>
+                            {inputMode === 'pattern' && (
+                                <Admonition type="info" title={patternLabel}>
+                                    {PATTERN_HINTS[patternType]}
+                                </Admonition>
                             )}
-                        </div>
-                    </div>
-                </div>
-
-                {/* RIGHT: Settings Panel */}
-                <div className={styles.settingsPanel}>
-                    <FourierControls
-                        inputMode={inputMode}
-                        onInputModeChange={setInputMode}
-                        patternType={patternType}
-                        onPatternTypeChange={setPatternType}
-                        displayMode={displayMode}
-                        onDisplayModeChange={setDisplayMode}
-                        colormap={colormap}
-                        onColormapChange={setColormap}
-                        gamma={gamma}
-                        onGammaChange={setGamma}
-                        resolution={resolution}
-                        onResolutionChange={setResolution}
-                        rectWidth={rectWidth}
-                        onRectWidthChange={setRectWidth}
-                        rectHeight={rectHeight}
-                        onRectHeightChange={setRectHeight}
-                        slitWidth={slitWidth}
-                        onSlitWidthChange={setSlitWidth}
-                        slitSeparation={slitSeparation}
-                        onSlitSeparationChange={setSlitSeparation}
-                        circleRadius={circleRadius}
-                        onCircleRadiusChange={setCircleRadius}
-                        gratingFrequency={gratingFrequency}
-                        onGratingFrequencyChange={setGratingFrequency}
-                        gratingAngle={gratingAngle}
-                        onGratingAngleChange={setGratingAngle}
-                        sigmaX={sigmaX}
-                        onSigmaXChange={setSigmaX}
-                        sigmaY={sigmaY}
-                        onSigmaYChange={setSigmaY}
-                        pointCount={pointCount}
-                        onPointCountChange={setPointCount}
-                        pointSpacing={pointSpacing}
-                        onPointSpacingChange={setPointSpacing}
-                        rhombusWidth={rhombusWidth}
-                        onRhombusWidthChange={setRhombusWidth}
-                        rhombusHeight={rhombusHeight}
-                        onRhombusHeightChange={setRhombusHeight}
-                        packShape={packShape}
-                        onPackShapeChange={setPackShape}
-                        packPacking={packPacking}
-                        onPackPackingChange={setPackPacking}
-                        packElementSize={packElementSize}
-                        onPackElementSizeChange={setPackElementSize}
-                        packSpacing={packSpacing}
-                        onPackSpacingChange={setPackSpacing}
-                        packEnvelopeRadius={packEnvelopeRadius}
-                        onPackEnvelopeRadiusChange={setPackEnvelopeRadius}
-                        wallpaperGroup={wallpaperGroup}
-                        onWallpaperGroupChange={handleWallpaperGroupChange}
-                        tiles={tiles}
-                        onTilesChange={setTiles}
-                        symmetryEnabled={symmetryEnabled}
-                        onSymmetryEnabledChange={setSymmetryEnabled}
-                        brushRadius={brushRadius}
-                        onBrushRadiusChange={setBrushRadius}
-                        cellAngle={cellAngle}
-                        onCellAngleChange={setCellAngle}
-                        cellRatio={cellRatio}
-                        onCellRatioChange={setCellRatio}
-                        theme={theme}
-                    />
-                </div>
-            </div>
-
-            {/* Explanation section */}
-            <div className={styles.explanationContainer}>
-                <h3 className={styles.explanationTitle}>
-                    Understanding the Fourier Transform
-                </h3>
-                <p className={styles.explanationText}>
-                    The 2D Fourier transform decomposes a spatial pattern into its
-                    constituent spatial frequencies. Low frequencies (near the center)
-                    represent gradual changes, while high frequencies (near the edges)
-                    represent sharp features and fine detail. The magnitude shows how
-                    much of each frequency is present; the phase encodes where those
-                    features are located.
-                </p>
-
-                {inputMode === 'pattern' && (
-                    <div className={styles.explanationNote}>
-                        <strong>Current pattern:</strong> {PATTERN_HINTS[patternType]}
-                    </div>
-                )}
-
-                <ul className={styles.hintList}>
-                    <li><strong>Inverse relationship:</strong> a wider input feature produces a narrower FT, and vice versa.</li>
-                    <li><strong>Rotation:</strong> rotating the input rotates the FT by the same angle.</li>
-                    <li><strong>Periodicity:</strong> periodic structures produce discrete spots in the FT at the corresponding frequency.</li>
-                </ul>
-            </div>
-        </div>
+                            <Admonition type="tip" title="Try this">
+                                Make the rectangle narrower and watch its transform spread out; then switch to Draw, pick a
+                                wallpaper group and see the symmetry appear in the spots.
+                            </Admonition>
+                        </>
+                    }
+                >
+                    <h2>Understanding the Fourier transform</h2>
+                    <p>
+                        The 2D Fourier transform decomposes a spatial pattern into its constituent spatial frequencies.
+                        Low frequencies (near the centre) represent gradual changes, while high frequencies (near the
+                        edges) represent sharp features and fine detail. The magnitude shows how much of each frequency
+                        is present; the phase encodes where those features are located.
+                    </p>
+                    <ul>
+                        <li>
+                            <strong>Inverse relationship:</strong> a wider input feature produces a narrower transform,
+                            and vice versa.
+                        </li>
+                        <li>
+                            <strong>Rotation:</strong> rotating the input rotates the transform by the same angle.
+                        </li>
+                        <li>
+                            <strong>Periodicity:</strong> periodic structures produce discrete spots at the
+                            corresponding frequencies.
+                        </li>
+                    </ul>
+                </VizExplanation>
+            )}
+        </>
     );
 };
 
-const FourierVisualization: React.FC<FourierVisualizationProps> = (props) => {
-    return (
-        <BrowserOnly fallback={<div>Loading visualization...</div>}>
-            {() => <FourierVisualizationInner {...props} />}
-        </BrowserOnly>
-    );
-};
+const FourierVisualization: React.FC<FourierVisualizationProps> = (props) => (
+    <BrowserOnly fallback={<div style={{ minHeight: 560 }} />}>{() => <FourierVisualizationInner {...props} />}</BrowserOnly>
+);
 
 export default FourierVisualization;
