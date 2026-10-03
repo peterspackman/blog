@@ -251,7 +251,11 @@ const config: Config = {
             },
             {
               label: 'occ',
-              to: 'https://github.com/peterspackman/occ',
+              to: 'https://getocc.xyz',
+            },
+            {
+              label: 'mlip.cpp',
+              to: 'https://github.com/peterspackman/mlip.cpp',
             },
           ],
         },

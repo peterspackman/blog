@@ -58,7 +58,7 @@ export default function Utilities() {
       sections={SECTIONS}
       footer={
         <p>
-          Built with <a href="https://github.com/peterspackman/occ">OCC</a> for quantum chemistry,{' '}
+          Built with <a href="https://getocc.xyz">OCC</a> for quantum chemistry,{' '}
           <a href="https://www.rdkit.org/">RDKit.js</a> for cheminformatics, <a href="https://www.lammps.org/">LAMMPS</a>{' '}
           for molecular dynamics and <a href="https://nglviewer.org/">NGL</a> for 3D structures.
         </p>

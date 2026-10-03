@@ -1,181 +1,71 @@
 import React from 'react';
 import Layout from '@theme/Layout';
-import styles from './software.module.css';
 import Link from '@docusaurus/Link';
-
-type SoftwareProjectProps = {
-  title: string;
-  description: React.ReactNode;
-  imageUrl?: string;
-  link: string;
-  github?: string;
-  jsLink?: string;
-  language: string;
-};
-
-const SoftwareProject: React.FC<SoftwareProjectProps> = ({
-  title,
-  description,
-  imageUrl,
-  link,
-  github,
-  jsLink,
-  language,
-}) => {
-  return (
-    <div className={styles.projectCard}>
-      {imageUrl && (
-        <div className={styles.projectImageContainer}>
-          <img src={imageUrl} alt={title} className={styles.projectImage} />
-        </div>
-      )}
-      <div className={styles.projectContent}>
-        <h3 className={styles.projectTitle}>{title}</h3>
-        <div className={styles.projectLanguage}>{language}</div>
-        <div className={styles.projectDescription}>{description}</div>
-        <div className={styles.projectLinks}>
-          <Link className="button button--primary" to={link}>
-            Learn More
-          </Link>
-          {github && (
-            <Link className="button button--secondary" to={github}>
-              GitHub
-            </Link>
-          )}
-          {jsLink && (
-            <Link className="button button--secondary" to={jsLink}>
-              Try in Browser
-            </Link>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
+import { FEATURED, MORE, WEB_PACKAGES } from '../components/home/projects';
+import styles from './software.module.css';
 
 export default function Software() {
   return (
-    <Layout
-      title="Software"
-      description="Scientific software developed by Peter Spackman"
-    >
-      <main className={styles.softwarePage}>
-        <div className="container margin-vert--lg">
-          <div className={styles.projectsContainer}>
-            <SoftwareProject
-              title="Open Computational Chemistry (OCC)"
-              description={
-                <>
-                  <p>
-                    A modern framework for computational chemistry methods, with a focus on quantum
-                    chemistry and electronic structure theory. OCC aims to provide a flexible,
-                    efficient, and maintainable platform for implementing and applying quantum
-                    chemical methods.
-                  </p>
-                  <p>
-                    Features include Hartree-Fock, DFT, and post-HF methods for molecular systems,
-                    along with visualization capabilities and integration with other computational
-                    chemistry tools.
-                  </p>
-                </>
-              }
-              imageUrl="/img/occ.png"
-              link="https://peterspackman.github.io/occ"
-              github="https://github.com/peterspackman/occ"
-              jsLink="/utilities/wavefunction-calculator"
-              language="C++ / Python / JS"
-            />
+    <Layout title="Software" description="Software by Peter R. Spackman: OCC, CrystalExplorer, chmpy, mlip.cpp and more.">
+      <main className={styles.page}>
+        <header className={styles.header}>
+          <h1>Software</h1>
+          <p>Things I've written, nearly all open source and nearly all for computational chemistry.</p>
+        </header>
 
-            <SoftwareProject
-              title="CrystalExplorer"
-              description={
-                <>
-                  <p>
-                    A software tool for analysis and visualization of molecular crystal structures.
-                    CrystalExplorer enables researchers to explore intermolecular interactions,
-                    characterize crystal packing, and compute properties of crystalline materials.
-                  </p>
-                  <p>
-                    The software provides advanced visualization of Hirshfeld surfaces,
-                    interaction energies, and other properties relevant to understanding
-                    molecular crystal structures and their properties.
-                  </p>
-                </>
-              }
-              imageUrl="/img/CrystalExplorer512x512.png"
-              link="https://crystalexplorer.net"
-              language="C++ / Qt"
-            />
+        <section aria-label="Main projects" className={styles.featured}>
+          {FEATURED.map((p) => (
+            <article key={p.name} className={styles.row}>
+              <div className={styles.art}>
+                {p.image ? <img src={p.image} alt={`${p.name} logo`} /> : <span className={styles.glyph}>{p.name}</span>}
+              </div>
+              <div className={styles.body}>
+                <div className={styles.titleLine}>
+                  <h2>{p.name}</h2>
+                  {p.status && <span className={styles.status}>{p.status}</span>}
+                  <span className={styles.mono}>{p.languages}</span>
+                </div>
+                <p>{p.description}</p>
+                <div className={styles.links}>
+                  {p.href && <Link to={p.href}>{new URL(p.href).hostname}</Link>}
+                  {p.docs && <Link to={p.docs}>Documentation</Link>}
+                  {p.github && <Link to={p.github}>GitHub</Link>}
+                  {p.tryHref && <Link to={p.tryHref}>Try it in the browser</Link>}
+                </div>
+              </div>
+            </article>
+          ))}
+        </section>
 
-            <SoftwareProject
-              title="chmpy"
-              description={
-                <>
-                  <p>
-                    A python library for wrangling molecules, crystals, Hirshfeld & promolecule density isosurfaces, spherical harmonic shape descriptors and more...
-                  </p>
-                </>
-              }
-              imageUrl="/img/chmpy_logo.png"
-              link="https://peterspackman.github.io/chmpy/"
-              github="https://github.com/peterspackman/chmpy"
-              language="Python"
-            />
+        <section aria-labelledby="more">
+          <h2 id="more" className={styles.sectionTitle}>More projects</h2>
+          <p className={styles.sub}>Smaller libraries, experiments and ports. Some are more polished than others.</p>
+          <div className={styles.grid}>
+            {MORE.map((p) => (
+              <Link key={p.name} to={p.github} className={styles.card}>
+                <span className={styles.cardName}>{p.name}</span>
+                <span className={styles.cardDesc}>{p.description}</span>
+                <span className={styles.mono}>{p.languages}</span>
+              </Link>
+            ))}
           </div>
+          <Link to="https://github.com/peterspackman" className={styles.more}>Everything else is on GitHub →</Link>
+        </section>
 
-          <div className="margin-top--lg">
-            <h2 className="text--center">Visualizations</h2>
-            <p className="text--center">
-              Interactive (JS) visualizations of quantum mechanical concepts,
-              available on this website
-            </p>
-
-            <div className={styles.visualizationsContainer}>
-              <div className={styles.visualizationCard}>
-                <h3>Quantum Particle in 1D</h3>
-                <p>Visualization of quantum states in one-dimensional potentials</p>
-                <Link to="/qm1d" className="button button--outline button--primary">
-                  View Visualization
-                </Link>
+        <section aria-labelledby="web" className={styles.web}>
+          <h2 id="web" className={styles.sectionTitle}>Built for the browser</h2>
+          <p className={styles.sub}>The packages behind the tools on this site.</p>
+          <div className={styles.webGrid}>
+            {WEB_PACKAGES.map((w) => (
+              <div key={w.name} className={styles.webItem}>
+                <Link to={w.href} className={styles.cardName}>{w.name}</Link>
+                <span>
+                  {w.what} → <Link to={w.toolHref}>{w.tool}</Link>
+                </span>
               </div>
-
-              <div className={styles.visualizationCard}>
-                <h3>Quantum Particle in 2D</h3>
-                <p>Interactive visualization of 2D quantum states and superpositions</p>
-                <Link to="/qm2d" className="button button--outline button--primary">
-                  View Visualization
-                </Link>
-              </div>
-
-              <div className={styles.visualizationCard}>
-                <h3>Spherical harmonics</h3>
-                <p>3D rendering of spherical harmonics</p>
-                <Link to="/spherical-harmonics" className="button button--outline button--primary">
-                  View Visualization
-                </Link>
-              </div>
-
-              <div className={styles.visualizationCard}>
-                <h3>Bragg Diffraction</h3>
-                <p>Simulation of X-ray diffraction in crystals</p>
-                <Link to="/bragg" className="button button--outline button--primary">
-                  View Visualization
-                </Link>
-              </div>
-            </div>
+            ))}
           </div>
-
-          <div className="margin-top--xl text--center">
-            <h2>More Projects</h2>
-            <p>Visit my GitHub profile to see all my open-source projects</p>
-            <Link
-              className="button button--secondary button--lg"
-              to="https://github.com/peterspackman"
-            >
-              GitHub Profile
-            </Link>
-          </div>
-        </div>
+        </section>
       </main>
     </Layout>
   );

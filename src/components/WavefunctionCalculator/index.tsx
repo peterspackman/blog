@@ -767,7 +767,7 @@ const WavefunctionCalculator: React.FC<{ title: string }> = ({ title }) => {
 
                 <h3>Powered by OCC</h3>
                 <p>
-                  The computational engine is <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">OCC
+                  The computational engine is <a href="https://getocc.xyz" target="_blank" rel="noopener noreferrer">OCC
                   (Open Computational Chemistry)</a>, an open-source quantum chemistry library.
                   If you use this tool in your work, please cite:
                 </p>
