@@ -70,11 +70,12 @@ export const MORE: Project[] = [
         description: 'Kinetic Monte Carlo for crystal growth simulations.',
     },
     {
-        name: 'msevb-lammps',
-        github: 'https://github.com/peterspackman/msevb-lammps',
+        name: 'fix msevb',
+        github: 'https://github.com/blake-armstrong/lammps/tree/msevb-coupling-fep/src/MSEVB',
         languages: 'C++',
         blurb: 'MS-EVB in LAMMPS.',
-        description: 'Multistate empirical valence bond (MS-EVB) implementation in LAMMPS.',
+        description:
+            "Multistate empirical valence bond (MS-EVB) for LAMMPS, from our JCTC paper with Blake Armstrong. It lives in Blake's LAMMPS fork.",
     },
     {
         name: 'steinhardt_f90',
