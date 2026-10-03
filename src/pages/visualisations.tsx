@@ -42,6 +42,12 @@ const VISUALISATIONS: VizCard[] = [
       'Separation of variables for central potentials: Y_{l,m}(θ,φ), R_{nl}(r), and the full ψ_{nlm} with linear combinations and cartesian pedagogy.',
   },
   {
+    title: 'Bands from Molecular Orbitals',
+    href: '/bandstructure',
+    tag: 'Quantum',
+    description: 'Hückel chains and rings: discrete MO levels merging into a band, with filling, doping and Peierls gaps.',
+  },
+  {
     title: "Bragg's Law",
     href: '/bragg',
     tag: 'Crystallography',

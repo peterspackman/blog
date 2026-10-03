@@ -1,18 +1,15 @@
 import React from 'react';
-import Layout from '@theme/Layout';
-import BandStructureVisualization from '@site/src/components/BandStructureVisualization';
-import styles from './qm-visualizations.module.css';
+import BandStructure from '@site/src/components/bandstructure/BandStructure';
+import { VizPage } from '@site/src/components/shared/viz';
 
-export default function BandStructure() {
-  return (
-    <Layout
-      title="Band Structure Emergence"
-      description="Interactive visualization showing how molecular orbital levels merge into energy bands">
-      <main className={styles.mainContainerWide}>
-        <div className={styles.visualizationContainerFull}>
-          <BandStructureVisualization />
-        </div>
-      </main>
-    </Layout>
-  );
+export default function BandStructurePage() {
+    return (
+        <VizPage
+            titleInPlot
+            title="Bands from molecular orbitals"
+            description="Hückel model of polyene chains and rings: how discrete molecular orbital levels become an energy band, with filling, doping and Peierls distortion"
+        >
+            <BandStructure title="Bands from molecular orbitals" />
+        </VizPage>
+    );
 }
