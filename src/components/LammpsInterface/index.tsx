@@ -4,6 +4,7 @@ import { TabId, DEFAULT_SCRIPT } from './types';
 import { useLammpsWorker } from './hooks/useLammpsWorker';
 import { useLocalStorage, restoreFilesFromState } from './hooks/useLocalStorage';
 import { detectMainInputFile } from './utils/fileDetection';
+import { usesReducedUnits } from './utils/xyzElements';
 import { parseLammpsDataFile, lammpsDataToPDB, LammpsDataFile } from './utils/lammpsDataParser';
 import { InputTab } from './tabs/InputTab';
 import { OutputTab } from './tabs/OutputTab';
@@ -630,6 +631,7 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = ({ title }) => {
             elementMapping={elementMapping}
             onElementMappingChange={setElementMapping}
             bonds={lammpsData?.data.bonds.map(b => [b.atom1, b.atom2] as [number, number])}
+            reducedUnits={usesReducedUnits(inputScript)}
           />
         )}
       </div>

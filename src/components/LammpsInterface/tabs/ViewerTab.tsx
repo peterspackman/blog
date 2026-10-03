@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import styles from '../LammpsInterface.module.css';
 import { LammpsMass } from '../utils/lammpsDataParser';
+import { labelXYZ } from '../utils/xyzElements';
 
 // Lazy load TrajectoryViewer to avoid SSR issues
 const TrajectoryViewer = React.lazy(() => import('../../TrajectoryViewer'));
@@ -22,6 +23,8 @@ interface ViewerTabProps {
   onElementMappingChange?: (mapping: Map<number, string>) => void;
   // Explicit bonds from topology as [atom1, atom2] pairs (1-indexed)
   bonds?: [number, number][];
+  // Reduced (LJ) units: coordinates are in sigma, so distance-based bonds are meaningless
+  reducedUnits?: boolean;
 }
 
 export const ViewerTab: React.FC<ViewerTabProps> = ({
@@ -37,6 +40,7 @@ export const ViewerTab: React.FC<ViewerTabProps> = ({
   elementMapping,
   onElementMappingChange,
   bonds,
+  reducedUnits = false,
 }) => {
   // Check if we're in browser environment
   const isBrowser = typeof window !== 'undefined';
@@ -56,6 +60,15 @@ export const ViewerTab: React.FC<ViewerTabProps> = ({
       type: 'application/octet-stream'
     });
   }, [trajectoryBinaryContent, trajectoryFilename, trajectoryFormat, isBrowser]);
+
+  // Name numeric atom types in xyz dumps, and only let NGL guess bonds from
+  // distances when every atom is a real element in real (non-LJ) units.
+  const labelled = useMemo(
+    () => (trajectoryFormat === 'xyz' && trajectoryData ? labelXYZ(trajectoryData, elementMapping) : null),
+    [trajectoryData, trajectoryFormat, elementMapping],
+  );
+  const hasExplicitBonds = !!bonds && bonds.length > 0;
+  const guessBonds = !hasExplicitBonds && !reducedUnits && (labelled ? labelled.allElements : true);
 
   // Determine display mode
   const useBinaryMode = trajectoryFormat === 'dcd' && structureFile && trajectoryFile;
@@ -129,7 +142,7 @@ export const ViewerTab: React.FC<ViewerTabProps> = ({
                   structureFile={structureFile}
                   moleculeName="Initial Structure"
                   autoPlay={false}
-                  autoBond={!topologyFile?.hasExplicitBonds}
+                  autoBond={!topologyFile?.hasExplicitBonds && !reducedUnits}
                   atomTypes={atomTypes}
                   elementMapping={elementMapping}
                   onElementMappingChange={onElementMappingChange}
@@ -140,17 +153,17 @@ export const ViewerTab: React.FC<ViewerTabProps> = ({
                   trajectoryFile={trajectoryFile}
                   moleculeName="LAMMPS Trajectory"
                   autoPlay={false}
-                  autoBond={!topologyFile?.hasExplicitBonds}
+                  autoBond={!topologyFile?.hasExplicitBonds && !reducedUnits}
                   atomTypes={atomTypes}
                   elementMapping={elementMapping}
                   onElementMappingChange={onElementMappingChange}
                 />
               ) : (trajectoryFormat === 'xyz' || trajectoryFormat === 'lammpstrj') ? (
                 <TrajectoryViewer
-                  trajectoryData={trajectoryData!}
+                  trajectoryData={labelled?.text ?? trajectoryData!}
                   moleculeName="LAMMPS Trajectory"
                   autoPlay={false}
-                  autoBond={!bonds || bonds.length === 0}
+                  autoBond={guessBonds}
                   bonds={bonds}
                   atomTypes={atomTypes}
                   elementMapping={elementMapping}

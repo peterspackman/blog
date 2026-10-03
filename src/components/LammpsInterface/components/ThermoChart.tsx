@@ -26,7 +26,9 @@ const DEFAULT_ENABLED = [
   'press', 'volume', 'vol',
 ];
 
-const MAX_SELECTED = 2;
+// Each selected column gets its own stacked panel (own y scale, shared steps).
+const MAX_SELECTED = 4;
+const DEFAULT_SELECTED = 3;
 
 // Parse thermo output from LAMMPS console output
 const parseThermoOutput = (output: Array<{ text: string; isError: boolean }>): ThermoData => {
@@ -102,7 +104,7 @@ const parseThermoOutput = (output: Array<{ text: string; isError: boolean }>): T
 export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) => {
   const theme = useVizTheme();
   const [chartRef, chart] = useEChart();
-  // Ordered array of selected columns (max 2). First = left axis, second = right axis.
+  // Selected columns, oldest first; shown as stacked panels in column order.
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const prevColumnsRef = useRef<string>('');
 
@@ -123,16 +125,16 @@ export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) =
 
     if (plottableColumns.length === 0) return;
 
-    // Pick the first 2 defaults that are present in plottable columns
+    // Pick the first few defaults that are present in plottable columns
     const defaults: string[] = [];
     for (const col of plottableColumns) {
-      if (DEFAULT_ENABLED.includes(col.toLowerCase()) && defaults.length < MAX_SELECTED) {
+      if (DEFAULT_ENABLED.includes(col.toLowerCase()) && defaults.length < DEFAULT_SELECTED) {
         defaults.push(col);
       }
     }
-    // If nothing matched defaults, pick first two plottable columns
+    // If nothing matched defaults, pick the first plottable columns
     if (defaults.length === 0) {
-      defaults.push(...plottableColumns.slice(0, MAX_SELECTED));
+      defaults.push(...plottableColumns.slice(0, DEFAULT_SELECTED));
     }
     setSelectedColumns(defaults);
   }, [plottableColumns]);
@@ -164,17 +166,21 @@ export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) =
       return;
     }
 
-    const useDual = activeCols.length === 2;
     const axis = echartsAxis(theme);
-
-    const yAxis = activeCols.map((col, idx) => ({
-      ...axis,
-      type: 'value' as const,
-      position: idx === 0 ? ('left' as const) : ('right' as const),
-      scale: true,
-      axisLine: { show: true, lineStyle: { color: colorMap[col] } },
-      splitLine: idx === 0 ? axis.splitLine : { show: false },
-    }));
+    const n = activeCols.length;
+    // Stacked panels in percent of the chart height: room above each panel for
+    // its name, and below the last for the step labels.
+    const top = 7;
+    const bottom = 12;
+    const gap = n > 1 ? 9 : 0;
+    const height = (100 - top - bottom - gap * (n - 1)) / n;
+    const stepLabels = thermoData.step.map(String);
+    const formatStep = (value: string) => {
+      const num = parseInt(value);
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+      return value;
+    };
 
     // Vertical markers at run boundaries (between multiple "run" commands)
     const boundaryMarkLine = thermoData.runBoundaries.length > 0 ? {
@@ -185,48 +191,57 @@ export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) =
       data: thermoData.runBoundaries.map(step => ({ xAxis: String(step) })),
     } : undefined;
 
-    const series = activeCols.map((col, idx) => ({
-      name: col,
-      type: 'line' as const,
-      yAxisIndex: useDual ? idx : 0,
-      data: thermoData.series[col],
-      symbol: 'none',
-      itemStyle: { color: colorMap[col] },
-      lineStyle: { color: colorMap[col], width: 1.75 },
-      // Attach boundary markers to the first series only
-      ...(idx === 0 && boundaryMarkLine ? { markLine: boundaryMarkLine } : {}),
-    }));
-
     const option: echarts.EChartsOption = {
       ...echartsBase(theme),
       animation: false,
-      legend: { show: false },
-      grid: { left: 12, right: useDual ? 12 : 20, top: 16, bottom: 32, containLabel: true },
+      grid: activeCols.map((_, i) => ({
+        // Fixed margins so the panels' plot areas line up
+        left: 64,
+        right: 24,
+        top: `${top + i * (height + gap)}%`,
+        height: `${height}%`,
+      })),
       tooltip: {
         ...echartsBase(theme).tooltip,
         trigger: 'axis',
         axisPointer: { type: 'line', lineStyle: { color: theme.axis } },
       },
-      xAxis: {
+      axisPointer: { link: [{ xAxisIndex: 'all' }] },
+      xAxis: activeCols.map((_, i) => {
+        const last = i === n - 1;
+        return {
+          ...axis,
+          type: 'category' as const,
+          gridIndex: i,
+          data: stepLabels,
+          boundaryGap: false,
+          splitLine: { show: false },
+          axisLabel: { ...axis.axisLabel, show: last, formatter: formatStep },
+          ...(last ? { name: 'Step', nameLocation: 'middle' as const, nameGap: 26 } : {}),
+        };
+      }),
+      yAxis: activeCols.map((col, i) => ({
         ...axis,
-        type: 'category',
-        data: thermoData.step.map(String),
-        name: 'Step',
-        nameLocation: 'middle',
-        nameGap: 26,
-        splitLine: { show: false },
-        axisLabel: {
-          ...axis.axisLabel,
-          formatter: (value: string) => {
-            const num = parseInt(value);
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-            return value;
-          },
-        },
-      },
-      yAxis,
-      series,
+        type: 'value' as const,
+        gridIndex: i,
+        scale: true,
+        splitNumber: 3,
+        name: col,
+        nameLocation: 'end' as const,
+        nameGap: 8,
+        nameTextStyle: { ...axis.nameTextStyle, color: theme.text, fontWeight: 600, align: 'left' as const, padding: [0, 0, 0, -56] },
+      })),
+      series: activeCols.map((col, i) => ({
+        name: col,
+        type: 'line' as const,
+        xAxisIndex: i,
+        yAxisIndex: i,
+        data: thermoData.series[col],
+        symbol: 'none',
+        itemStyle: { color: colorMap[col] },
+        lineStyle: { color: colorMap[col], width: 1.75 },
+        ...(boundaryMarkLine ? { markLine: boundaryMarkLine } : {}),
+      })),
     };
 
     chart.setOption(option, true);
