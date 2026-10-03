@@ -45,13 +45,7 @@ const VISUALISATIONS: VizCard[] = [
     title: "Bragg's Law",
     href: '/bragg',
     tag: 'Crystallography',
-    description: 'Bragg scattering and wave interference from crystal planes.',
-  },
-  {
-    title: 'Crystal Structures',
-    href: '/crystals',
-    tag: 'Crystallography',
-    description: '3D crystal structures, unit cells, and Miller planes.',
+    description: 'Reflections from crystal planes, path difference and how intensity peaks sharpen with more planes.',
   },
   {
     title: 'Diffraction',
@@ -63,7 +57,7 @@ const VISUALISATIONS: VizCard[] = [
     title: 'Wulff Construction',
     href: '/wulff',
     tag: 'Crystallography',
-    description: '2D Wulff construction for equilibrium crystal shapes.',
+    description: 'Equilibrium crystal shapes from surface energies: the 2D construction and 3D cubic shapes.',
   },
   {
     title: 'Molecular Dynamics',

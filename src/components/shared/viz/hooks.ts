@@ -5,14 +5,19 @@ const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayout
 /**
  * Tracks an element's content-box size with a ResizeObserver.
  * Returns [ref, {width, height}]; sizes are 0 until first measured.
+ * The ref is a callback ref, so it also works for elements that mount
+ * later (e.g. inside a tab that isn't shown initially).
  */
 export function useContainerSize<T extends HTMLElement = HTMLDivElement>() {
-    const ref = useRef<T>(null);
+    const [el, setEl] = useState<T | null>(null);
+    const ref = useCallback((node: T | null) => setEl(node), []);
     const [size, setSize] = useState({ width: 0, height: 0 });
 
     useIsoLayoutEffect(() => {
-        const el = ref.current;
-        if (!el) return;
+        if (!el) {
+            setSize((s) => (s.width === 0 && s.height === 0 ? s : { width: 0, height: 0 }));
+            return;
+        }
         const update = (w: number, h: number) =>
             setSize((s) => (s.width === w && s.height === h ? s : { width: w, height: h }));
         const r = el.getBoundingClientRect();
@@ -23,7 +28,7 @@ export function useContainerSize<T extends HTMLElement = HTMLDivElement>() {
         });
         ro.observe(el);
         return () => ro.disconnect();
-    }, []);
+    }, [el]);
 
     return [ref, size] as const;
 }
