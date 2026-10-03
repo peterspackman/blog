@@ -34,7 +34,7 @@ export function runSCFWorker(
     callbacks: WorkerCallbacks,
     onComplete: (response: Extract<WorkerResponse, { type: 'exit' }>) => void,
 ): { terminate: () => void } {
-    const worker = new Worker('/occ-cli-worker.js');
+    const worker = new Worker('/occ-cli-worker.js', { type: 'module' });
     let hasExited = false;
 
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
@@ -100,7 +100,7 @@ export function runCubeWorker(
     callbacks: WorkerCallbacks,
     onComplete: (response: Extract<WorkerResponse, { type: 'exit' }>) => void,
 ): { terminate: () => void } {
-    const worker = new Worker('/occ-cli-worker.js');
+    const worker = new Worker('/occ-cli-worker.js', { type: 'module' });
     let hasExited = false;
 
     worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
