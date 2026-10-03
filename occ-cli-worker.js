@@ -1,19 +1,41 @@
-// CLI worker for running OCC calculations
-// Based on getocc's occ-run-worker.js pattern
+// CLI worker for running OCC calculations. One worker per run (fresh FS).
+//
+// occjs >= 0.9 ships occ.js as an ES module exporting the Emscripten factory,
+// so this must be spawned with { type: 'module' }. occ.js, occ.wasm and
+// occ.data are copied to /wasm/ by `npm run copy-wasm`.
+import createOccCliModule from '/wasm/occ.js';
 
-let commandData = null;
-let moduleReady = false;
 let outputBuffer = '';
 
 self.onmessage = async function(e) {
-    commandData = e.data;
-
-    if (moduleReady) {
-        executeCommand();
+    const commandData = e.data;
+    let Module;
+    try {
+        Module = await createOccCliModule({
+            print: (text) => {
+                outputBuffer += text + '\n';
+                self.postMessage({ type: 'output', text });
+            },
+            printErr: (text) => {
+                outputBuffer += text + '\n';
+                self.postMessage({ type: 'error', text });
+            },
+            onAbort: (msg) => {
+                self.postMessage({ type: 'error', text: `Module aborted: ${msg}` });
+                self.postMessage({ type: 'exit', code: 1, files: {}, stdout: outputBuffer });
+            },
+            locateFile: (path) => '/wasm/' + path,
+            noInitialRun: true,
+        });
+    } catch (error) {
+        self.postMessage({ type: 'error', text: `Failed to load occ.js: ${error && error.message}` });
+        self.postMessage({ type: 'exit', code: 1, files: {}, stdout: '' });
+        return;
     }
+    await executeCommand(Module, commandData);
 };
 
-function executeCommand() {
+async function executeCommand(Module, commandData) {
     const {
         command,
         xyzData,
@@ -144,8 +166,8 @@ function executeCommand() {
 
         self.postMessage({ type: 'ready' });
 
-        // Call main with arguments
-        const exitCode = Module.callMain(args);
+        // main() runs on a pthread; runMain resolves with its exit status.
+        const exitCode = await Module.runMain(args);
 
         // Collect output files from filesystem
         const outputFiles = {};
@@ -265,41 +287,4 @@ function executeCommand() {
             self.postMessage({ type: 'exit', code: 1, files: {}, stdout: outputBuffer });
         }
     }
-}
-
-// Set up Module configuration BEFORE loading
-var Module = {
-    print: (text) => {
-        outputBuffer += text + '\n';
-        self.postMessage({ type: 'output', text });
-    },
-    printErr: (text) => {
-        outputBuffer += text + '\n';
-        self.postMessage({ type: 'error', text });
-    },
-    onAbort: (msg) => {
-        self.postMessage({ type: 'error', text: `Module aborted: ${msg}` });
-        self.postMessage({ type: 'exit', code: 1, files: {}, stdout: outputBuffer });
-    },
-    onRuntimeInitialized: () => {
-        moduleReady = true;
-        if (commandData) {
-            executeCommand();
-        }
-    },
-    locateFile: (path) => {
-        if (path.endsWith('.wasm') || path.endsWith('.data')) {
-            return '/wasm/' + path;
-        }
-        return path;
-    },
-    noInitialRun: true
-};
-
-// Load the OCC module
-try {
-    importScripts('/wasm/occ.js');
-} catch (error) {
-    self.postMessage({ type: 'error', text: `Failed to load occ.js: ${error.message}` });
-    self.postMessage({ type: 'exit', code: 1, files: {}, stdout: '' });
 }
