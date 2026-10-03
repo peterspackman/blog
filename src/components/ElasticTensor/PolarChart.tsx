@@ -1,264 +1,117 @@
-import React, { useRef, useEffect } from 'react';
-import * as echarts from 'echarts';
-import { DirectionalData, getPropertyTitle, getPropertyUnit, calculateDirectionalDifferences, getComputedTensorColors, getComputedTensorColor } from './CommonFunctions';
+import React, { useMemo } from 'react';
+import { echartsAxis, echartsBase, useVizTheme } from '../shared/viz';
+import {
+  DirectionalData,
+  TensorDataset,
+  getPropertyUnit,
+  hasMinMax,
+  planeAxes,
+  saveImageToolbox,
+  tensorColor,
+} from './CommonFunctions';
+import { useEChart } from '../shared/viz/useEChart';
 
-interface MultiTensorDataset {
-  data: DirectionalData[];
-  tensorId: string;
-  name: string;
-  colorIndex: number;
+/** Smallest 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8 × 10^n at or above x, so the axis ends on a round number. */
+function niceCeil(x: number): number {
+  const pow = 10 ** Math.floor(Math.log10(x));
+  const m = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((f) => f * pow >= x) ?? 10;
+  return m * pow;
 }
 
+/** Polar cut of a property through one plane: radius = value in that direction. */
 const PolarChart: React.FC<{
   property: string;
   plane: string;
-  multiTensorData?: MultiTensorDataset[];
+  multiTensorData: TensorDataset<DirectionalData[]>[];
   showShading?: boolean;
-  showLegend?: boolean;
   showGridLines?: boolean;
-}> = ({ property, plane, multiTensorData, showShading = true, showLegend = true, showGridLines = true }) => {
-  const chartRef = useRef<HTMLDivElement>(null);
+}> = ({ property, plane, multiTensorData, showShading = true, showGridLines = true }) => {
+  const theme = useVizTheme();
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    
-    if (!multiTensorData || multiTensorData.length === 0) return;
-    
-    const colors = getComputedTensorColors();
+  const option = useMemo(() => {
+    if (multiTensorData.length === 0) return null;
+    const axes = planeAxes(plane);
+    const unit = getPropertyUnit(property);
+    const toXY = (r: number, d: DirectionalData) => [r * Math.cos(d.angleRad), r * Math.sin(d.angleRad)];
 
-    const chart = echarts.init(chartRef.current);
+    const maxVal = Math.max(
+      ...multiTensorData.flatMap((ds) => ds.data.map((d) => Math.abs(d.value))),
+      1e-9,
+    );
+    const lim = niceCeil(maxVal * 1.05);
 
-    // Process all datasets and find overall ranges
-    const processedDatasets = multiTensorData.map(dataset => {
-      const polarCoords = dataset.data.map(d => {
-        // If WASM method provided x, y coordinates, use them
-        if (d.x !== undefined && d.y !== undefined) {
-          return [d.x, d.y];
-        }
-
-        // Otherwise, calculate from angle and value
-        const angleRad = d.angleRad;
-        const radius = d.value;
-
-        // Convert to Cartesian coordinates for plotting
-        let x, y;
-        if (plane === 'xy') {
-          x = radius * Math.cos(angleRad);
-          y = radius * Math.sin(angleRad);
-        } else if (plane === 'xz') {
-          x = radius * Math.cos(angleRad);
-          y = radius * Math.sin(angleRad); // Using same mapping for visualization
-        } else { // yz plane
-          x = radius * Math.cos(angleRad);
-          y = radius * Math.sin(angleRad);
-        }
-
-        return [x, y];
+    const series: object[] = [];
+    for (const ds of multiTensorData) {
+      const color = tensorColor(theme, ds.colorIndex);
+      const line = {
+        type: 'line',
+        smooth: false,
+        // Small markers so the item tooltip has something to hover.
+        symbol: 'circle',
+        symbolSize: 3,
+        animation: false,
+        connectNulls: true,
+        itemStyle: { color },
+      };
+      // Prefer the worker's x/y when given (single-valued properties only).
+      const outer = ds.data.map((d) =>
+        !hasMinMax(property) && d.x !== undefined && d.y !== undefined ? [d.x, d.y] : toXY(d.value, d),
+      );
+      series.push({
+        ...line,
+        name: hasMinMax(property) ? `${ds.name} (max)` : ds.name,
+        data: outer,
+        lineStyle: { width: 2, color },
+        ...(showShading ? { areaStyle: { opacity: 0.18, color } } : {}),
       });
-      
-      return { ...dataset, polarCoords };
+      if (hasMinMax(property) && ds.data.some((d) => d.valueMin !== undefined && d.valueMin !== d.value)) {
+        series.push({
+          ...line,
+          name: `${ds.name} (min)`,
+          data: ds.data.map((d) => toXY(d.valueMin ?? d.value, d)),
+          lineStyle: { width: 2, color, type: 'dashed' },
+        });
+      }
+    }
+
+    const axis = (name: string) => ({
+      ...echartsAxis(theme),
+      type: 'value',
+      name,
+      nameLocation: 'center',
+      nameGap: 26,
+      min: -lim,
+      max: lim,
+      axisLabel: { ...echartsAxis(theme).axisLabel, formatter: (v: number) => String(+v.toPrecision(3)) },
+      splitLine: { ...echartsAxis(theme).splitLine, show: showGridLines },
     });
 
-    // Find the range for proper scaling across all datasets
-    const allValues = processedDatasets.flatMap(dataset => dataset.polarCoords.flat());
-    const maxVal = Math.max(...allValues.map(v => Math.abs(v)));
-
-    // Get value range for color mapping across all datasets
-    const allDataValues = processedDatasets.flatMap(dataset => dataset.data.map(d => d.value));
-    const minValue = Math.min(...allDataValues);
-    const maxValue = Math.max(...allDataValues);
-
-    // Get axis labels based on plane
-    const getAxisLabels = (plane: string) => {
-      switch (plane) {
-        case 'xy': return { x: 'X', y: 'Y' };
-        case 'xz': return { x: 'X', y: 'Z' };
-        case 'yz': return { x: 'Y', y: 'Z' };
-        default: return { x: 'X', y: 'Y' };
-      }
-    };
-
-    const axisLabels = getAxisLabels(plane);
-
-    const option = {
+    const base = echartsBase(theme);
+    return {
+      ...base,
       animation: false,
-      title: {
-        show: false
-      },
-      toolbox: {
-        show: true,
-        orient: 'vertical',
-        left: 'right',
-        top: 'top',
-        feature: {
-          saveAsImage: {
-            show: true,
-            title: 'Save as PNG',
-            backgroundColor: '#ffffff',
-            pixelRatio: 2,
-            excludeComponents: ['toolbox']
-          }
-        }
-      },
+      toolbox: saveImageToolbox(theme),
       tooltip: {
+        ...base.tooltip,
         trigger: 'item',
-        formatter: (params: any) => {
-          const [x, y] = params.data;
-          const radius = Math.sqrt(x * x + y * y);
-          const angle = Math.atan2(y, x) * 180 / Math.PI;
-          return `${axisLabels.x}: ${x.toFixed(2)}<br/>${axisLabels.y}: ${y.toFixed(2)}<br/>Value: ${radius.toFixed(3)} ${getPropertyUnit(property)}<br/>Angle: ${angle.toFixed(1)}°`;
-        }
-      },
-      grid: {
-        left: 90,
-        right: 50,
-        top: showLegend && multiTensorData.length > 1 ? 80 : 60,
-        bottom: 80,
-        borderWidth: 0
-      },
-      xAxis: {
-        type: 'value',
-        name: axisLabels.x,
-        nameLocation: 'center',
-        nameGap: 35,
-        min: -maxVal * 1.1,
-        max: maxVal * 1.1,
-        axisLabel: {
-          fontSize: 10,
-          formatter: (value: number) => value.toFixed(0),
-          margin: 15
+        formatter: (p: { seriesName: string; data: number[] }) => {
+          const [x, y] = p.data;
+          const r = Math.hypot(x, y);
+          const angle = (Math.atan2(y, x) * 180) / Math.PI;
+          return `${p.seriesName}<br/>${r.toFixed(3)} ${unit} at ${angle.toFixed(1)}° from ${axes.x}`;
         },
-        splitLine: {
-          show: showGridLines
-        }
       },
-      yAxis: {
-        type: 'value',
-        name: axisLabels.y,
-        nameLocation: 'center',
-        nameGap: 35,
-        min: -maxVal * 1.1,
-        max: maxVal * 1.1,
-        axisLabel: {
-          fontSize: 10,
-          formatter: (value: number) => value.toFixed(0),
-          margin: 15
-        },
-        splitLine: {
-          show: showGridLines
-        }
-      },
-      series: (() => {
-        const hasMinMax = property === 'shear' || property === 'poisson';
-        const series = [];
-
-        // Create a series for each tensor dataset
-        processedDatasets.forEach((dataset, index) => {
-          const color = getComputedTensorColor(dataset.colorIndex);
-          
-          if (hasMinMax) {
-            // Properties with min/max (shear, poisson) - show both min and max values
-            const maxCoords = dataset.data.map(d => {
-              const angleRad = d.angleRad;
-              const radius = d.value; // This is max value for these properties
-              return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-            });
-            
-            const minCoords = dataset.data.map(d => {
-              const angleRad = d.angleRad;
-              const radius = d.valueMin || d.value; // Use min value if available
-              return [radius * Math.cos(angleRad), radius * Math.sin(angleRad)];
-            });
-
-            // Max value series
-            series.push({
-              name: `${dataset.name} (Max)`,
-              type: 'line',
-              data: maxCoords,
-              smooth: false,
-              lineStyle: { width: 2, color: color, type: 'solid' },
-              ...(showShading ? { areaStyle: { opacity: 0.3, color: color } } : {}),
-              symbol: 'circle',
-              symbolSize: 3,
-              itemStyle: { color: color },
-              animation: false,
-              connectNulls: true
-            });
-
-            // Min value series (if different from max)
-            if (dataset.data.some(d => d.valueMin !== undefined && d.valueMin !== d.value)) {
-              series.push({
-                name: `${dataset.name} (Min)`,
-                type: 'line',
-                data: minCoords,
-                smooth: false,
-                lineStyle: { width: 2, color: color, type: 'dashed' },
-                symbol: 'circle',
-                symbolSize: 2,
-                itemStyle: { color: color },
-                animation: false,
-                connectNulls: true
-              });
-            }
-          } else {
-            // Single value properties (youngs, linear_compressibility)
-            series.push({
-              name: dataset.name,
-              type: 'line',
-              data: dataset.polarCoords,
-              smooth: false,
-              lineStyle: { width: 2, color: color, type: 'solid' },
-              ...(showShading ? { areaStyle: { opacity: 0.3, color: color } } : {}),
-              symbol: 'circle',
-              symbolSize: 3,
-              itemStyle: { color: color },
-              animation: false,
-              connectNulls: true
-            });
-          }
-        });
-
-        return series;
-      })(),
-      legend: {
-        show: showLegend && multiTensorData.length > 1,
-        top: 30,
-        textStyle: {
-          color: 'var(--ifm-color-emphasis-800)',
-          fontSize: 12
-        }
-      },
-      tooltip: {
-        trigger: 'item',
-        formatter: (params: any) => {
-          const [x, y] = params.data;
-          const radius = Math.sqrt(x * x + y * y);
-          const angle = Math.atan2(y, x) * 180 / Math.PI;
-          return `${axisLabels.x}: ${x.toFixed(2)}<br/>${axisLabels.y}: ${y.toFixed(2)}<br/>Value: ${radius.toFixed(3)} ${getPropertyUnit(property)}<br/>Angle: ${angle.toFixed(1)}°`;
-        }
-      },
-      grid: {
-        left: '10%',
-        right: '10%',
-        top: '15%',
-        bottom: '15%'
-      }
+      // Equal margins horizontally and vertically keep the square plot round.
+      grid: { left: 52, right: 16, top: 16, bottom: 52 },
+      xAxis: axis(axes.x),
+      yAxis: { ...axis(axes.y), nameGap: 36 },
+      series,
     };
+  }, [theme, property, plane, multiTensorData, showShading, showGridLines]);
 
-    chart.setOption(option);
-
-    const handleResize = () => chart.resize();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chart.dispose();
-    };
-  }, [property, plane, multiTensorData, showShading, showLegend, showGridLines]);
-
-  return <div ref={chartRef} style={{ width: '100%', height: '100%', aspectRatio: '1/1' }} />;
+  const [ref] = useEChart(option);
+  return <div ref={ref} style={{ width: '100%', aspectRatio: '1 / 1' }} />;
 };
 
 export { PolarChart };
 export default PolarChart;
-

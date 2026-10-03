@@ -1,5 +1,7 @@
 import React, { useState, useRef } from 'react';
+import { VizButton } from '../shared/controls';
 import styles from './ElasticTensor.module.css';
+import { EXAMPLE_TENSORS } from './examples';
 
 interface TensorToAdd {
   name: string;
@@ -100,70 +102,30 @@ export const AddTensorModal: React.FC<AddTensorModalProps> = ({
     }
   };
 
-  const loadExampleTensor = (example: string) => {
-    let data = '';
-    let name = '';
-    
-    if (example === 'silicon') {
-      data = `166  64  64   0   0   0
- 64 166  64   0   0   0
- 64  64 166   0   0   0
-  0   0   0  80   0   0
-  0   0   0   0  80   0
-  0   0   0   0   0  80`;
-      name = 'Silicon';
-    } else if (example === 'quartz') {
-      data = `48.137 11.411 12.783  0.000 -3.654  0.000
-11.411 34.968 14.749  0.000 -0.094  0.000
-12.783 14.749 26.015  0.000 -4.528  0.000
- 0.000  0.000  0.000 14.545  0.000  0.006
--3.654 -0.094 -4.528  0.000 10.771  0.000
- 0.000  0.000  0.000  0.006  0.000 11.947`;
-      name = 'Quartz';
-    }
-
-    setPendingTensors(prev => [...prev, {
-      name,
-      input: data,
-      source: 'paste'
-    }]);
+  const addExample = (example: (typeof EXAMPLE_TENSORS)[number]) => {
+    setPendingTensors(prev => [...prev, { name: example.name, input: example.input, source: 'paste' }]);
   };
 
   return (
     <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="add-tensors-title" onClick={(e) => e.stopPropagation()}>
         <div className={styles.modalHeader}>
-          <h3>Add Tensors</h3>
-          <button onClick={onClose} className={styles.closeButton}>×</button>
+          <h3 id="add-tensors-title">Add tensors</h3>
+          <button type="button" onClick={onClose} className={styles.closeButton} aria-label="Close">×</button>
         </div>
 
         <div className={styles.modalContent}>
-          {/* Drag and Drop Area */}
-          <div 
+          <div
             className={`${styles.dropZone} ${dragActive ? styles.dragActive : ''}`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
           >
-            <div className={styles.dropZoneContent}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14,2 14,8 20,8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
-                <polyline points="10,9 9,9 8,9"/>
-              </svg>
-              <div>
-                <p style={{ margin: '8px 0 4px 0' }}>Drop .txt files here or</p>
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className={styles.selectFilesButton}
-                >
-                  Select Files
-                </button>
-              </div>
-            </div>
+            <span>Drop .txt files here or</span>
+            <VizButton size="sm" onClick={() => fileInputRef.current?.click()}>
+              Select files
+            </VizButton>
           </div>
 
           <input
@@ -172,90 +134,72 @@ export const AddTensorModal: React.FC<AddTensorModalProps> = ({
             multiple
             accept=".txt,.dat"
             onChange={handleFileSelect}
-            style={{ display: 'none' }}
+            hidden
           />
 
-          {/* Manual Entry */}
-          <div className={styles.manualEntry}>
-            <h4>Or enter manually:</h4>
+          <div className={styles.modalSection}>
+            <h4>Or enter manually</h4>
             <input
               type="text"
               value={currentName}
               onChange={(e) => setCurrentName(e.target.value)}
               placeholder="Tensor name"
-              className={styles.tensorNameInput}
+              className={styles.input}
             />
             <textarea
               value={currentInput}
               onChange={(e) => setCurrentInput(e.target.value)}
-              placeholder="6x6 elastic stiffness matrix (GPa)..."
+              placeholder="6×6 stiffness matrix in GPa (full or upper triangle)"
               rows={6}
-              className={styles.tensorInput}
+              className={`${styles.input} ${styles.textarea}`}
             />
-            <button 
-              onClick={addFromPaste}
-              disabled={!currentInput.trim() || !currentName.trim()}
-              className={styles.addButton}
-            >
-              Add to List
-            </button>
+            <VizButton onClick={addFromPaste} disabled={!currentInput.trim() || !currentName.trim()}>
+              Add to list
+            </VizButton>
           </div>
 
-          {/* Quick Add Examples */}
-          <div className={styles.exampleSection}>
-            <h4>Quick add examples:</h4>
-            <div className={styles.exampleButtons}>
-              <button 
-                onClick={() => loadExampleTensor('silicon')}
-                className={styles.exampleButton}
-              >
-                Silicon
-              </button>
-              <button 
-                onClick={() => loadExampleTensor('quartz')}
-                className={styles.exampleButton}
-              >
-                Quartz
-              </button>
+          <div className={styles.modalSection}>
+            <h4>Examples</h4>
+            <div className={styles.buttonWrap}>
+              {EXAMPLE_TENSORS.map((ex) => (
+                <VizButton key={ex.name} size="sm" onClick={() => addExample(ex)}>
+                  {ex.name}
+                </VizButton>
+              ))}
             </div>
           </div>
 
-
-          {/* Pending Tensors List */}
           {pendingTensors.length > 0 && (
-            <div className={styles.pendingSection}>
-              <h4>Ready to add ({pendingTensors.length}):</h4>
-              <div className={styles.pendingList}>
+            <div className={styles.modalSection}>
+              <h4>Ready to add ({pendingTensors.length})</h4>
+              <ul className={styles.pendingList}>
                 {pendingTensors.map((tensor, index) => (
-                  <div key={index} className={styles.pendingItem}>
-                    <div className={styles.pendingInfo}>
-                      <strong>{tensor.name}</strong>
-                      <span className={styles.pendingSource}>({tensor.source})</span>
-                    </div>
+                  <li key={index} className={styles.pendingItem}>
+                    <span>
+                      <strong>{tensor.name}</strong> <span className={styles.pendingSource}>{tensor.source}</span>
+                    </span>
                     <button
+                      type="button"
                       onClick={() => removePending(index)}
-                      className={styles.removePending}
+                      className={`${styles.iconButton} ${styles.iconDanger}`}
+                      aria-label={`Remove ${tensor.name}`}
                     >
                       ×
                     </button>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
 
         <div className={styles.modalFooter}>
-          <button onClick={onClose} className={styles.cancelButton}>
+          <VizButton variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button 
-            onClick={handleAddAll}
-            disabled={pendingTensors.length === 0}
-            className={styles.addAllButton}
-          >
-            Add All ({pendingTensors.length})
-          </button>
+          </VizButton>
+          <VizButton variant="primary" onClick={handleAddAll} disabled={pendingTensors.length === 0}>
+            Add {pendingTensors.length || ''} {pendingTensors.length === 1 ? 'tensor' : 'tensors'}
+          </VizButton>
         </div>
       </div>
     </div>

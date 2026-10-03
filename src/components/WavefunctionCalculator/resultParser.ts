@@ -38,13 +38,6 @@ export function parseCalculationResults(
     const logs: ParseLog[] = [];
     const log = (message: string, level: ParseLog['level'] = 'info') => logs.push({ message, level });
 
-    // Parse energy from stdout
-    const energyMatch = stdout.match(/total\s+([-\d.]+)/);
-    if (!energyMatch) {
-        throw new Error('Could not parse energy from output');
-    }
-    const energy = parseFloat(energyMatch[1]);
-
     const convergedMatch = stdout.match(/converged after ([\d.]+) seconds/);
     const converged = convergedMatch !== null;
     const convergenceTime = convergedMatch ? parseFloat(convergedMatch[1]) * 1000 : 0;
@@ -68,6 +61,17 @@ export function parseCalculationResults(
     } catch (parseError: any) {
         log(`Failed to parse owf.json: ${parseError.message}`, 'error');
         throw parseError;
+    }
+
+    // Total energy: prefer the wavefunction file. In the log, match a line that
+    // is exactly "total <number>" (the last one), not e.g. "nuclear.total".
+    let energy = Number(owfJson?.energy?.total);
+    if (!Number.isFinite(energy)) {
+        const totals = [...stdout.matchAll(/^\s*total\s+(-?\d+\.\d+)\s*$/gm)];
+        if (totals.length === 0) {
+            throw new Error('Could not parse energy from output');
+        }
+        energy = parseFloat(totals[totals.length - 1][1]);
     }
 
     const result: CalculationResult = {

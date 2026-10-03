@@ -44,22 +44,18 @@
     flex-direction: column;
     gap: 0.375rem;
   }
-  
-  .exportButton {
-    width: 100%;
-  }
 }
 
 .energyCard, .statusCard, .propertiesCard {
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.5rem;
   padding: 1rem;
-  background-color: var(--ifm-background-surface-color);
+  background-color: var(--viz-surface);
 }
 
 .energyCard h4, .statusCard h4, .propertiesCard h4 {
   margin: 0 0 0.75rem 0;
-  color: var(--ifm-heading-color);
+  color: var(--viz-text);
   font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -75,12 +71,12 @@
 .primaryEnergy {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--ifm-color-primary);
+  color: var(--viz-accent);
 }
 
 .secondaryEnergy {
   font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
 }
 
 .statusInfo {
@@ -95,16 +91,16 @@
 }
 
 .converged {
-  color: var(--ifm-color-success);
+  color: var(--viz-success);
 }
 
 .notConverged {
-  color: var(--ifm-color-danger);
+  color: var(--viz-danger);
 }
 
 .timing {
   font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
 }
 
 .propertyList {
@@ -122,26 +118,25 @@
 
 .propertyLabel {
   font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
+  color: var(--viz-muted);
 }
 
 .propertyValue {
   font-weight: 600;
-  color: var(--ifm-color-emphasis-800);
+  color: var(--viz-text);
 }
-
 
 .exportSection {
   margin-top: 1rem;
   padding: 1rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.5rem;
-  background-color: var(--ifm-background-surface-color);
+  background-color: var(--viz-surface);
 }
 
 .exportSection h4 {
   margin: 0 0 0.75rem 0;
-  color: var(--ifm-heading-color);
+  color: var(--viz-text);
   font-size: 0.875rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -153,37 +148,10 @@
   gap: 0.5rem;
 }
 
-.exportButton {
-  background-color: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.exportButton:hover {
-  background-color: var(--ifm-color-primary-dark);
-}
-
-.exportButtonDisabled {
-  background-color: var(--ifm-color-emphasis-300) !important;
-  color: var(--ifm-color-emphasis-600) !important;
-  cursor: not-allowed !important;
-}
-
-.exportButtonDisabled:hover {
-  background-color: var(--ifm-color-emphasis-300) !important;
-}
-
-
 .noResults {
   text-align: center;
   padding: 3rem;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
 }
 
 .noResults h3 {
@@ -197,9 +165,9 @@
 .optimizationInfo {
   margin-top: 1rem;
   padding: 0.75rem;
-  background-color: var(--ifm-color-emphasis-100);
+  background-color: var(--viz-surface-subtle);
   border-radius: 0.375rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
 }
 
 .infoItem {
@@ -215,10 +183,10 @@
 }
 
 .infoItem span:first-child {
-  color: var(--ifm-color-emphasis-700);
+  color: var(--viz-muted);
   font-weight: 500;
 }
 
 .infoItem span:last-child {
-  color: var(--ifm-font-color-base);
+  color: var(--viz-text);
 }

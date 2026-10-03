@@ -1,1 +1,0 @@
-export { ElasticTensor } from './ElasticTensor/index';

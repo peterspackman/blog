@@ -1,246 +1,99 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
+import { useVizTheme, VizPanel, VizPanelSection, VizSectionHeader, VizWorkbench } from '../shared/viz';
+import { ControlGroup, ControlHint, SegmentedControl } from '../shared/controls';
+import { moleculeProperties, moleculeSvg, useRDKit } from '../shared/chem';
 import styles from './SmilesViewer.module.css';
 
-interface RDKitModule {
-  get_mol: (smiles: string) => any;
-  prefer_coordgen: (prefer: boolean) => void;
-}
+const EXAMPLES = [
+  { name: 'Aspirin', smiles: 'CC(=O)Oc1ccccc1C(=O)O' },
+  { name: 'Caffeine', smiles: 'CN1C=NC2=C1C(=O)N(C(=O)N2C)C' },
+  { name: 'Glucose', smiles: 'C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O' },
+  { name: 'Ibuprofen', smiles: 'CC(C)Cc1ccc(cc1)C(C)C(=O)O' },
+  { name: 'Penicillin G', smiles: 'CC1(C)S[C@@H]2[C@H](NC(=O)Cc3ccccc3)C(=O)N2[C@H]1C(=O)O' },
+  { name: 'Vitamin C', smiles: 'C([C@@H]([C@@H]1C(=C(C(=O)O1)O)O)O)O' },
+];
 
-declare global {
-  interface Window {
-    initRDKitModule: () => Promise<RDKitModule>;
-  }
-}
-
-interface MoleculeHistory {
-  smiles: string;
-  timestamp: Date;
-  formula?: string;
+/** C9H8O4 → C₉H₈O₄ with a superscript charge. */
+function Formula({ formula }: { formula: string }) {
+  const m = /^(.*?)(\d*[+−])?$/.exec(formula)!;
+  return (
+    <>
+      {m[1].split(/(\d+)/).map((part, i) => (i % 2 ? <sub key={i}>{part}</sub> : part))}
+      {m[2] && <sup>{m[2]}</sup>}
+    </>
+  );
 }
 
 export function SmilesViewer() {
-  const [smiles, setSmiles] = useState<string>('CC(=O)O');
-  const [error, setError] = useState<string>('');
-  const [rdkit, setRdkit] = useState<RDKitModule | null>(null);
-  const [svgContent, setSvgContent] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [history, setHistory] = useState<MoleculeHistory[]>([]);
-  const [molecularFormula, setMolecularFormula] = useState<string>('');
-  
-  // Initialize RDKit
-  useEffect(() => {
-    const initRDKit = async () => {
-      try {
-        if (window.initRDKitModule) {
-          const RDKitModule = await window.initRDKitModule();
-          RDKitModule.prefer_coordgen(true);
-          setRdkit(RDKitModule);
-          setLoading(false);
-          
-          // Visualize initial SMILES
-          if (smiles) {
-            visualizeMolecule(RDKitModule, smiles);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to initialize RDKit:', err);
-        setLoading(false);
-      }
-    };
-    
-    // Load RDKit script
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/@rdkit/rdkit/dist/RDKit_minimal.js';
-    script.onload = () => {
-      initRDKit();
-    };
-    document.head.appendChild(script);
-    
-    return () => {
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
-  }, []);
-  
-  // Visualize molecule from SMILES
-  const visualizeMolecule = (rdkitModule: RDKitModule, smilesStr: string) => {
-    try {
-      if (!smilesStr) {
-        setSvgContent('');
-        setMolecularFormula('');
-        return;
-      }
-      
-      const mol = rdkitModule.get_mol(smilesStr);
-      if (mol) {
-        const svg = mol.get_svg();
-        setSvgContent(svg);
-        
-        // Get molecular formula - using descriptors
-        try {
-          const descriptors = JSON.parse(mol.get_descriptors());
-          setMolecularFormula(descriptors.MolecularFormula || '');
-        } catch {
-          // If descriptors fail, just skip the formula
-          setMolecularFormula('');
-        }
-        
-        mol.delete();
-        setError('');
-      } else {
-        setSvgContent('');
-        setMolecularFormula('');
-        setError('Invalid SMILES string');
-      }
-    } catch (err) {
-      console.error('Failed to generate molecule visualization:', err);
-      setSvgContent('');
-      setMolecularFormula('');
-      setError('Failed to parse SMILES string');
-    }
-  };
-  
-  // Handle SMILES visualization
-  const handleVisualize = useCallback(() => {
-    if (!rdkit) {
-      setError('RDKit is still loading...');
-      return;
-    }
-    
-    visualizeMolecule(rdkit, smiles);
-    
-    // Add to history if successful
-    if (smiles && !error) {
-      const newEntry: MoleculeHistory = {
-        smiles,
-        timestamp: new Date(),
-        formula: molecularFormula
-      };
-      setHistory(prev => [newEntry, ...prev.filter(h => h.smiles !== smiles).slice(0, 9)]);
-    }
-  }, [smiles, rdkit, error, molecularFormula]);
-  
-  // Load from history
-  const loadFromHistory = (item: MoleculeHistory) => {
-    setSmiles(item.smiles);
-    setError('');
-    if (rdkit) {
-      visualizeMolecule(rdkit, item.smiles);
-    }
-  };
-  
-  // Example molecules
-  const examples = [
-    { name: 'Aspirin', smiles: 'CC(=O)Oc1ccccc1C(=O)O' },
-    { name: 'Caffeine', smiles: 'CN1C=NC2=C1C(=O)N(C(=O)N2C)C' },
-    { name: 'Glucose', smiles: 'C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O' },
-    { name: 'Ibuprofen', smiles: 'CC(C)Cc1ccc(cc1)C(C)C(=O)O' },
-    { name: 'Penicillin G', smiles: 'CC1(C)S[C@@H]2[C@H](NC(=O)Cc3ccccc3)C(=O)N2[C@H]1C(=O)O' },
-    { name: 'Vitamin C', smiles: 'C([C@@H]([C@@H]1C(=C(C(=O)O1)O)O)O)O' }
-  ];
-  
+  const theme = useVizTheme();
+  const { rdkit, error: loadError } = useRDKit();
+  const [smiles, setSmiles] = useState(EXAMPLES[0].smiles);
+  const input = useDeferredValue(smiles.trim());
+
+  const svg = useMemo(() => (rdkit ? moleculeSvg(rdkit, input, theme, { width: 520, height: 400 }) : null), [rdkit, input, theme]);
+  const props = useMemo(() => (rdkit ? moleculeProperties(rdkit, input) : null), [rdkit, input]);
+  const invalid = Boolean(rdkit && input && !svg);
+  const example = EXAMPLES.find((e) => e.smiles === smiles.trim())?.name ?? '';
+
+  const sidebar = (
+    <VizPanel stack>
+      <ControlGroup label="SMILES">
+        <textarea
+          className={styles.textarea}
+          value={smiles}
+          onChange={(e) => setSmiles(e.target.value)}
+          placeholder="e.g. CC(=O)O for acetic acid"
+          rows={3}
+          spellCheck={false}
+          aria-label="SMILES string"
+          aria-invalid={invalid}
+        />
+        {invalid ? (
+          <p className={styles.error}>RDKit can't parse this SMILES string.</p>
+        ) : (
+          <ControlHint>The structure updates as you type.</ControlHint>
+        )}
+      </ControlGroup>
+      <ControlGroup label="Examples">
+        <SegmentedControl<string>
+          aria-label="Example molecules"
+          columns={2}
+          value={example}
+          onChange={(name) => setSmiles(EXAMPLES.find((e) => e.name === name)!.smiles)}
+          options={EXAMPLES.map((e) => ({ value: e.name, label: e.name }))}
+        />
+      </ControlGroup>
+    </VizPanel>
+  );
+
+  let body: React.ReactNode;
+  if (loadError) body = <p className={styles.placeholder}>{loadError}. Check your connection and reload.</p>;
+  else if (!rdkit) body = <p className={styles.placeholder}>Loading RDKit…</p>;
+  else if (svg) body = <div className={styles.molecule} dangerouslySetInnerHTML={{ __html: svg }} />;
+  else body = <p className={styles.placeholder}>{input ? 'No structure to show.' : 'Enter a SMILES string to draw it.'}</p>;
+
   return (
-    <div className={styles.container}>
-      <div className={styles.mainContent}>
-        <div className={styles.inputSection}>
-          <div className={styles.card}>
-            <h3>Input SMILES String</h3>
-            <textarea
-              value={smiles}
-              onChange={(e) => setSmiles(e.target.value)}
-              className={styles.textarea}
-              placeholder="Enter SMILES string (e.g., CC(=O)O for acetic acid)"
-              rows={3}
-            />
-            
-            <div className={styles.buttonGroup}>
-              <button 
-                onClick={handleVisualize} 
-                className="button button--primary"
-                disabled={loading || !smiles}
-              >
-                Visualize Molecule
-              </button>
-            </div>
-            
-            {error && (
-              <div className={styles.error}>
-                {error}
-              </div>
-            )}
-          </div>
-          
-          <div className={styles.card}>
-            <h3>Example Molecules</h3>
-            <div className={styles.exampleGrid}>
-              {examples.map((example) => (
-                <button
-                  key={example.name}
-                  onClick={() => {
-                    setSmiles(example.smiles);
-                    if (rdkit) {
-                      visualizeMolecule(rdkit, example.smiles);
-                    }
-                  }}
-                  className={styles.exampleButton}
-                  disabled={loading}
-                >
-                  {example.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        <div className={styles.outputSection}>
-          <div className={styles.card}>
-            <h3>Molecule Visualization</h3>
-            
-            {loading ? (
-              <div className={styles.loading}>Loading RDKit...</div>
-            ) : svgContent ? (
-              <>
-                <div className={styles.moleculeDisplay}>
-                  <div dangerouslySetInnerHTML={{ __html: svgContent }} />
-                </div>
-                {molecularFormula && (
-                  <div className={styles.moleculeInfo}>
-                    <strong>Molecular Formula:</strong> {molecularFormula}
-                  </div>
-                )}
-                <div className={styles.moleculeInfo}>
-                  <strong>SMILES:</strong> <code>{smiles}</code>
-                </div>
-              </>
-            ) : (
-              <div className={styles.placeholder}>
-                Enter a SMILES string and click "Visualize Molecule" to see the structure
-              </div>
-            )}
-          </div>
-          
-          {history.length > 0 && (
-            <div className={styles.card}>
-              <h3>Recent Molecules</h3>
-              <div className={styles.historyList}>
-                {history.map((item, index) => (
-                  <div 
-                    key={`${item.smiles}-${index}`}
-                    className={styles.historyItem}
-                    onClick={() => loadFromHistory(item)}
-                  >
-                    <code className={styles.historySmiles}>{item.smiles}</code>
-                    {item.formula && (
-                      <span className={styles.historyFormula}>{item.formula}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <VizWorkbench sidebar={sidebar}>
+      <VizPanel flush>
+        <VizPanelSection>
+          <VizSectionHeader title={example || 'Structure'} detail={props && <Formula formula={props.formula} />} />
+          <div className={styles.stage}>{body}</div>
+        </VizPanelSection>
+        {props && svg && (
+          <VizPanelSection>
+            <dl className={styles.properties}>
+              <div><dt>Formula</dt><dd><Formula formula={props.formula} /></dd></div>
+              <div><dt>Mass</dt><dd>{props.mw.toFixed(2)} g/mol</dd></div>
+              <div><dt>Heavy atoms</dt><dd>{props.heavyAtoms}</dd></div>
+              <div><dt>Rings</dt><dd>{props.rings}</dd></div>
+              <div><dt>H-bond donors</dt><dd>{props.hbd}</dd></div>
+              <div><dt>H-bond acceptors</dt><dd>{props.hba}</dd></div>
+              <div><dt>TPSA</dt><dd>{props.tpsa.toFixed(1)} Å²</dd></div>
+              <div><dt>cLogP</dt><dd>{props.logP.toFixed(2)}</dd></div>
+            </dl>
+          </VizPanelSection>
+        )}
+      </VizPanel>
+    </VizWorkbench>
   );
 }

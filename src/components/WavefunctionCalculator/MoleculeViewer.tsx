@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as NGL from 'ngl';
+import { useVizTheme } from '../shared/viz';
+import { CollapsibleSection, Select, ToggleSwitch, VizButton } from '../shared/controls';
 import styles from './MoleculeViewer.module.css';
 import OrbitalItem from './OrbitalItem';
 import { getOrbitalList } from './types';
@@ -18,6 +20,20 @@ interface MoleculeViewerProps {
 
 type RepresentationType = 'ball+stick' | 'line' | 'spacefill' | 'surface' | 'cartoon' | 'licorice';
 
+const REPRESENTATIONS: { value: RepresentationType; label: string }[] = [
+  { value: 'ball+stick', label: 'Ball and stick' },
+  { value: 'line', label: 'Line' },
+  { value: 'spacefill', label: 'Space fill' },
+  { value: 'licorice', label: 'Licorice' },
+  { value: 'surface', label: 'Surface' },
+];
+
+const COLOR_SCHEMES = [
+  { value: 'element', label: 'Colour by element' },
+  { value: 'uniform', label: 'Uniform colour' },
+  { value: 'random', label: 'Random colours' },
+];
+
 const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   xyzData,
   moleculeName = 'Molecule',
@@ -28,6 +44,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   onRequestCubeComputation,
   onOpenCubeSettings
 }) => {
+  const viz = useVizTheme();
   const stageRef = useRef<HTMLDivElement>(null);
   const nglStageRef = useRef<NGL.Stage | null>(null);
   const componentRef = useRef<any>(null);
@@ -58,7 +75,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [gridSteps, setGridSteps] = useState<number>(cubeSettings?.gridSteps || 50);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [isMOSettingsExpanded, setIsMOSettingsExpanded] = useState<boolean>(true);
   const [showGridBounds, setShowGridBounds] = useState<boolean>(false);
   const gridBoundsComponentRef = useRef<any>(null);
   const [lastGridInfo, setLastGridInfo] = useState<any>(null);
@@ -68,7 +84,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [slicePosition, setSlicePosition] = useState<number>(0);
   const [colorScale, setColorScale] = useState<string>('rwb');
   const [colorRange, setColorRange] = useState<[number, number]>([0, 0.05]);
-  const [isColorRangeExpanded, setIsColorRangeExpanded] = useState<boolean>(false);
 
   // Sync gridSteps with cubeSettings when it changes
   useEffect(() => {
@@ -77,18 +92,12 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
     }
   }, [cubeSettings?.gridSteps]);
 
-  // Get theme-aware background color
-  const getBackgroundColor = () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    return isDark ? '#1b1b1d' : '#ffffff';
-  };
-
   useEffect(() => {
     if (!stageRef.current) return;
 
     // Initialize NGL Stage with more tolerant clipping planes
     nglStageRef.current = new NGL.Stage(stageRef.current, {
-      backgroundColor: getBackgroundColor(),
+      backgroundColor: viz.surface,
       quality: 'medium',
       clipNear: 0.000001,  // Very small near clipping plane
       clipFar: 100,
@@ -106,28 +115,17 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
     window.addEventListener('resize', handleResize);
 
-    // Listen for theme changes
-    const handleThemeChange = () => {
-      if (nglStageRef.current) {
-        nglStageRef.current.setParameters({ backgroundColor: getBackgroundColor() });
-      }
-    };
-
-    // Use MutationObserver to watch for theme changes
-    const observer = new MutationObserver(handleThemeChange);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
-
     return () => {
       window.removeEventListener('resize', handleResize);
-      observer.disconnect();
       if (nglStageRef.current) {
         nglStageRef.current.dispose();
       }
     };
   }, []);
+
+  useEffect(() => {
+    nglStageRef.current?.setParameters({ backgroundColor: viz.surface });
+  }, [viz.surface]);
 
   // Convert XYZ format to SDF format with bond guessing
   const convertXYZToSDF = (xyzData: string, moleculeName: string): string => {
@@ -580,7 +578,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       }
 
       const moComponents = [];
-      const colors = ['#4A90E2', '#FF8C42', '#7B68EE', '#32CD32', '#FF6B6B', '#9B59B6'];
+      const colors = viz.series;
 
       // If no orbitals selected, clear everything and return
       if (selectedOrbitals.size === 0) {
@@ -640,7 +638,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
                   visible: true,
                   isolevelType: 'value',
                   isolevel: -isosurfaceValue,
-                  color: 'red',
+                  color: viz.negative,
                   opacity: opacity,
                   opaqueBack: false
                 });
@@ -662,7 +660,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
                   visible: true,
                   isolevelType: 'value',
                   isolevel: -isosurfaceValue,
-                  color: 'red',
+                  color: viz.negative,
                   opacity: opacity,
                   wireframe: true,
                   linewidth: 2
@@ -834,7 +832,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
         // Add wireframe representation
         boundsComponent.addRepresentation('line', {
           colorScheme: 'uniform',
-          colorValue: '#ff6b6b',
+          colorValue: viz.accent,
           linewidth: 2,
           opacity: 0.7
         });
@@ -876,58 +874,23 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h4>3D Structure & Molecular Orbitals</h4>
-        <div className={styles.controls}>
-          <button 
-            className={styles.controlButton}
-            onClick={resetView}
-            title="Reset view"
-          >
-            ⌂
-          </button>
-          <button 
-            className={styles.controlButton}
-            onClick={toggleFullscreen}
-            title="Toggle fullscreen"
-          >
-            ⛶
-          </button>
-        </div>
+      <div className={styles.toolbar}>
+        <Select<RepresentationType>
+          aria-label="Structure style"
+          value={representation}
+          onChange={setRepresentation}
+          options={REPRESENTATIONS}
+        />
+        <Select
+          aria-label="Atom colours"
+          value={colorScheme}
+          onChange={setColorScheme}
+          options={COLOR_SCHEMES}
+        />
+        <span className={styles.toolbarSpacer} />
+        <VizButton size="sm" variant="ghost" onClick={resetView} title="Reset view">Reset view</VizButton>
+        <VizButton size="sm" variant="ghost" onClick={toggleFullscreen} title="Toggle fullscreen">Fullscreen</VizButton>
       </div>
-      
-      <div className={styles.representationControls}>
-        {/* Structure Controls */}
-        <div className={styles.inlineControlGroup}>
-          <label className={styles.controlLabel}>Style</label>
-          <select 
-            value={representation} 
-            onChange={(e) => setRepresentation(e.target.value as RepresentationType)}
-            className={styles.controlSelect}
-          >
-            <option value="ball+stick">Ball & Stick</option>
-            <option value="line">Line</option>
-            <option value="spacefill">Space Fill</option>
-            <option value="licorice">Licorice</option>
-            <option value="surface">Surface</option>
-          </select>
-        </div>
-        
-        <div className={styles.inlineControlGroup}>
-          <label className={styles.controlLabel}>Color</label>
-          <select 
-            value={colorScheme} 
-            onChange={(e) => setColorScheme(e.target.value)}
-            className={styles.controlSelect}
-          >
-            <option value="element">By Element</option>
-            <option value="uniform">Uniform</option>
-            <option value="chainname">By Chain</option>
-            <option value="random">Random</option>
-          </select>
-        </div>
-      </div>
-
 
       <div className={styles.mainContent}>
         <div className={styles.viewerContainer}>
@@ -975,31 +938,22 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
             </div>
 
             {/* Settings - Collapsible */}
-            <div className={styles.collapsibleSection}>
-              <button 
-                className={styles.lightSectionHeader}
-                onClick={() => setIsMOSettingsExpanded(!isMOSettingsExpanded)}
-              >
-                <span>Settings</span>
-                <span className={`${styles.chevron} ${isMOSettingsExpanded ? styles.chevronExpanded : ''}`}>
-                  ▼
-                </span>
-              </button>
-              {isMOSettingsExpanded && (
-                <div className={styles.sectionContent}>
+            <div className={styles.moSettings}>
+              <CollapsibleSection title="Surface settings" defaultExpanded>
                   <div className={styles.moControls}>
                   <div className={styles.controlGroup}>
                     <label className={styles.controlLabel}>Style</label>
-                    <select 
+                    <Select<'surface' | 'wireframe' | 'dot' | 'slice'>
+                      aria-label="Orbital style"
                       value={orbitalRenderStyle}
-                      onChange={(e) => setOrbitalRenderStyle(e.target.value as 'surface' | 'wireframe' | 'dot' | 'slice')}
-                      className={styles.controlSelect}
-                    >
-                      <option value="surface">Surface</option>
-                      <option value="wireframe">Wireframe</option>
-                      <option value="dot">Dot Volume</option>
-                      <option value="slice">Slice Volume</option>
-                    </select>
+                      onChange={setOrbitalRenderStyle}
+                      options={[
+                        { value: 'surface', label: 'Surface' },
+                        { value: 'wireframe', label: 'Wireframe' },
+                        { value: 'dot', label: 'Dot volume' },
+                        { value: 'slice', label: 'Slice volume' },
+                      ]}
+                    />
                   </div>
 
                   {(orbitalRenderStyle === 'surface' || orbitalRenderStyle === 'wireframe') && (
@@ -1021,26 +975,21 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                     <>
                       <div className={styles.controlGroup}>
                         <label className={styles.controlLabel}>Slice Direction</label>
-                        <select 
+                        <Select<'x' | 'y' | 'z'>
+                          aria-label="Slice direction"
                           value={sliceDirection}
-                          onChange={(e) => setSliceDirection(e.target.value as 'x' | 'y' | 'z')}
-                          className={styles.controlSelect}
-                        >
-                          <option value="x">X-axis</option>
-                          <option value="y">Y-axis</option>
-                          <option value="z">Z-axis</option>
-                        </select>
+                          onChange={setSliceDirection}
+                          options={[
+                            { value: 'x', label: 'x' },
+                            { value: 'y', label: 'y' },
+                            { value: 'z', label: 'z' },
+                          ]}
+                        />
                       </div>
                       <div className={styles.controlGroup}>
                         <label className={styles.controlLabel}>Slice Position</label>
                         <div className={styles.slicePositionControls}>
-                          <button 
-                            onClick={() => setSlicePosition(slicePosition - 0.5)}
-                            className={styles.controlButton}
-                            title="Move slice by -0.5"
-                          >
-                            -
-                          </button>
+                          <VizButton size="sm" onClick={() => setSlicePosition(slicePosition - 0.5)} title="Move slice by -0.5">−</VizButton>
                           <input 
                             type="number" 
                             step="0.1" 
@@ -1049,27 +998,10 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                             className={styles.numberInput}
                             title="Slice position in Angstroms"
                           />
-                          <button 
-                            onClick={() => setSlicePosition(slicePosition + 0.5)}
-                            className={styles.controlButton}
-                            title="Move slice by +0.5"
-                          >
-                            +
-                          </button>
+                          <VizButton size="sm" onClick={() => setSlicePosition(slicePosition + 0.5)} title="Move slice by +0.5">+</VizButton>
                         </div>
                       </div>
-                      <div className={styles.collapsibleControl}>
-                        <button 
-                          className={styles.controlToggle}
-                          onClick={() => setIsColorRangeExpanded(!isColorRangeExpanded)}
-                        >
-                          <span className={styles.controlLabel}>Color Range</span>
-                          <span className={`${styles.chevron} ${isColorRangeExpanded ? styles.chevronExpanded : ''}`}>
-                            ▼
-                          </span>
-                        </button>
-                        {isColorRangeExpanded && (
-                          <div className={styles.controlContent}>
+                      <CollapsibleSection title="Colour range">
                             <div className={styles.colorRangeGrid}>
                               <div className={styles.controlGroup}>
                                 <label className={styles.controlLabel}>Minimum</label>
@@ -1094,9 +1026,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                                 />
                               </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
+                      </CollapsibleSection>
                     </>
                   )}
 
@@ -1127,27 +1057,15 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                       title="Number of grid points per dimension (higher = more detail, slower)"
                     />
                     {cubeGridInfo && (
-                      <label className={styles.checkboxLabel}>
-                        <input
-                          type="checkbox"
-                          checked={showGridBounds}
-                          onChange={(e) => setShowGridBounds(e.target.checked)}
-                          className={styles.checkbox}
-                        />
-                        Bounds
-                      </label>
+                      <ToggleSwitch label="Bounds" checked={showGridBounds} onChange={setShowGridBounds} />
                     )}
                   </div>
 
                   {onOpenCubeSettings && (
                     <div className={styles.controlGroup}>
-                      <button
-                        className={styles.cubeSettingsButton}
-                        onClick={onOpenCubeSettings}
-                        title="Advanced cube generation settings"
-                      >
-                        ⚙ Cube Settings...
-                      </button>
+                      <VizButton block size="sm" onClick={onOpenCubeSettings} title="Advanced cube generation settings">
+                        Cube settings…
+                      </VizButton>
                     </div>
                   )}
 
@@ -1157,10 +1075,8 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                     </div>
                   )}
                   </div>
-                </div>
-              )}
+              </CollapsibleSection>
             </div>
-
 
             {/* Orbital List */}
             {(() => {

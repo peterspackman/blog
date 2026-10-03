@@ -1,30 +1,23 @@
 import React, { useEffect } from 'react';
-import Layout from '@theme/Layout';
+import { VizPage } from '@site/src/components/shared/viz';
 import WavefunctionCalculator from '@site/src/components/WavefunctionCalculator';
+
+const TITLE = 'Wavefunction calculator';
 
 export default function WavefunctionCalculatorPage() {
   useEffect(() => {
-    // Load coi-serviceworker for COOP/COEP headers needed by WASM
+    // coi-serviceworker sets the COOP/COEP headers the WASM threads need. It
+    // declares globals, so inject it at most once per document.
+    if (document.querySelector('script[src="/coi-serviceworker.js"]')) return;
     const script = document.createElement('script');
     script.src = '/coi-serviceworker.js';
     script.async = true;
     document.head.appendChild(script);
-
-    return () => {
-      // Cleanup on unmount
-      if (script.parentNode) {
-        script.parentNode.removeChild(script);
-      }
-    };
   }, []);
 
   return (
-    <Layout
-      title="Wavefunction Calculator"
-      description="Quantum Chemistry Calculations in Your Browser">
-      <main style={{ minHeight: 'calc(100vh - 60px)' }}>
-        <WavefunctionCalculator />
-      </main>
-    </Layout>
+    <VizPage title={TITLE} description="Quantum chemistry calculations in your browser" titleInPlot>
+      <WavefunctionCalculator title={TITLE} />
+    </VizPage>
   );
 }

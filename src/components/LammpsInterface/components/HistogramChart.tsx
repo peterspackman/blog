@@ -1,6 +1,9 @@
-import React, { useEffect, useRef, useMemo, useState } from 'react';
-import * as echarts from 'echarts';
+import React, { useEffect, useMemo, useState } from 'react';
+import type * as echarts from 'echarts';
+import { echartsAxis, echartsBase, useVizTheme, withAlpha } from '../../shared/viz';
+import { SliderWithInput } from '../../shared/controls';
 import styles from '../LammpsInterface.module.css';
+import { useEChart } from '../../shared/viz/useEChart';
 
 interface HistogramChartProps {
   data: string | null;
@@ -105,83 +108,62 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
   filename,
   isLoading = false
 }) => {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const theme = useVizTheme();
+  const [chartRef, chart] = useEChart();
   const [selectedTimestepIndex, setSelectedTimestepIndex] = useState<number>(-1); // -1 means latest
 
   const histogramData = useMemo(() => {
-    if (!data) {
-      return null;
-    }
+    if (!data) return null;
     return parseHistogramData(data, filename);
   }, [data, filename]);
 
-  // Get the current timestep data to display
-  const currentData = useMemo(() => {
-    if (!histogramData || histogramData.timesteps.length === 0) return null;
-    const index = selectedTimestepIndex < 0
-      ? histogramData.timesteps.length - 1
-      : Math.min(selectedTimestepIndex, histogramData.timesteps.length - 1);
-    return histogramData.timesteps[index];
-  }, [histogramData, selectedTimestepIndex]);
+  const numTimesteps = histogramData?.timesteps.length ?? 0;
+  const displayIndex = selectedTimestepIndex < 0
+    ? numTimesteps - 1
+    : Math.min(selectedTimestepIndex, numTimesteps - 1);
+  const currentData = numTimesteps > 0 ? histogramData!.timesteps[displayIndex] : null;
 
-
-  // Initialize chart
   useEffect(() => {
-    if (!chartRef.current) return;
-
-    chartInstance.current = echarts.init(chartRef.current);
-
-    const handleResize = () => {
-      chartInstance.current?.resize();
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, []);
-
-  // Update chart when data changes
-  useEffect(() => {
-    if (!chartInstance.current || !currentData || !histogramData) return;
+    if (!chart) return;
+    if (!currentData || !histogramData) {
+      chart.clear();
+      return;
+    }
+    const base = echartsBase(theme);
+    const axis = echartsAxis(theme);
 
     const option: echarts.EChartsOption = {
+      ...base,
       animation: false,
+      legend: { show: false },
       title: {
-        text: `${histogramData.title} (step ${currentData.timestep})`,
+        ...base.title,
+        text: `${histogramData.title} · step ${currentData.timestep}`,
         left: 'center',
-        top: 5,
-        textStyle: { fontSize: 12 },
+        top: 4,
       },
-      grid: {
-        left: '12%',
-        right: '5%',
-        top: '18%',
-        bottom: '15%',
-      },
+      grid: { left: 12, right: 20, top: 36, bottom: 32, containLabel: true },
       tooltip: {
+        ...base.tooltip,
         trigger: 'axis',
-        axisPointer: { type: 'shadow' },
+        axisPointer: { type: 'shadow', shadowStyle: { color: withAlpha(theme.text, 0.06) } },
         formatter: (params: any) => {
           const p = params[0];
           return `${p.name}°: ${p.value.toFixed(0)} counts`;
         },
       },
       xAxis: {
+        ...axis,
         type: 'category',
         data: currentData.bins.map(b => b.toFixed(1)),
         name: 'Angle (°)',
         nameLocation: 'middle',
-        nameGap: 25,
-        axisLabel: {
-          interval: Math.floor(currentData.bins.length / 10),
-          rotate: 0,
-          fontSize: 10,
-        },
+        nameGap: 26,
+        splitLine: { show: false },
+        axisLabel: { ...axis.axisLabel, interval: Math.floor(currentData.bins.length / 10) },
       },
       yAxis: {
+        ...axis,
         type: 'value',
         name: 'Count',
         nameLocation: 'middle',
@@ -190,57 +172,39 @@ export const HistogramChart: React.FC<HistogramChartProps> = ({
       series: [{
         type: 'bar',
         data: currentData.counts,
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#5470c6' },
-            { offset: 1, color: '#91cc75' },
-          ]),
-        },
+        itemStyle: { color: theme.series[0], borderRadius: [2, 2, 0, 0] },
         barWidth: '90%',
       }],
     };
 
-    chartInstance.current.setOption(option, true);
-  }, [histogramData, currentData]);
+    chart.setOption(option, true);
+  }, [chart, theme, histogramData, currentData]);
 
-  if (isLoading) {
-    return (
-      <div className={styles.histogramChartEmpty}>
-        <span>Loading histogram data...</span>
-      </div>
-    );
-  }
-
-  if (!data || !histogramData || histogramData.timesteps.length === 0) {
-    return (
-      <div className={styles.histogramChartEmpty}>
-        <span>No histogram data available</span>
-      </div>
-    );
-  }
-
-  const numTimesteps = histogramData.timesteps.length;
-  const displayIndex = selectedTimestepIndex < 0 ? numTimesteps - 1 : selectedTimestepIndex;
+  const empty = isLoading
+    ? 'Loading histogram data…'
+    : !currentData
+      ? 'No histogram data in this file.'
+      : null;
 
   return (
-    <div className={styles.histogramChart}>
-      {/* Timestep slider */}
+    <div className={styles.chartPane}>
       {numTimesteps > 1 && (
-        <div className={styles.histogramSlider}>
-          <input
-            type="range"
-            min={0}
-            max={numTimesteps - 1}
-            value={displayIndex}
-            onChange={(e) => setSelectedTimestepIndex(parseInt(e.target.value, 10))}
-            style={{ flex: 1 }}
+        <div className={styles.chartToolbar}>
+          <SliderWithInput
+            label="Output frame"
+            value={displayIndex + 1}
+            onChange={(v) => setSelectedTimestepIndex(Math.round(v) - 1)}
+            min={1}
+            max={numTimesteps}
+            step={1}
+            decimals={0}
           />
-          <span className={styles.histogramTimestep}>
-            {displayIndex + 1} / {numTimesteps}
-          </span>
         </div>
       )}
-      <div ref={chartRef} style={{ flex: 1, minHeight: 0 }} />
+      <div className={styles.chartCanvas}>
+        <div ref={chartRef} className={styles.chartFill} />
+        {empty && <div className={styles.chartEmpty}>{empty}</div>}
+      </div>
     </div>
   );
 };

@@ -1,211 +1,102 @@
-import React, { useRef, useEffect } from 'react';
-import * as echarts from 'echarts';
+import React, { useMemo } from 'react';
 import 'echarts-gl';
-import { SurfaceData, getPropertyTitle, getPropertyUnit, getComputedTensorColors, getComputedTensorColor } from './CommonFunctions';
+import { echartsBase, useVizTheme } from '../shared/viz';
+import {
+  SurfaceData,
+  TensorDataset,
+  getPropertyTitle,
+  getPropertyUnit,
+  saveImageToolbox,
+  tensorColor,
+} from './CommonFunctions';
+import { useEChart } from '../shared/viz/useEChart';
 
-interface MultiSurfaceDataset {
-  data: SurfaceData;
-  tensorId: string;
-  name: string;
-  colorIndex: number;
+/** Value on the (u, v) grid nearest to the angles, or 0 outside it. */
+function sample(s: SurfaceData, u: number, v: number): number {
+  const i = Math.round((u / (2 * Math.PI)) * (s.numU - 1));
+  const j = Math.round((v / Math.PI) * (s.numV - 1));
+  return s.surfaceData[i]?.[j] ?? 0;
 }
 
+/** Directional surface r(θ, φ) = property value, as points or a shaded mesh. */
 const SurfaceChart: React.FC<{
-  multiSurfaceData?: MultiSurfaceDataset[];
+  multiSurfaceData: TensorDataset<SurfaceData>[];
   property: string;
   useScatter?: boolean;
-  showLegend?: boolean;
-}> = ({ multiSurfaceData, property, useScatter = true, showLegend = true }) => {
-  const chartRef = useRef<HTMLDivElement>(null);
+}> = ({ multiSurfaceData, property, useScatter = true }) => {
+  const theme = useVizTheme();
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    
-    if (!multiSurfaceData || multiSurfaceData.length === 0) return;
-
-    const chart = echarts.init(chartRef.current);
-
-    // Calculate overall data range across all datasets for consistent scaling
-    let allFlatData: number[] = [];
-    multiSurfaceData.forEach(dataset => {
-      allFlatData = [...allFlatData, ...dataset.data.surfaceData.flat()];
+  const option = useMemo(() => {
+    if (multiSurfaceData.length === 0) return null;
+    const unit = getPropertyUnit(property);
+    const axis3D = (name: string) => ({
+      type: 'value',
+      name,
+      nameTextStyle: { color: theme.muted, fontFamily: theme.fontSans },
+      axisLine: { lineStyle: { color: theme.axis } },
+      axisTick: { lineStyle: { color: theme.axis } },
+      axisLabel: { textStyle: { color: theme.muted, fontFamily: theme.fontMono, fontSize: 10 } },
+      splitLine: { lineStyle: { color: theme.grid } },
     });
-    allFlatData.sort((a, b) => a - b);
-    const colorMin = Math.min(...allFlatData);
-    const colorMax = Math.max(...allFlatData);
 
-    const option = {
+    const series = multiSurfaceData.map(({ data: s, name, colorIndex }) => {
+      const color = tensorColor(theme, colorIndex);
+      if (useScatter) {
+        const points: number[][] = [];
+        for (let i = 0; i < s.numU; i++) {
+          for (let j = 0; j < s.numV; j++) {
+            const u = (i / (s.numU - 1)) * 2 * Math.PI;
+            const v = (j / (s.numV - 1)) * Math.PI;
+            const r = s.surfaceData[i]?.[j] ?? 0;
+            points.push([r * Math.sin(v) * Math.cos(u), r * Math.sin(v) * Math.sin(u), r * Math.cos(v), r]);
+          }
+        }
+        return { name, type: 'scatter3D', data: points, symbolSize: 2.5, itemStyle: { color, opacity: 0.8 } };
+      }
+      return {
+        name,
+        type: 'surface',
+        parametric: true,
+        shading: 'lambert',
+        wireframe: { show: true, lineStyle: { color: theme.grid, width: 0.5 } },
+        itemStyle: { color, opacity: 0.85 },
+        parametricEquation: {
+          u: { min: 0, max: 2 * Math.PI, step: (2 * Math.PI) / (s.numU - 1) },
+          v: { min: 0, max: Math.PI, step: Math.PI / (s.numV - 1) },
+          x: (u: number, v: number) => sample(s, u, v) * Math.sin(v) * Math.cos(u),
+          y: (u: number, v: number) => sample(s, u, v) * Math.sin(v) * Math.sin(u),
+          z: (u: number, v: number) => sample(s, u, v) * Math.cos(v),
+        },
+      };
+    });
+
+    const base = echartsBase(theme);
+    return {
+      ...base,
       animation: false,
-      title: {
-        show: false
-      },
-      toolbox: {
-        show: true,
-        orient: 'vertical',
-        left: 'right',
-        top: 'top',
-        feature: {
-          saveAsImage: {
-            show: true,
-            title: 'Save as PNG',
-            backgroundColor: '#ffffff',
-            pixelRatio: 2,
-            excludeComponents: ['toolbox']
-          }
-        }
-      },
+      toolbox: saveImageToolbox(theme),
       tooltip: {
-        trigger: 'item',
-        formatter: (params: any) => {
-          const value = params.value[3] || params.value[2];
-          return `${getPropertyTitle(property)}: ${value.toFixed(3)} ${getPropertyUnit(property)}`;
-        }
+        ...base.tooltip,
+        formatter: (p: { seriesName: string; value: number[] }) => {
+          const [x, y, z, r] = p.value;
+          const value = r ?? Math.hypot(x, y, z);
+          return `${p.seriesName}<br/>${getPropertyTitle(property)}: ${value.toFixed(3)} ${unit}`;
+        },
       },
-      visualMap: multiSurfaceData.map((dataset, index) => ({
-        show: false,
-        seriesIndex: index,
-        dimension: 3,
-        min: colorMin,
-        max: colorMax,
-        inRange: {
-          color: [getComputedTensorColor(dataset.colorIndex), getComputedTensorColor(dataset.colorIndex)]
-        }
-      })),
-      xAxis3D: {
-        type: 'value',
-        name: 'X',
-        nameTextStyle: {
-          color: 'var(--ifm-color-emphasis-800)'
-        }
-      },
-      yAxis3D: {
-        type: 'value',
-        name: 'Y',
-        nameTextStyle: {
-          color: 'var(--ifm-color-emphasis-800)'
-        }
-      },
-      zAxis3D: {
-        type: 'value',
-        name: 'Z',
-        nameTextStyle: {
-          color: 'var(--ifm-color-emphasis-800)'
-        }
-      },
+      xAxis3D: axis3D('X'),
+      yAxis3D: axis3D('Y'),
+      zAxis3D: axis3D('Z'),
       grid3D: {
-        viewControl: {
-          projection: 'perspective'
-        }
+        axisPointer: { lineStyle: { color: theme.accent } },
+        viewControl: { projection: 'perspective' },
+        light: { main: { intensity: 1.1 }, ambient: { intensity: 0.4 } },
       },
-      legend: {
-        show: showLegend && multiSurfaceData.length > 1,
-        data: multiSurfaceData.map(dataset => ({
-          name: dataset.name,
-          itemStyle: {
-            color: getComputedTensorColor(dataset.colorIndex)
-          }
-        })),
-        textStyle: {
-          color: 'var(--ifm-color-emphasis-800)'
-        }
-      },
-      series: multiSurfaceData.map((dataset, index) => {
-        const tensorColor = getComputedTensorColor(dataset.colorIndex);
-        console.log(`Tensor ${dataset.name} (index ${dataset.colorIndex}): color = ${tensorColor}`);
-        const surfaceData = dataset.data;
-        
-        // Generate 3D scatter points from surface data
-        const scatterPoints = [];
-        for (let i = 0; i < surfaceData.numU; i++) {
-          for (let j = 0; j < surfaceData.numV; j++) {
-            const u = (i / (surfaceData.numU - 1)) * 2 * Math.PI;
-            const v = (j / (surfaceData.numV - 1)) * Math.PI;
-            const value = surfaceData.surfaceData[i] && surfaceData.surfaceData[i][j] ? surfaceData.surfaceData[i][j] : 0;
-
-            // Convert spherical to Cartesian coordinates using the property value as radius
-            const x = value * Math.sin(v) * Math.cos(u);
-            const y = value * Math.sin(v) * Math.sin(u);
-            const z = value * Math.cos(v);
-
-            scatterPoints.push([x, y, z, value]);
-          }
-        }
-
-        if (useScatter) {
-          return {
-            name: dataset.name,
-            type: 'scatter3D',
-            data: scatterPoints,
-            symbolSize: 2.5,
-            itemStyle: {
-              opacity: 0.8
-            }
-          };
-        } else {
-          // Create parametric surface using parametricEquation (like the original code)
-          return {
-            name: dataset.name,
-            type: 'surface',
-            parametric: true,
-            shading: 'lambert',
-            wireframe: {
-              show: true,
-              lineStyle: {
-                color: 'rgba(0,0,0,0.1)',
-                width: 0.5
-              }
-            },
-            itemStyle: {
-              opacity: 0.8,
-              color: tensorColor
-            },
-            parametricEquation: {
-              u: {
-                min: 0,
-                max: 2 * Math.PI,
-                step: (2 * Math.PI) / (surfaceData.numU - 1)
-              },
-              v: {
-                min: 0,
-                max: Math.PI,
-                step: Math.PI / (surfaceData.numV - 1)
-              },
-              x: function(u: number, v: number) {
-                const i = Math.round((u / (2 * Math.PI)) * (surfaceData.numU - 1));
-                const j = Math.round((v / Math.PI) * (surfaceData.numV - 1));
-                const value = surfaceData.surfaceData[i] && surfaceData.surfaceData[i][j] ? surfaceData.surfaceData[i][j] : 0;
-                return value * Math.sin(v) * Math.cos(u);
-              },
-              y: function(u: number, v: number) {
-                const i = Math.round((u / (2 * Math.PI)) * (surfaceData.numU - 1));
-                const j = Math.round((v / Math.PI) * (surfaceData.numV - 1));
-                const value = surfaceData.surfaceData[i] && surfaceData.surfaceData[i][j] ? surfaceData.surfaceData[i][j] : 0;
-                return value * Math.sin(v) * Math.sin(u);
-              },
-              z: function(u: number, v: number) {
-                const i = Math.round((u / (2 * Math.PI)) * (surfaceData.numU - 1));
-                const j = Math.round((v / Math.PI) * (surfaceData.numV - 1));
-                const value = surfaceData.surfaceData[i] && surfaceData.surfaceData[i][j] ? surfaceData.surfaceData[i][j] : 0;
-                return value * Math.cos(v);
-              }
-            }
-          };
-        }
-      })
+      series,
     };
+  }, [theme, multiSurfaceData, property, useScatter]);
 
-    chart.setOption(option);
-
-    const handleResize = () => chart.resize();
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chart.dispose();
-    };
-  }, [multiSurfaceData, property, useScatter, showLegend]);
-
-  return <div ref={chartRef} style={{ width: '100%', height: '100%', minHeight: '400px' }} />;
+  const [ref] = useEChart(option);
+  return <div ref={ref} style={{ width: '100%', height: 'min(70vh, 560px)', minHeight: 360 }} />;
 };
 
 export { SurfaceChart };

@@ -1,1260 +1,620 @@
-/* Main container */
+/* LAMMPS interface: one card holding a header row (title, view tabs, reset)
+   and the active view. Colours come from the --viz-* tokens in custom.css. */
+
 .container {
   display: flex;
   flex-direction: column;
-  min-height: 600px;
-  height: min(1200px, calc(100vh - 100px));
-  max-width: none;
-  padding: 0;
-}
-
-/* Tab bar */
-.tabBar {
-  display: flex;
-  border-radius: 6px;
+  height: clamp(560px, calc(100vh - var(--ifm-navbar-height) - 3.5rem), 1100px);
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
   overflow: hidden;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  margin-bottom: 1rem;
-  background: var(--ifm-background-surface-color);
-}
-
-.tabBarTabs {
-  display: flex;
-  flex: 1;
-}
-
-.clearStorageBtn {
-  padding: 0.5rem 0.75rem;
-  border: none;
-  border-left: 1px solid var(--ifm-color-emphasis-300);
-  background: transparent;
-  color: var(--ifm-color-emphasis-500);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.clearStorageBtn:hover {
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-danger);
-}
-
-.clearStorageBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.clearStorageBtn:disabled:hover {
-  background: transparent;
-  color: var(--ifm-color-emphasis-500);
-}
-
-.tabButton {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: none;
-  background: transparent;
-  color: var(--ifm-font-color-base);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
   position: relative;
 }
 
-.tabButton:hover {
-  background: var(--ifm-color-emphasis-100);
+/* Header row ------------------------------------------------------------ */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--viz-border);
 }
 
-.tabButtonActive {
-  background: var(--ifm-color-primary);
-  color: #fff;
+.title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0;
+  margin-right: auto;
 }
 
-.tabButtonActive:hover {
-  background: var(--ifm-color-primary-dark);
+.tabs {
+  min-width: 16rem;
+}
+
+.tabLabel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
 }
 
 .tabBadge {
-  background: rgba(255, 255, 255, 0.3);
-  color: inherit;
-  border-radius: 10px;
-  padding: 0.1rem 0.5rem;
-  font-size: 0.7rem;
+  font-size: var(--viz-font-xs);
   font-weight: 600;
-  min-width: 1.2rem;
-  text-align: center;
-}
-
-.tabButton:not(.tabButtonActive) .tabBadge {
-  background: var(--ifm-color-emphasis-200);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 0.125rem 0.375rem;
+  border-radius: 999px;
+  color: var(--viz-muted);
+  background: var(--viz-surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--viz-border);
 }
 
 .tabBadgeError {
-  background: var(--ifm-color-danger) !important;
-  color: #fff !important;
+  color: var(--viz-danger);
+  box-shadow: inset 0 0 0 1px var(--viz-danger);
 }
 
-.liveDotSmall {
+.liveDotSmall,
+.liveDot {
   width: 6px;
   height: 6px;
-  background: var(--ifm-color-success);
   border-radius: 50%;
+  background: var(--viz-success);
   animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-/* Tab content */
-.tabContentWrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.tabContent {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  overflow: auto;
-}
-
-/* =============================================
-   INPUT TAB - Split Panel Layout
-   ============================================= */
-
-.inputTabContainer {
-  flex: 1;
-  display: flex;
-  gap: 1rem;
-  position: relative;
-  min-height: 500px;
-}
-
-.inputTabDragging {
-  /* Visual feedback when dragging */
-}
-
-/* Drag overlay */
-.dragOverlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(var(--ifm-color-primary-rgb, 37, 99, 235), 0.1);
-  border: 3px dashed var(--ifm-color-primary);
-  border-radius: 0.5rem;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-}
-
-.dragOverlayContent {
-  text-align: center;
-  color: var(--ifm-color-primary);
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-.dragIcon {
-  font-size: 3rem;
-  line-height: 1;
-  margin-bottom: 0.5rem;
-}
-
-/* Left Panel: File Browser */
-.fileBrowserPanel {
-  width: 240px;
-  min-width: 200px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.fileBrowserHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
-}
-
-.fileBrowserHeader h4 {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ifm-heading-color);
-}
-
-.addFileBtn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: var(--ifm-color-primary);
-  color: white;
-  border-radius: 4px;
-  font-size: 1.1rem;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease;
-}
-
-.addFileBtn:hover {
-  background: var(--ifm-color-primary-dark);
-}
-
-/* File list */
-.fileList {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0.5rem;
-}
-
-.emptyFileList {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-  text-align: center;
-  color: var(--ifm-color-emphasis-500);
-  cursor: pointer;
-  border: 2px dashed var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  margin: 0.5rem;
-  transition: all 0.2s ease;
-}
-
-.emptyFileList:hover {
-  border-color: var(--ifm-color-primary);
-  color: var(--ifm-color-primary);
-  background: var(--ifm-color-primary-lightest);
-}
-
-.dropZoneIcon {
-  margin-bottom: 0.5rem;
-  opacity: 0.7;
-}
-
-.emptyFileList span {
-  font-size: 0.8rem;
-}
-
-/* File list item */
-.fileListItem {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.5rem 0.6rem;
-  margin-bottom: 0.25rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-  border: 1px solid transparent;
-}
-
-.fileListItem:hover {
-  background: var(--ifm-color-emphasis-100);
-}
-
-.fileListItemSelected {
-  background: var(--ifm-color-primary-lightest);
-  border-color: var(--ifm-color-primary);
-}
-
-.fileListItemSelected:hover {
-  background: var(--ifm-color-primary-lighter);
-}
-
-.fileItemLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  flex: 1;
-}
-
-/* Checkbox toggle for main file */
-.mainFileToggle {
-  position: relative;
-  display: inline-flex;
-  cursor: pointer;
-}
-
-.mainFileToggle input {
-  position: absolute;
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.checkmark {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--ifm-color-emphasis-400);
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.mainFileToggle input:checked + .checkmark {
-  background: var(--ifm-color-primary);
-  border-color: var(--ifm-color-primary);
-}
-
-.mainFileToggle input:checked + .checkmark::after {
-  content: '✓';
-  color: white;
-  font-size: 10px;
-  font-weight: bold;
-}
-
-.mainFileToggle:hover .checkmark {
-  border-color: var(--ifm-color-primary);
-}
-
-.fileName {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mainBadge {
-  font-size: 0.6rem;
-  font-weight: 700;
-  color: white;
-  background: var(--ifm-color-primary);
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-}
-
-.fileDeleteBtn {
-  background: transparent;
-  border: none;
-  color: var(--ifm-color-emphasis-500);
-  cursor: pointer;
-  font-size: 1rem;
-  padding: 0 0.25rem;
-  line-height: 1;
-  opacity: 0;
-  transition: all 0.15s ease;
-}
-
-.fileListItem:hover .fileDeleteBtn {
-  opacity: 1;
-}
-
-.fileDeleteBtn:hover {
-  color: var(--ifm-color-danger);
-}
-
-/* Small drop zone at bottom of file list */
-.dropZoneSmall {
-  padding: 0.6rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-500);
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.dropZoneSmall:hover {
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-primary);
-}
-
-/* Right Panel: Editor */
-.editorPanel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.editorHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
-}
-
-.editorHeader h4 {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--ifm-heading-color);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.readOnlyBadge {
-  font-size: 0.65rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-600);
-  background: var(--ifm-color-emphasis-200);
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
-}
-
-.editorHint {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-500);
-  font-style: italic;
-}
-
-.editor {
-  flex: 1;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.85rem;
-  border: none;
-  padding: 1rem;
-  resize: none;
-  outline: none;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  line-height: 1.5;
-  min-height: 300px;
-}
-
-.editor:focus {
-  background: var(--ifm-background-color);
-}
-
-.editor[readonly] {
-  background: var(--ifm-color-emphasis-100);
-  cursor: default;
-}
-
-.editorFooter {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
-}
-
-.editorFooter .buttonGroup {
-  margin: 0;
-}
-
-.editorFooter .status {
-  margin: 0;
-  font-size: 0.8rem;
-}
-
-/* =============================================
-   OUTPUT TAB SECTIONS (keep existing)
-   ============================================= */
-
-.outputSection h4,
-.outputFilesSection h4 {
-  margin: 0 0 0.75rem 0;
-  color: var(--ifm-heading-color);
-  font-size: 0.9rem;
-  font-weight: 600;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  padding-bottom: 0.5rem;
-}
-
-/* Output Tab Sections */
-.outputSection {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  padding: 1rem;
-  min-height: 300px;
-}
-
-.outputHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  padding-bottom: 0.5rem;
-}
-
-.outputHeader h4 {
-  margin: 0;
-  border: none;
-  padding: 0;
-}
-
-.outputActions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.outputFilesSection {
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  padding: 1rem;
-}
-
-/* Viewer Tab */
-.viewerContainer {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  min-height: 500px;
-}
-
-.viewerStatus {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  background: var(--ifm-color-emphasis-100);
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  font-size: 0.85rem;
-  position: relative;
-}
-
-.trajectoryInfo {
-  color: var(--ifm-font-color-base);
-}
-
-.trajectoryInfo strong {
-  font-weight: 600;
-}
-
-.trajectoryInfo span {
-  color: var(--ifm-color-emphasis-600);
-}
-
-.liveIndicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  color: var(--ifm-color-success);
-  font-weight: 600;
-  text-transform: uppercase;
 }
 
 .liveDot {
   width: 8px;
   height: 8px;
-  background: var(--ifm-color-success);
-  border-radius: 50%;
-  animation: pulse 1.5s ease-in-out infinite;
 }
 
-.viewerStatusRight {
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDotSmall,
+  .liveDot {
+    animation: none;
+  }
+}
+
+/* Body and panes -------------------------------------------------------- */
+.tabContentWrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* A column inside the card with its own header row */
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid var(--viz-border);
+  background: var(--viz-surface-subtle);
+}
+
+.paneTitle,
+.paneSubtitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: var(--viz-font-sm);
+  font-weight: 600;
+  color: var(--viz-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paneHint {
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
+}
+
+.paneActions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.paneFooter {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.optionsToggle {
-  background: transparent;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
-  font-size: 1rem;
-  color: var(--ifm-font-color-base);
-  transition: background 0.15s ease;
-}
-
-.optionsToggle:hover {
-  background: var(--ifm-color-emphasis-200);
-}
-
-.viewerOptions {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 100;
-  min-width: 250px;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  margin-top: 0.25rem;
-}
-
-.optionsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  font-size: 0.85rem;
+  border-top: 1px solid var(--viz-border);
 }
 
-.optionsClose {
-  background: transparent;
-  border: none;
-  font-size: 1.2rem;
-  cursor: pointer;
-  color: var(--ifm-color-emphasis-600);
-  padding: 0;
+.status {
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge,
+.badgeMuted {
+  flex-shrink: 0;
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--viz-radius-sm);
+  color: var(--viz-accent);
+  background: var(--viz-accent-soft);
+}
+
+.badgeMuted {
+  font-weight: 500;
+  color: var(--viz-muted);
+  background: var(--viz-surface);
+  box-shadow: inset 0 0 0 1px var(--viz-border);
+}
+
+/* Input tab ------------------------------------------------------------- */
+.inputSplit {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr);
+  min-height: 0;
+  position: relative;
+}
+
+.filePane {
+  border-right: 1px solid var(--viz-border);
+}
+
+.dragOverlay {
+  position: absolute;
+  inset: 0.5rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  color: var(--viz-accent);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--viz-surface) 85%, transparent);
+  border: 2px dashed var(--viz-accent);
+  border-radius: var(--viz-radius);
+  pointer-events: none;
+}
+
+.dragIcon {
+  font-size: 2.5rem;
   line-height: 1;
 }
 
-.optionsClose:hover {
-  color: var(--ifm-font-color-base);
+.fileList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.375rem;
 }
 
-.atomTypeList {
-  padding: 0.5rem;
-  max-height: 200px;
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 1.5rem 0.75rem;
+  font: inherit;
+  font-size: var(--viz-font-xs);
+  line-height: 1.45;
+  text-align: center;
+  color: var(--viz-muted);
+  background: transparent;
+  border: 1px dashed var(--viz-border);
+  border-radius: var(--viz-radius);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.dropZone:hover,
+.dropZone:focus-visible {
+  color: var(--viz-accent);
+  border-color: var(--viz-accent);
+  background: var(--viz-accent-soft);
+  outline: none;
+}
+
+.fileListItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: var(--viz-radius-sm);
+  cursor: pointer;
+}
+
+.fileListItem:hover {
+  background: var(--viz-surface-subtle);
+}
+
+.fileListItemSelected,
+.fileListItemSelected:hover {
+  background: var(--viz-accent-soft);
+}
+
+.mainCheckbox {
+  margin: 0;
+  accent-color: var(--viz-accent);
+  cursor: pointer;
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-xs);
+  color: var(--viz-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileDeleteBtn {
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  color: var(--viz-muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.fileListItem:hover .fileDeleteBtn,
+.fileDeleteBtn:focus-visible {
+  opacity: 1;
+}
+
+.fileDeleteBtn:hover {
+  color: var(--viz-danger);
+}
+
+.editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-sm);
+  line-height: 1.55;
+  tab-size: 4;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  color: var(--viz-text);
+  background: var(--viz-surface);
+  border: 0;
+  outline: none;
+  resize: none;
+}
+
+.editor[readonly] {
+  color: var(--viz-muted);
+  background: var(--viz-surface-subtle);
+}
+
+/* Output tab ------------------------------------------------------------ */
+.outputSplit {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.outputSplit > .pane + .pane {
+  border-left: 1px solid var(--viz-border);
+}
+
+.console {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 1rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--viz-text);
+  background: var(--viz-surface);
+}
+
+.consoleIdle {
+  color: var(--viz-muted);
+}
+
+.error {
+  color: var(--viz-danger);
+}
+
+.outputFiles {
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--viz-border);
+}
+
+.outputFiles .paneSubtitle {
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+
+.outputFileList {
+  list-style: none;
+  margin: 0;
+  padding: 0 0.375rem 0.375rem;
   overflow-y: auto;
 }
 
-.atomTypeRow {
+.outputFileItem {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.35rem 0.25rem;
-  gap: 1rem;
+  gap: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  margin: 0;
+  border-radius: var(--viz-radius-sm);
 }
 
-.atomTypeLabel {
-  font-size: 0.8rem;
-  color: var(--ifm-font-color-base);
+.outputFileItem:hover {
+  background: var(--viz-surface-subtle);
 }
 
-.atomTypeMass {
-  color: var(--ifm-color-emphasis-500);
-  font-size: 0.75rem;
+.outputFileName {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.elementSelect {
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  font-size: 0.8rem;
-  cursor: pointer;
+.fileSize {
+  font-size: var(--viz-font-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-muted);
+}
+
+.chartTabs {
+  flex-shrink: 0;
+}
+
+.dataFileSelect {
+  flex: 1;
+  min-width: 0;
+  max-width: 16rem;
+}
+
+/* Charts (ThermoChart, HistogramChart) */
+.chartPane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chartToolbar {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--viz-border);
+}
+
+.chartCanvas {
+  flex: 1;
+  min-height: 12rem;
+  position: relative;
+}
+
+.chartFill {
+  position: absolute;
+  inset: 0;
+}
+
+.chartEmpty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+/* Viewer tab ------------------------------------------------------------ */
+.tabContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.viewerContainer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.viewerStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.375rem 0.75rem;
+  font-size: var(--viz-font-sm);
+  background: var(--viz-surface-subtle);
+  border-bottom: 1px solid var(--viz-border);
+}
+
+.trajectoryInfo {
+  color: var(--viz-text);
+}
+
+.trajectoryInfo strong {
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 600;
+}
+
+.trajectoryInfo span {
+  color: var(--viz-muted);
+}
+
+.liveIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--viz-success);
 }
 
 .viewerWrapper {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
-.viewerPlaceholder {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-emphasis-600);
-  text-align: center;
-  padding: 2rem;
-}
-
-.placeholderContent {
-  max-width: 400px;
-}
-
-.placeholderContent p {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.95rem;
-}
-
-.placeholderContent small {
-  display: block;
-  color: var(--ifm-color-emphasis-500);
-  font-size: 0.8rem;
-}
-
-.placeholderContent code {
-  background: var(--ifm-color-emphasis-200);
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
-  font-size: 0.75rem;
-}
-
+.viewerPlaceholder,
 .viewerLoading {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ifm-color-emphasis-600);
-}
-
-/* File upload area */
-.fileUpload {
-  border: 2px dashed var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
+  padding: 2rem;
   text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-bottom: 1rem;
+  color: var(--viz-muted);
 }
 
-.fileUpload:hover {
-  border-color: var(--ifm-color-primary);
-  background: var(--ifm-color-primary-lightest);
+.placeholderContent {
+  max-width: 26rem;
 }
 
-.fileUpload.dragover {
-  border-color: var(--ifm-color-primary);
-  background: var(--ifm-color-primary-lightest);
-  transform: scale(1.02);
+.placeholderContent p {
+  margin: 0 0 0.5rem;
+  color: var(--viz-text);
+  font-weight: 600;
 }
 
-.fileUpload div {
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-  margin-bottom: 0.5rem;
+.placeholderContent small {
+  display: block;
+  font-size: var(--viz-font-sm);
+  line-height: 1.5;
 }
 
-.fileUpload small {
-  color: var(--ifm-color-emphasis-600);
-  font-size: 0.8rem;
+.placeholderContent .liveIndicator {
+  margin-bottom: 0.75rem;
 }
 
-/* File badges */
-.fileBadges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.fileBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  background: var(--ifm-color-emphasis-200);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-family: var(--ifm-font-family-monospace);
-  transition: all 0.2s;
-  position: relative;
-}
-
-.fileBadge.selected {
-  background: var(--ifm-color-primary-lightest);
-  border-color: var(--ifm-color-primary);
-  color: var(--ifm-color-primary-dark);
-}
-
-.fileBadge:hover {
-  background: var(--ifm-color-emphasis-300);
-}
-
-.fileBadge.selected:hover {
-  background: var(--ifm-color-primary-lighter);
-}
-
-.fileBadge.isMainInput {
-  border: 2px solid var(--ifm-color-primary);
-  padding-top: 0.6rem;
-}
-
-.mainInputBadge {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--ifm-color-primary);
-  color: white;
-  font-size: 0.55rem;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.fileBadgeText {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.deleteBtn {
-  background: transparent;
-  border: none;
-  color: var(--ifm-color-emphasis-600);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  margin-left: 0.25rem;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.deleteBtn:hover {
-  color: var(--ifm-color-danger);
-}
-
-.inputFileHint {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-600);
-  font-style: italic;
-}
-
-/* Script textarea */
-.inputScript {
-  flex: 1;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.85rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  padding: 0.75rem;
-  resize: none;
-  outline: none;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  line-height: 1.4;
-  min-height: 300px;
-}
-
-.inputScript:focus {
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-/* Button group */
-.buttonGroup {
-  margin-top: 0.75rem;
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-/* Status */
-.status {
-  margin-top: 0.75rem;
-  font-size: 0.85rem;
-  color: var(--ifm-color-emphasis-600);
-  font-weight: 500;
-}
-
-/* Output area */
-.output {
-  flex: 1;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-font-color-base);
-  padding: 0.75rem;
-  border-radius: 0.25rem;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  line-height: 1.3;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  min-height: 0;
-}
-
-.error {
-  color: var(--ifm-color-danger);
-}
-
-/* Output files list */
-.outputFilesList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.outputFileItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 0.75rem;
-  background: var(--ifm-color-emphasis-100);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 0.25rem;
-  transition: background-color 0.2s;
-}
-
-.outputFileItem:hover {
-  background: var(--ifm-color-emphasis-200);
-}
-
-.outputFileName {
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.85rem;
-  color: var(--ifm-heading-color);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.fileSize {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-600);
-}
-
-/* Dark mode adjustments */
-[data-theme='dark'] .output {
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border-color: var(--ifm-color-emphasis-300);
-}
-
-[data-theme='dark'] .error {
-  color: #f48771;
-}
-
-[data-theme='dark'] .viewerPlaceholder {
-  background: #2d2d2d;
-}
-
-[data-theme='dark'] .viewerStatus {
-  background: #2d2d2d;
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-  .container {
-    min-height: 500px;
-  }
-
-  /* Input tab stacks vertically on mobile */
-  .inputTabContainer {
-    flex-direction: column;
-    min-height: auto;
-  }
-
-  .fileBrowserPanel {
-    width: 100%;
-    min-width: auto;
-    max-height: 200px;
-  }
-
-  .editorPanel {
-    min-height: 350px;
-  }
-
-  .editor {
-    min-height: 250px;
-  }
-
-  .outputSection {
-    min-height: 250px;
-  }
-
-  .viewerContainer {
-    min-height: 400px;
-  }
-
-  .tabButton {
-    padding: 0.6rem 0.5rem;
-    font-size: 0.8rem;
-  }
-}
-
-/* Dark mode adjustments for input tab */
-[data-theme='dark'] .fileBrowserPanel {
-  background: #1e1e1e;
-}
-
-[data-theme='dark'] .fileBrowserHeader,
-[data-theme='dark'] .editorHeader,
-[data-theme='dark'] .editorFooter {
-  background: #2d2d2d;
-}
-
-[data-theme='dark'] .emptyFileList {
-  border-color: var(--ifm-color-emphasis-400);
-}
-
-[data-theme='dark'] .editor {
-  background: #1e1e1e;
-}
-
-[data-theme='dark'] .editor[readonly] {
-  background: #2d2d2d;
-}
-
-/* Progress bar - styled as status footer matching tab bar */
+/* Progress strip along the bottom of the card while running ------------- */
 .progressBar {
   position: relative;
-  height: 28px;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 6px;
-  overflow: hidden;
   flex-shrink: 0;
+  height: 1.75rem;
+  border-top: 1px solid var(--viz-border);
+  background: var(--viz-surface-subtle);
 }
 
 .progressFill {
   position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: var(--ifm-color-primary);
-  opacity: 0.15;
+  inset: 0 auto 0 0;
+  background: var(--viz-accent-soft);
   transition: width 0.3s ease;
 }
 
 .progressLabel {
   position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  font-size: 0.75rem;
+  font-size: var(--viz-font-xs);
   font-weight: 500;
-  color: var(--ifm-font-color-base);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-text);
   white-space: nowrap;
 }
 
-/* Output tab with chart layout */
-.outputWithChart {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  flex: 1;
-  min-height: 400px;
-}
-
-.consoleSection {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.chartSection {
-  border-left: 1px solid var(--ifm-color-emphasis-200);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.thermoChart {
-  flex: 1;
-  min-height: 200px;
-  width: 100%;
-  background: var(--ifm-background-surface-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.thermoColumnSelector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
-}
-
-.thermoColumnChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.45rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 3px;
-  background: transparent;
-  color: var(--ifm-color-emphasis-600);
-  font-size: 0.7rem;
-  font-family: var(--ifm-font-family-monospace);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  line-height: 1.3;
-}
-
-.thermoColumnChip:hover {
-  border-color: var(--ifm-color-emphasis-500);
-  background: var(--ifm-color-emphasis-200);
-}
-
-.thermoColumnChipActive {
-  border-color: var(--ifm-color-primary);
-  color: var(--ifm-font-color-base);
-  background: var(--ifm-background-surface-color);
-}
-
-.thermoColumnDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-
-.thermoChartEmpty {
-  flex: 1;
-  min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ifm-color-emphasis-500);
-  font-size: 0.85rem;
-  background: var(--ifm-color-emphasis-100);
-}
-
-/* Histogram/Data file chart */
-.histogramChart {
-  flex: 1;
-  min-height: 200px;
-  width: 100%;
-  background: var(--ifm-background-surface-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.histogramChartEmpty {
-  flex: 1;
-  min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ifm-color-emphasis-500);
-  font-size: 0.85rem;
-  background: var(--ifm-color-emphasis-100);
-}
-
-.histogramSlider {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
-  background: var(--ifm-color-emphasis-100);
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.histogramSlider input[type="range"] {
-  flex: 1;
-  height: 4px;
-  cursor: pointer;
-}
-
-.histogramTimestep {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-600);
-  font-family: var(--ifm-font-family-monospace);
-  min-width: 60px;
-  text-align: right;
-}
-
-/* Data file selector in chart section */
-.dataFileSelector {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-color-emphasis-100);
-  font-size: 0.8rem;
-}
-
-.dataFileSelector label {
-  color: var(--ifm-color-emphasis-600);
-  white-space: nowrap;
-}
-
-.dataFileSelector select {
-  flex: 1;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  background: var(--ifm-background-color);
-  color: var(--ifm-font-color-base);
-  font-size: 0.8rem;
-  font-family: var(--ifm-font-family-monospace);
-}
-
-.chartSectionTabs {
-  display: flex;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.chartTabButton {
-  flex: 1;
-  padding: 0.4rem 0.5rem;
-  border: none;
-  background: transparent;
-  color: var(--ifm-color-emphasis-600);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.chartTabButton:hover {
-  background: var(--ifm-color-emphasis-100);
-}
-
-.chartTabButtonActive {
-  background: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-  font-weight: 500;
-  border-bottom: 2px solid var(--ifm-color-primary);
-}
-
-.chartContent {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-/* Stack vertically on narrower screens */
-@media (max-width: 700px) {
-  .outputWithChart {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 150px;
+/* Narrow screens: panes stack ------------------------------------------- */
+@media (max-width: 768px) {
+  .container {
+    height: auto;
+    min-height: 0;
   }
 
-  .chartSection {
-    grid-row: 2;
-    border-left: none;
-    border-top: 1px solid var(--ifm-color-emphasis-200);
+  .header {
+    padding: 0.625rem 0.75rem;
   }
 
-  .consoleSection {
-    grid-row: 1;
+  .tabs {
+    min-width: 0;
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .inputSplit,
+  .outputSplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filePane {
+    border-right: 0;
+    border-bottom: 1px solid var(--viz-border);
+  }
+
+  .fileList {
+    max-height: 11rem;
+  }
+
+  .editor {
+    min-height: 22rem;
+  }
+
+  .console {
+    min-height: 18rem;
+    max-height: 24rem;
+  }
+
+  .outputSplit > .pane + .pane {
+    border-left: 0;
+    border-top: 1px solid var(--viz-border);
+  }
+
+  .chartCanvas {
+    min-height: 16rem;
+  }
+
+  .viewerContainer {
+    min-height: 26rem;
   }
 }

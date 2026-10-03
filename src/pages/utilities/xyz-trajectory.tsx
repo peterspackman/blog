@@ -1,28 +1,21 @@
-import React, { useState, useRef } from 'react';
-import Layout from '@theme/Layout';
-import styles from './utilities.module.css';
+import React, { useMemo, useRef, useState } from 'react';
+import clsx from 'clsx';
 import TrajectoryViewer from '@site/src/components/TrajectoryViewer';
+import styles from '@site/src/components/TrajectoryViewer/TrajectoryPage.module.css';
+import { VizPage, VizPanel, VizWorkbench } from '@site/src/components/shared/viz';
+import {
+  ButtonRow,
+  CollapsibleSection,
+  ControlGroup,
+  ControlHint,
+  SegmentedControl,
+  VizButton,
+} from '@site/src/components/shared/controls';
 
-function XYZTrajectoryViewer() {
-  const [activeTab, setActiveTab] = useState<'xyz' | 'files'>('xyz');
-  
-  // XYZ tab state
-  const [trajectoryText, setTrajectoryText] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const [isDragOver, setIsDragOver] = useState<boolean>(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // File tab state
-  const [structureFile, setStructureFile] = useState<File | null>(null);
-  const [trajectoryFile, setTrajectoryFile] = useState<File | null>(null);
-  const [fileError, setFileError] = useState<string>('');
-  const [structureDragOver, setStructureDragOver] = useState<boolean>(false);
-  const [trajectoryDragOver, setTrajectoryDragOver] = useState<boolean>(false);
-  const structureFileRef = useRef<HTMLInputElement>(null);
-  const trajectoryFileRef = useRef<HTMLInputElement>(null);
+type Source = 'xyz' | 'files';
 
-  // Example multi-frame XYZ data - water molecule optimization with energy information
-  const exampleTrajectory = `3
+// Water geometry optimisation, with energies in the comment lines.
+const EXAMPLE_TRAJECTORY = `3
 Step 0 Energy=-75.576566960
 O     0.000000     0.000000     0.000000
 H     0.900000     0.000000     0.000000
@@ -58,245 +51,7 @@ O    -0.019728    -0.027022     0.000000
 H     0.946851    -0.012467     0.000000
 H    -0.327123     0.889489     0.000000`;
 
-  const validateTrajectoryData = (text: string) => {
-    if (!text.trim()) {
-      setError('Please enter XYZ trajectory data');
-      return false;
-    }
-    
-    try {
-      const lines = text.trim().split('\n');
-      let frameCount = 0;
-      let i = 0;
-      
-      while (i < lines.length) {
-        const numAtoms = parseInt(lines[i]);
-        if (isNaN(numAtoms)) {
-          i++;
-          continue;
-        }
-        
-        if (i + numAtoms + 1 >= lines.length) {
-          setError(`Incomplete frame ${frameCount + 1}: expected ${numAtoms} atoms but reached end of file`);
-          return false;
-        }
-        
-        frameCount++;
-        i += numAtoms + 2;
-      }
-      
-      if (frameCount === 0) {
-        setError('No valid XYZ frames found');
-        return false;
-      }
-      
-      setError('');
-      return true;
-    } catch (err) {
-      setError(`Error parsing trajectory data: ${err.message}`);
-      return false;
-    }
-  };
-
-  const handleFileLoad = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setTrajectoryText(content);
-    };
-    reader.onerror = () => {
-      setError('Failed to read file');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      handleFileLoad(file);
-    }
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setIsDragOver(false);
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      handleFileLoad(file);
-    }
-  };
-
-  const openFileDialog = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleStructureFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setStructureFile(file);
-      setFileError('');
-    }
-  };
-
-  const handleTrajectoryFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setTrajectoryFile(file);
-      setFileError('');
-    }
-  };
-
-  const clearFiles = () => {
-    setStructureFile(null);
-    setTrajectoryFile(null);
-    setFileError('');
-  };
-
-  // Structure file drag and drop handlers
-  const handleStructureDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setStructureDragOver(true);
-  };
-
-  const handleStructureDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setStructureDragOver(false);
-  };
-
-  const handleStructureDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setStructureDragOver(false);
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      setStructureFile(file);
-      setFileError('');
-    }
-  };
-
-  // Trajectory file drag and drop handlers
-  const handleTrajectoryDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-    setTrajectoryDragOver(true);
-  };
-
-  const handleTrajectoryDragLeave = (event: React.DragEvent) => {
-    event.preventDefault();
-    setTrajectoryDragOver(false);
-  };
-
-  const handleTrajectoryDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    setTrajectoryDragOver(false);
-    
-    const files = event.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      setTrajectoryFile(file);
-      setFileError('');
-    }
-  };
-
-  return (
-    <Layout title="Trajectory Viewer" description="Visualize molecular trajectories">
-      <main className={styles.utilityPage}>
-        <div className={styles.container}>
-          <h1>Trajectory Viewer</h1>
-          <p>Visualize molecular trajectories and dynamics from XYZ data or structure/trajectory file pairs using NGL's capabilities.</p>
-          
-          
-          {/* Tab Navigation */}
-          <div className={styles.tabNavigation}>
-            <button 
-              className={`${styles.tabButton} ${activeTab === 'xyz' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('xyz')}
-            >
-              XYZ Text/File
-            </button>
-            <button 
-              className={`${styles.tabButton} ${activeTab === 'files' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('files')}
-            >
-              Structure + Trajectory Files
-            </button>
-          </div>
-          
-          {/* Main Content Area */}
-          <div className={styles.mainLayout}>
-            {/* Left Column - Data Input */}
-            <div className={styles.leftColumn}>
-              {activeTab === 'xyz' && (
-                <div 
-                  className={`${styles.inputSection} ${isDragOver ? styles.dragOver : ''}`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                >
-                  <h3>XYZ Trajectory Input</h3>
-                
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".xyz,.txt"
-                  onChange={handleFileSelect}
-                  style={{ display: 'none' }}
-                />
-                
-                <div className={styles.fileControls}>
-                  <button 
-                    onClick={openFileDialog}
-                    className="button button--primary button--sm"
-                  >
-                    Open File
-                  </button>
-                  <span className={styles.dragHint}>or drag & drop XYZ file here</span>
-                </div>
-                
-                <textarea
-                  value={trajectoryText}
-                  onChange={(e) => setTrajectoryText(e.target.value)}
-                  placeholder="Paste multi-frame XYZ data here or drag & drop a file..."
-                  className={styles.trajectoryInput}
-                />
-                <div className={styles.inputControls}>
-                  <button 
-                    onClick={() => setTrajectoryText(exampleTrajectory)} 
-                    className="button button--primary button--sm"
-                  >
-                    Load Example
-                  </button>
-                  <button 
-                    onClick={() => setTrajectoryText('')} 
-                    className="button button--outline button--sm"
-                  >
-                    Clear
-                  </button>
-                </div>
-                
-                {error && (
-                  <div className={styles.errorMessage}>
-                    {error}
-                  </div>
-                )}
-                
-                <div className={styles.formatHelp}>
-                  <h4>Format Guide</h4>
-                  <pre className={styles.formatExample}>
-{`3
+const FORMAT_EXAMPLE = `3
 Frame 1
 O  0.000  0.000  0.000
 H  0.757  0.586  0.000
@@ -304,166 +59,217 @@ H -0.757  0.586  0.000
 3
 Frame 2
 O  0.000  0.000  0.010
-...`}
-                  </pre>
-                    <p className={styles.formatNote}>
-                      Each frame: atom count → comment → coordinates
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              {activeTab === 'files' && (
-                <div className={styles.inputSection}>
-                  <h3>Structure + Trajectory Files</h3>
-                  
-                  {/* Structure File Input */}
-                  <div className={styles.fileInputGroup}>
-                    <label className={styles.fileLabel}>Structure File (Required)</label>
-                    <p className={styles.fileDescription}>PDB, GRO, mmCIF, or other structure formats</p>
-                    
-                    <input
-                      ref={structureFileRef}
-                      type="file"
-                      accept=".pdb,.ent,.pqr,.gro,.mmcif,.cif,.mcif,.sdf,.mol2,.mmtf"
-                      onChange={handleStructureFileSelect}
-                      style={{ display: 'none' }}
-                    />
-                    
-                    <div 
-                      className={`${styles.fileControls} ${structureDragOver ? styles.dragOver : ''}`}
-                      onDragOver={handleStructureDragOver}
-                      onDragLeave={handleStructureDragLeave}
-                      onDrop={handleStructureDrop}
-                    >
-                      <button 
-                        onClick={() => structureFileRef.current?.click()}
-                        className="button button--primary button--sm"
-                      >
-                        Choose Structure File
-                      </button>
-                      <span className={styles.dragHint}>or drag & drop file here</span>
-                      {structureFile && (
-                        <span className={styles.fileName}>{structureFile.name}</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Trajectory File Input */}
-                  <div className={styles.fileInputGroup}>
-                    <label className={styles.fileLabel}>Trajectory File (Optional)</label>
-                    <p className={styles.fileDescription}>DCD, TRR, XTC, or NCTRAJ files. Leave empty for multi-model structures.</p>
-                    
-                    <input
-                      ref={trajectoryFileRef}
-                      type="file"
-                      accept=".dcd,.trr,.xtc,.nctraj"
-                      onChange={handleTrajectoryFileSelect}
-                      style={{ display: 'none' }}
-                    />
-                    
-                    <div 
-                      className={`${styles.fileControls} ${trajectoryDragOver ? styles.dragOver : ''}`}
-                      onDragOver={handleTrajectoryDragOver}
-                      onDragLeave={handleTrajectoryDragLeave}
-                      onDrop={handleTrajectoryDrop}
-                    >
-                      <button 
-                        onClick={() => trajectoryFileRef.current?.click()}
-                        className="button button--outline button--sm"
-                      >
-                        Choose Trajectory File
-                      </button>
-                      <span className={styles.dragHint}>or drag & drop file here</span>
-                      {trajectoryFile && (
-                        <span className={styles.fileName}>{trajectoryFile.name}</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className={styles.inputControls}>
-                    <button 
-                      onClick={clearFiles} 
-                      className="button button--outline button--sm"
-                    >
-                      Clear Files
-                    </button>
-                  </div>
-                  
-                  {fileError && (
-                    <div className={styles.errorMessage}>
-                      {fileError}
-                    </div>
-                  )}
-                  
-                  <div className={styles.formatHelp}>
-                    <h4>Supported Formats</h4>
-                    <div className={styles.formatExample}>
-                      <strong>Structure:</strong> PDB, GRO, mmCIF, SDF, MOL2, MMTF<br/>
-                      <strong>Trajectory:</strong> DCD, TRR, XTC, NCTRAJ
-                    </div>
-                    <p className={styles.formatNote}>
-                      Load a structure file first, then optionally add a trajectory file for dynamics.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {/* Right Column - Trajectory Viewer */}
-            <div className={styles.rightColumn}>
-              {/* XYZ Tab Viewer */}
-              {activeTab === 'xyz' && (
-                trajectoryText.trim() && !error ? (
-                  <TrajectoryViewer 
-                    trajectoryData={trajectoryText}
-                    moleculeName="XYZ Trajectory"
-                    autoPlay={false}
-                  />
-                ) : (
-                  <div className={styles.placeholderViewer}>
-                    <div className={styles.placeholderContent}>
-                      <h3>Trajectory Viewer</h3>
-                      <p>Load XYZ trajectory data to visualize molecular dynamics</p>
-                      <button 
-                        onClick={() => setTrajectoryText(exampleTrajectory)}
-                        className="button button--primary"
-                      >
-                        Try Example
-                      </button>
-                    </div>
-                  </div>
-                )
-              )}
-              
-              {/* Files Tab Viewer */}
-              {activeTab === 'files' && (
-                structureFile && !fileError ? (
-                  <TrajectoryViewer 
-                    structureFile={structureFile}
-                    trajectoryFile={trajectoryFile || undefined}
-                    moleculeName={structureFile.name.split('.')[0]}
-                    autoPlay={false}
-                  />
-                ) : (
-                  <div className={styles.placeholderViewer}>
-                    <div className={styles.placeholderContent}>
-                      <h3>Trajectory Viewer</h3>
-                      <p>Select structure and trajectory files to visualize molecular dynamics</p>
-                      <div className={styles.formatInfo}>
-                        <p><strong>Structure:</strong> PDB, GRO, mmCIF, etc.</p>
-                        <p><strong>Trajectory:</strong> DCD, TRR, XTC (optional)</p>
-                      </div>
-                    </div>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      </main>
-    </Layout>
+...`;
+
+/** Returns an error message, or '' if the text parses as at least one XYZ frame. */
+function validateXYZ(text: string): string {
+  if (!text.trim()) return '';
+  const lines = text.trim().split('\n');
+  let frames = 0;
+  let i = 0;
+  while (i < lines.length) {
+    const numAtoms = parseInt(lines[i]);
+    if (isNaN(numAtoms)) {
+      i++;
+      continue;
+    }
+    if (i + numAtoms + 1 >= lines.length) {
+      return `Frame ${frames + 1} is incomplete: expected ${numAtoms} atoms but reached the end of the file.`;
+    }
+    frames++;
+    i += numAtoms + 2;
+  }
+  return frames === 0 ? 'No XYZ frames found.' : '';
+}
+
+/** Button plus drag-and-drop target for a single file. */
+function FileDrop({
+  label,
+  accept,
+  file,
+  onFile,
+  children,
+}: {
+  label: string;
+  accept: string;
+  file?: File | null;
+  onFile: (file: File) => void;
+  children?: React.ReactNode;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      className={clsx(styles.drop, over && styles.dropOver)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const f = e.dataTransfer.files[0];
+        if (f) onFile(f);
+      }}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) onFile(f);
+          e.target.value = '';
+        }}
+      />
+      <VizButton size="sm" onClick={() => inputRef.current?.click()}>
+        {label}
+      </VizButton>
+      <span className={styles.dropHint}>{file ? <span className={styles.fileName}>{file.name}</span> : 'or drop a file here'}</span>
+      {children}
+    </div>
   );
 }
 
-export default XYZTrajectoryViewer;
+export default function XYZTrajectoryViewer(): React.JSX.Element {
+  const [source, setSource] = useState<Source>('xyz');
+  const [trajectoryText, setTrajectoryText] = useState('');
+  const [readError, setReadError] = useState('');
+  const [structureFile, setStructureFile] = useState<File | null>(null);
+  const [trajectoryFile, setTrajectoryFile] = useState<File | null>(null);
+
+  const parseError = useMemo(() => validateXYZ(trajectoryText), [trajectoryText]);
+  const error = readError || parseError;
+
+  const loadText = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setReadError('');
+      setTrajectoryText((e.target?.result as string) ?? '');
+    };
+    reader.onerror = () => setReadError('Could not read the file.');
+    reader.readAsText(file);
+  };
+
+  const sidebar = (
+    <VizPanel stack>
+      <SegmentedControl<Source>
+        aria-label="Input"
+        value={source}
+        onChange={setSource}
+        options={[
+          { value: 'xyz', label: 'XYZ text' },
+          { value: 'files', label: 'Structure files' },
+        ]}
+      />
+
+      {source === 'xyz' ? (
+        <>
+          <ControlGroup label="Multi-frame XYZ">
+            <FileDrop label="Open file" accept=".xyz,.extxyz,.txt" onFile={loadText} />
+            <textarea
+              className={styles.textarea}
+              value={trajectoryText}
+              onChange={(e) => {
+                setReadError('');
+                setTrajectoryText(e.target.value);
+              }}
+              placeholder="Paste multi-frame XYZ here"
+              spellCheck={false}
+              aria-label="XYZ trajectory"
+            />
+            <ButtonRow>
+              <VizButton size="sm" onClick={() => setTrajectoryText(EXAMPLE_TRAJECTORY)}>
+                Example
+              </VizButton>
+              <VizButton size="sm" variant="ghost" onClick={() => setTrajectoryText('')} disabled={!trajectoryText}>
+                Clear
+              </VizButton>
+            </ButtonRow>
+            {error && <p className={styles.error}>{error}</p>}
+          </ControlGroup>
+          <CollapsibleSection title="Format">
+            <ControlHint>Each frame is an atom count, a comment line, then one line per atom.</ControlHint>
+            <pre className={styles.formatExample}>{FORMAT_EXAMPLE}</pre>
+            <ControlHint>
+              Extended XYZ comments are read too: <code>Energy=</code> is shown relative to the lowest frame, and{' '}
+              <code>Lattice="…"</code> enables the unit cell and supercells.
+            </ControlHint>
+          </CollapsibleSection>
+        </>
+      ) : (
+        <>
+          <ControlGroup label="Structure (required)">
+            <FileDrop
+              label="Choose structure"
+              accept=".pdb,.ent,.pqr,.gro,.mmcif,.cif,.mcif,.sdf,.mol2,.mmtf"
+              file={structureFile}
+              onFile={setStructureFile}
+            />
+            <ControlHint>PDB, GRO, mmCIF, SDF, MOL2 or MMTF.</ControlHint>
+          </ControlGroup>
+          <ControlGroup label="Trajectory (optional)">
+            <FileDrop label="Choose trajectory" accept=".dcd,.trr,.xtc,.nctraj" file={trajectoryFile} onFile={setTrajectoryFile} />
+            <ControlHint>DCD, TRR, XTC or NCTRAJ. Leave empty to play the models of a multi-model structure.</ControlHint>
+          </ControlGroup>
+          <VizButton
+            size="sm"
+            variant="ghost"
+            disabled={!structureFile && !trajectoryFile}
+            onClick={() => {
+              setStructureFile(null);
+              setTrajectoryFile(null);
+            }}
+          >
+            Clear files
+          </VizButton>
+        </>
+      )}
+    </VizPanel>
+  );
+
+  let viewer: React.ReactNode;
+  if (source === 'xyz' && trajectoryText.trim() && !error) {
+    viewer = <TrajectoryViewer trajectoryData={trajectoryText} moleculeName="XYZ trajectory" autoPlay={false} />;
+  } else if (source === 'files' && structureFile) {
+    viewer = (
+      <TrajectoryViewer
+        structureFile={structureFile}
+        trajectoryFile={trajectoryFile ?? undefined}
+        moleculeName={structureFile.name.split('.')[0]}
+        autoPlay={false}
+      />
+    );
+  } else {
+    viewer = (
+      <VizPanel className={styles.placeholder}>
+        <div className={styles.placeholderContent}>
+          {source === 'xyz' ? (
+            <>
+              <p>Paste or open a multi-frame XYZ file to play it back.</p>
+              <VizButton variant="primary" onClick={() => setTrajectoryText(EXAMPLE_TRAJECTORY)}>
+                Load the example
+              </VizButton>
+            </>
+          ) : (
+            <p>Choose a structure file, and optionally a trajectory, to play it back.</p>
+          )}
+        </div>
+      </VizPanel>
+    );
+  }
+
+  return (
+    <VizPage
+      title="Trajectory viewer"
+      description="Play back molecular trajectories from XYZ data or structure and trajectory files"
+      intro="Play back geometry optimisations and dynamics from multi-frame XYZ, or from a structure plus trajectory file. Everything runs in your browser using NGL."
+    >
+      <VizWorkbench sidebar={sidebar}>
+        <div className={styles.stage}>{viewer}</div>
+      </VizWorkbench>
+    </VizPage>
+  );
+}

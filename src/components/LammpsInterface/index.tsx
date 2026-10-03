@@ -8,8 +8,12 @@ import { parseLammpsDataFile, lammpsDataToPDB, LammpsDataFile } from './utils/la
 import { InputTab } from './tabs/InputTab';
 import { OutputTab } from './tabs/OutputTab';
 import { ViewerTab } from './tabs/ViewerTab';
+import { SegmentedControl, VizButton } from '../shared/controls';
 
-interface LammpsInterfaceProps {}
+interface LammpsInterfaceProps {
+  /** Page heading, shown in the first row of the card. */
+  title: string;
+}
 
 // Count frames in XYZ trajectory data
 const countXYZFrames = (data: string): number => {
@@ -46,7 +50,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: 'viewer', label: 'Viewer' },
 ];
 
-const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
+const LammpsInterface: React.FC<LammpsInterfaceProps> = ({ title }) => {
   // Tab state
   const [activeTab, setActiveTab] = useState<TabId>('input');
 
@@ -73,19 +77,11 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
 
   // Parse LAMMPS data file and extract info (without converting to PDB yet)
   const lammpsData = useMemo((): { data: LammpsDataFile; filename: string } | null => {
-    console.log('[LAMMPS Debug] Checking uploaded files:', Array.from(uploadedFiles.keys()));
     for (const [name, content] of uploadedFiles) {
-      console.log(`[LAMMPS Debug] File "${name}" - isLammpsCoordFile: ${isLammpsCoordFile(name)}`);
       if (isLammpsCoordFile(name)) {
         try {
           const text = new TextDecoder().decode(content);
           const parsed = parseLammpsDataFile(text);
-          console.log('[LAMMPS Debug] Parsed result:', parsed ? {
-            atoms: parsed.atoms.length,
-            bonds: parsed.bonds.length,
-            masses: parsed.masses,
-            atomTypes: parsed.atomTypes
-          } : null);
           if (parsed) {
             return { data: parsed, filename: name };
           }
@@ -126,7 +122,6 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
         for (let i = 1; i <= lammpsData.data.atomTypes; i++) {
           newMapping.set(i, 'X');
         }
-        console.log('[LAMMPS Debug] No masses found, initialized default mapping for', lammpsData.data.atomTypes, 'types');
       }
 
       setElementMapping(newMapping);
@@ -139,18 +134,13 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
     // First check for native PDB/GRO files
     for (const [name, content] of uploadedFiles) {
       if (isTopologyFile(name)) {
-        console.log('[LAMMPS Debug] Found native topology file:', name);
         return { name, content, hasExplicitBonds: true };
       }
     }
 
     // If no PDB but we have parsed LAMMPS data, convert to PDB with current element mapping
     if (lammpsData) {
-      console.log('[LAMMPS Debug] Converting LAMMPS data to PDB with element mapping:',
-        Object.fromEntries(elementMapping));
       const pdbContent = lammpsDataToPDB(lammpsData.data, elementMapping.size > 0 ? elementMapping : undefined);
-      console.log('[LAMMPS Debug] Generated PDB (first 500 chars):', pdbContent.substring(0, 500));
-      console.log('[LAMMPS Debug] PDB has CONECT records:', pdbContent.includes('CONECT'));
       const encoder = new TextEncoder();
       return {
         name: lammpsData.filename.replace(/\.\w+$/, '.pdb'),
@@ -159,7 +149,6 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
       };
     }
 
-    console.log('[LAMMPS Debug] No topology file found');
     return null;
   }, [uploadedFiles, lammpsData, elementMapping]);
 
@@ -556,43 +545,43 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = () => {
     return `${h}h ${m}m`;
   };
 
+  const tabOptions = TABS.map(({ id, label }) => {
+    const badge = id === 'output' && errorCount > 0 ? errorCount :
+                 id === 'viewer' && frameCount > 0 ? frameCount : undefined;
+    return {
+      value: id,
+      label: (
+        <span className={styles.tabLabel}>
+          {label}
+          {badge !== undefined && (
+            <span className={`${styles.tabBadge} ${id === 'output' ? styles.tabBadgeError : ''}`}>{badge}</span>
+          )}
+          {id === 'viewer' && isPolling && <span className={styles.liveDotSmall} aria-label="live" />}
+        </span>
+      ),
+    };
+  });
+
   return (
     <div className={styles.container}>
-      {/* Tab bar */}
-      <div className={styles.tabBar}>
-        <div className={styles.tabBarTabs}>
-          {TABS.map(({ id, label }) => {
-            const isActive = activeTab === id;
-            const badge = id === 'output' && errorCount > 0 ? errorCount :
-                         id === 'viewer' && frameCount > 0 ? frameCount : undefined;
-
-            return (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className={`${styles.tabButton} ${isActive ? styles.tabButtonActive : ''}`}
-              >
-                {label}
-                {badge !== undefined && (
-                  <span className={`${styles.tabBadge} ${id === 'output' && errorCount > 0 ? styles.tabBadgeError : ''}`}>
-                    {badge}
-                  </span>
-                )}
-                {id === 'viewer' && isPolling && (
-                  <span className={styles.liveDotSmall} />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <button
-          className={styles.clearStorageBtn}
+      <div className={styles.header}>
+        <h1 className={styles.title}>{title}</h1>
+        <SegmentedControl<TabId>
+          aria-label="View"
+          className={styles.tabs}
+          value={activeTab}
+          onChange={setActiveTab}
+          options={tabOptions}
+        />
+        <VizButton
+          variant="ghost"
+          size="sm"
           onClick={handleClearStorage}
           disabled={isRunning}
-          title="Clear saved state and reset"
+          title="Clear saved files and output, and reset"
         >
-          Clear
-        </button>
+          Reset
+        </VizButton>
       </div>
 
       {/* Tab content */}

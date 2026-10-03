@@ -1,131 +1,62 @@
+/* All colours come from --viz-* tokens. */
+
 .container {
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  background-color: var(--ifm-background-surface-color);
-  overflow: hidden;
-  width: 100%;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: var(--viz-text);
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: var(--viz-shadow);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 1rem;
-  background: var(--ifm-background-surface-color);
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--viz-border);
 }
 
 .header h4 {
   margin: 0;
-  color: var(--ifm-heading-color);
-  font-size: 1rem;
+  font-size: var(--viz-font-md);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  color: var(--viz-text);
 }
 
 .controls {
   display: flex;
-  gap: 0.5rem;
-}
-
-.controlButton {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.875rem;
-  border: 1px solid var(--ifm-color-primary-light);
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-color-primary);
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
-}
-
-.controlButton:hover {
-  background-color: var(--ifm-color-primary);
-  color: var(--ifm-background-surface-color);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.representationControls {
-  display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background-color: var(--ifm-background-color);
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.controlGroup {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
-  width: 100%;
-}
-
-.inlineControlGroup {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.controlLabel {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0;
-}
-
-.controlSelect {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.875rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.controlSelect:hover {
-  border-color: var(--ifm-color-primary);
-}
-
-.controlSelect:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  gap: 0.375rem;
 }
 
 .viewer {
   position: relative;
-  background: var(--ifm-background-surface-color);
   flex: 1;
-  min-height: 400px;
   width: 100%;
+  min-height: 400px;
+  background: var(--viz-canvas);
 }
 
 .loadingOverlay,
 .errorOverlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ifm-background-surface-color);
-  z-index: 10;
+  background: var(--viz-canvas);
 }
 
 .loadingSpinner {
-  font-size: 1rem;
-  color: var(--ifm-color-primary);
+  font-size: var(--viz-font-md);
+  color: var(--viz-muted);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -134,632 +65,204 @@
   50% { opacity: 0.5; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .loadingSpinner { animation: none; }
+}
+
 .errorMessage {
-  color: var(--ifm-color-danger);
-  font-size: 0.875rem;
-  padding: 1rem;
-  background: var(--ifm-color-danger-lightest);
-  border: 1px solid var(--ifm-color-danger-light);
-  border-radius: 0.375rem;
   max-width: 400px;
+  padding: 0.75rem 1rem;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-danger);
+  background: var(--viz-surface-subtle);
+  border: 1px solid var(--viz-danger);
+  border-radius: var(--viz-radius);
 }
 
 .frameInfoOverlay {
   position: absolute;
-  bottom: 1rem;
-  right: 1rem;
-  background: transparent;
-  color: var(--ifm-font-color-base);
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  backdrop-filter: blur(8px);
+  right: 0.75rem;
+  bottom: 0.75rem;
   z-index: 5;
   max-width: 300px;
+  padding: 0.375rem 0.625rem;
+  font-size: var(--viz-font-sm);
+  line-height: 1.4;
+  text-align: right;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--viz-surface) 80%, transparent);
+  border-radius: var(--viz-radius);
+  backdrop-filter: blur(6px);
 }
 
 .frameNumber {
   font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: var(--ifm-color-primary);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-text);
 }
 
 .frameComment {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-700);
-  margin-bottom: 0.25rem;
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
+  overflow-wrap: anywhere;
 }
 
-.frameEnergy {
-  font-weight: 600;
-  color: var(--ifm-color-success-dark);
+.frameValue {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-text);
 }
 
-.frameVolume {
-  font-weight: 600;
-  color: var(--ifm-color-info-dark);
-  font-size: 0.875rem;
-}
-
-/* Display controls overlay */
+/* Display options popover */
 .displayControlsOverlay {
   position: absolute;
-  top: 1rem;
-  left: 1rem;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
+  top: 0.75rem;
+  left: 0.75rem;
   z-index: 10;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  max-width: 280px;
+  display: grid;
+  gap: 0.625rem;
+  width: 15rem;
+  max-height: calc(100% - 1.5rem);
+  overflow-y: auto;
+  padding: 0.75rem;
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: 0 4px 16px rgba(16, 24, 40, 0.12);
 }
 
-.overlayControls {
-  display: flex;
-  flex-direction: column;
+.overlaySection {
+  display: grid;
   gap: 0.5rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid var(--viz-border);
 }
 
-.overlayControlGroup {
+.overlaySectionHeader {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--viz-muted);
+}
+
+.overlayRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
 }
 
 .overlayLabel {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-  min-width: 50px;
-}
-
-.overlaySelect {
-  flex: 1;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-  cursor: pointer;
-}
-
-.overlaySelect:hover {
-  border-color: var(--ifm-color-primary);
-}
-
-.overlaySelect:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  font-size: var(--viz-font-sm);
+  color: var(--viz-text);
 }
 
 .overlayTextInput {
-  width: 60px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-}
-
-.overlayTextInput:hover {
-  border-color: var(--ifm-color-primary);
+  width: 5rem;
+  padding: 0.125rem 0.375rem;
+  font: inherit;
+  font-size: var(--viz-font-xs);
+  color: var(--viz-text);
+  background: var(--viz-surface-subtle);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-sm);
 }
 
 .overlayTextInput:focus {
   outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 2px var(--viz-accent-soft);
 }
 
-.overlayCheckbox {
-  margin: 0;
-}
-
-.overlaySlider {
-  flex: 1;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--ifm-color-emphasis-200);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-  margin: 0 0.5rem;
-}
-
-.overlaySlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
-  cursor: pointer;
-}
-
-.overlaySlider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
-  cursor: pointer;
-  border: none;
-}
-
-.overlayValue {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--ifm-color-primary);
-  min-width: 30px;
-  text-align: center;
-}
-
-.overlayNumberInput {
-  width: 60px;
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-  text-align: center;
-}
-
-.overlayNumberInput:hover {
-  border-color: var(--ifm-color-primary);
-}
-
-.overlayNumberInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.overlaySection {
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-}
-
-.overlaySectionHeader {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-600);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-}
-
+/* Playback bar */
 .trajectoryControls {
-  background: linear-gradient(to bottom, var(--ifm-background-color), var(--ifm-background-surface-color));
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-  padding: 0.5rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   flex-shrink: 0;
-}
-
-.compactControls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.frameControls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.trajectoryInfo {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-}
-
-.frameInfo {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-800);
-  background: var(--ifm-color-emphasis-100);
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--viz-border);
 }
 
 .playerControls {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
 .playerButton {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid var(--ifm-color-primary-light);
-  background: var(--ifm-background-surface-color);
-  color: var(--ifm-color-primary);
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  color: var(--viz-text);
+  background: transparent;
+  border: 1px solid var(--viz-border);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
-.playerButton:hover {
-  background: var(--ifm-color-primary);
-  color: var(--ifm-background-surface-color);
-  transform: scale(1.1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+.playerButton svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: currentColor;
 }
 
-.playerButton:active {
-  transform: scale(0.95);
+.playerButton:hover:not(:disabled) {
+  background: var(--viz-surface-subtle);
+  border-color: var(--viz-axis);
+}
+
+.playerButton:focus-visible {
+  outline: 2px solid var(--viz-accent);
+  outline-offset: 2px;
 }
 
 .playerButton:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
-  transform: none;
-}
-
-.playerButton:disabled:hover {
-  background: var(--ifm-background-surface-color);
-  color: var(--ifm-color-primary);
-  transform: none;
-  box-shadow: none;
-}
-
-/* CSS-based icons for better appearance */
-.playerButton.firstFrame::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 6px 8px 6px 0;
-  border-color: transparent currentColor transparent transparent;
-  margin-right: 2px;
-}
-
-.playerButton.firstFrame::after {
-  content: '';
-  width: 2px;
-  height: 12px;
-  background: currentColor;
-  position: absolute;
-  left: 12px;
-}
-
-.playerButton.prevFrame::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 6px 8px 6px 0;
-  border-color: transparent currentColor transparent transparent;
-}
-
-.playerButton.nextFrame::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 6px 0 6px 8px;
-  border-color: transparent transparent transparent currentColor;
-}
-
-.playerButton.lastFrame::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 6px 0 6px 8px;
-  border-color: transparent transparent transparent currentColor;
-  margin-left: 2px;
-}
-
-.playerButton.lastFrame::after {
-  content: '';
-  width: 2px;
-  height: 12px;
-  background: currentColor;
-  position: absolute;
-  right: 12px;
 }
 
 .playPauseButton {
-  width: 44px;
-  height: 44px;
-  font-size: 1.125rem;
-  background: var(--ifm-color-primary);
-  color: var(--ifm-background-surface-color);
-  border-color: var(--ifm-color-primary);
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--viz-on-accent);
+  background: var(--viz-accent);
+  border-color: var(--viz-accent);
 }
 
-.playPauseButton:hover {
-  background: var(--ifm-color-primary-darker);
-  border-color: var(--ifm-color-primary-darker);
-}
-
-.playPauseButton.playing::before {
-  content: '';
-  width: 3px;
-  height: 12px;
-  background: currentColor;
-  margin-right: 2px;
-}
-
-.playPauseButton.playing::after {
-  content: '';
-  width: 3px;
-  height: 12px;
-  background: currentColor;
-  margin-left: 2px;
-}
-
-.playPauseButton.paused::before {
-  content: '';
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 8px 0 8px 12px;
-  border-color: transparent transparent transparent currentColor;
-  margin-left: 2px;
-}
-
-.sliderContainer {
-  padding: 0 1rem;
+.playPauseButton:hover:not(:disabled) {
+  background: var(--viz-accent);
+  border-color: var(--viz-accent);
+  filter: brightness(1.08);
 }
 
 .frameSlider {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--ifm-color-emphasis-200);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.frameSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.frameSlider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  background: var(--ifm-color-primary-darker);
-}
-
-.frameSlider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.frameSlider::-moz-range-thumb:hover {
-  transform: scale(1.2);
-  background: var(--ifm-color-primary-darker);
-}
-
-.speedControl {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 0 1rem;
-}
-
-.speedLabel {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-  margin: 0;
-  min-width: 50px;
-}
-
-.speedSlider {
   flex: 1;
-  max-width: 200px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--ifm-color-emphasis-200);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.speedSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--viz-accent);
   cursor: pointer;
-  transition: all 0.2s;
 }
 
-.speedSlider::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  background: var(--ifm-color-primary-darker);
+.frameSlider:disabled {
+  cursor: not-allowed;
 }
 
-.speedSlider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ifm-color-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.speedSlider::-moz-range-thumb:hover {
-  transform: scale(1.2);
-  background: var(--ifm-color-primary-darker);
-}
-
-.speedValue {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--ifm-color-primary);
-  min-width: 50px;
-  text-align: right;
-}
-
-.keyboardHints {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.hint {
-  font-size: 0.75rem;
-  color: var(--ifm-color-emphasis-600);
-  background: var(--ifm-color-emphasis-100);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  font-family: var(--ifm-font-family-monospace);
-}
-
-/* Responsive design */
 @media (max-width: 768px) {
   .viewer {
     min-height: 300px;
   }
-  
-  /* Much more compact controls on mobile */
-  .trajectoryControls {
-    padding: 0.25rem 0.5rem;
-  }
-  
-  .compactControls {
-    gap: 0.5rem;
-    flex-direction: column;
-  }
-  
-  .frameControls {
-    gap: 0.25rem;
-    order: 1;
-  }
-  
-  .controlGroup {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-  
-  .representationControls {
-    padding: 0.5rem;
-    gap: 0.5rem;
-  }
-  
-  .playerControls {
-    gap: 0.25rem;
-  }
-  
-  .playerButton {
-    width: 28px;
-    height: 28px;
-    font-size: 0.75rem;
-  }
-  
-  .playPauseButton {
-    width: 32px;
-    height: 32px;
-    font-size: 0.875rem;
-  }
-  
-  .trajectoryInfo {
-    gap: 0.5rem;
-  }
-  
-  .frameInfo {
-    font-size: 0.75rem;
-    padding: 0.125rem 0.5rem;
-  }
-  
-  .speedControl {
-    gap: 0.5rem;
-    padding: 0 0.5rem;
-  }
-  
-  .speedLabel {
-    font-size: 0.75rem;
-    min-width: 40px;
-  }
-  
-  .speedValue {
-    font-size: 0.7rem;
-    min-width: 40px;
-  }
-  
-  .sliderContainer {
-    padding: 0 0.5rem;
-  }
-  
-  /* Hide keyboard hints on mobile to save space */
-  .keyboardHints {
-    display: none;
-  }
-  
-  /* Mobile overlay controls */
+
   .displayControlsOverlay {
     top: 0.5rem;
     left: 0.5rem;
     right: 0.5rem;
-    max-width: none;
-    padding: 0.5rem;
-  }
-  
-  .overlayControls {
-    gap: 0.25rem;
-  }
-  
-  .overlayControlGroup {
-    gap: 0.25rem;
-  }
-  
-  .overlayLabel {
-    min-width: 40px;
-    font-size: 0.7rem;
-  }
-  
-  .overlaySelect {
-    font-size: 0.7rem;
-    padding: 0.125rem 0.25rem;
-  }
-  
-  .overlaySlider {
-    margin: 0 0.25rem;
-  }
-  
-  .overlayValue {
-    font-size: 0.65rem;
-    min-width: 25px;
+    width: auto;
   }
 }

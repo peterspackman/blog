@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Select, VizButton } from '../shared/controls';
 import styles from './FileUploader.module.css';
 import { fetchFromPubChem } from './pubchem';
 
@@ -312,8 +313,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
     }, 300);
   };
 
-  const handleExampleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const exampleKey = e.target.value;
+  const handleExampleChange = (exampleKey: string) => {
     if (exampleKey && exampleMolecules[exampleKey as keyof typeof exampleMolecules]) {
       const molecule = exampleMolecules[exampleKey as keyof typeof exampleMolecules];
       setXyzText(molecule.xyz);
@@ -355,22 +355,18 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
 
   return (
     <div className={styles.section}>
-      <div className={styles.exampleSection}>
-        <label className={styles.exampleLabel}>Example Molecules</label>
-        <select 
-          value={selectedExample} 
-          onChange={handleExampleChange}
-          className={styles.exampleSelect}
-        >
-          <option value="">Select an example...</option>
-          {Object.entries(exampleMolecules).map(([key, molecule]) => (
-            <option key={key} value={key}>{molecule.name}</option>
-          ))}
-        </select>
-      </div>
+      <Select
+        label="Example"
+        value={selectedExample}
+        onChange={handleExampleChange}
+        options={[
+          { value: '', label: 'Choose a molecule…' },
+          ...Object.entries(exampleMolecules).map(([key, molecule]) => ({ value: key, label: molecule.name })),
+        ]}
+      />
       
       <div className={styles.pubchemSection}>
-        <label className={styles.exampleLabel}>Search PubChem</label>
+        <label className={styles.label}>Search PubChem</label>
         <div className={styles.pubchemRow}>
           <input
             type="text"
@@ -381,13 +377,13 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
             onKeyDown={handlePubchemKeyDown}
             disabled={pubchemLoading}
           />
-          <button
-            className={styles.pubchemButton}
+          <VizButton
+            variant="primary"
             onClick={handlePubchemSearch}
             disabled={!pubchemQuery.trim() || pubchemLoading}
           >
-            {pubchemLoading ? '...' : 'Fetch'}
-          </button>
+            {pubchemLoading ? '…' : 'Fetch'}
+          </VizButton>
         </div>
         {pubchemError && (
           <div className={styles.pubchemError}>{pubchemError}</div>
@@ -396,19 +392,19 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileLoad, onValidationCha
 
       <div className={styles.inputContainer}>
         <div className={styles.headerRow}>
-          <span className={styles.label}>XYZ Coordinates</span>
+          <span className={styles.label}>XYZ coordinates</span>
           <div className={styles.controls}>
-            <button onClick={handleBrowseClick} className={styles.browseButton}>
-              Browse
-            </button>
+            <VizButton size="sm" variant="ghost" onClick={handleBrowseClick}>
+              Browse…
+            </VizButton>
             {(fileName || xyzText) && (
-              <button onClick={clearFile} className={styles.clearButton}>Clear</button>
+              <VizButton size="sm" variant="ghost" onClick={clearFile}>Clear</VizButton>
             )}
           </div>
         </div>
         
         <div
-          className={`${styles.combinedInput} ${isDragging ? styles.dragging : ''} ${!isValid ? styles.invalid : xyzText.trim() ? styles.valid : ''}`}
+          className={`${styles.combinedInput} ${isDragging ? styles.dragging : ''} ${!isValid ? styles.invalid : ''}`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}

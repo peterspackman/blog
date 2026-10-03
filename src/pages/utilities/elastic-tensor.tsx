@@ -1,30 +1,23 @@
 import React from 'react';
-import Layout from '@theme/Layout';
-import { ElasticTensor } from '../../components/ElasticTensor';
+import { VizPage } from '@site/src/components/shared/viz';
+import { ElasticTensor } from '@site/src/components/ElasticTensor';
 
 export default function ElasticTensorPage(): React.JSX.Element {
   return (
-    <Layout
-      title="Elastic Tensor Calculator"
-      description="Interactive elastic tensor analysis tool for calculating elastic properties and visualizations"
+    <VizPage
+      title="Elastic tensor analysis"
+      description="Interactive elastic tensor analysis: averaged moduli, directional extremes and polar and 3D plots of Young's modulus, shear modulus, linear compressibility and Poisson's ratio"
+      intro="Paste a 6×6 stiffness matrix to get Voigt–Reuss–Hill averages and see how each modulus varies with direction."
+      actions={
+        <small>
+          Inspired by{' '}
+          <a href="https://progs.coudert.name/elate" target="_blank" rel="noopener noreferrer">
+            ELATE
+          </a>
+        </small>
+      }
     >
-      <main style={{ minHeight: 'calc(100vh - 60px)' }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center',
-          padding: '0.5rem 1rem',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-          margin: '1rem',
-          marginBottom: '1.5rem'
-        }}>
-          <h1 style={{ marginBottom: 0, fontSize: '1.5rem', flex: '1 1 auto' }}>Elastic Tensor Calculator</h1>
-          <small style={{ color: 'var(--ifm-color-emphasis-600)', flex: '0 0 auto' }}>
-            Inspired by <a href="https://progs.coudert.name/elate" target="_blank" rel="noopener noreferrer">ELATE</a>
-          </small>
-        </div>
-        <ElasticTensor />
-      </main>
-    </Layout>
+      <ElasticTensor />
+    </VizPage>
   );
 }

@@ -78,6 +78,8 @@ export interface NGLRendererProps {
     volumeGrid?: VolumeGrid;
     autoRotate?: boolean;
     isDark: boolean;
+    /** Viewer background; defaults to the theme surface. */
+    background?: string;
     onCameraChange?: (state: CameraState) => void;
 }
 
@@ -196,6 +198,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
             volumeGrid,
             autoRotate = true,
             isDark,
+            background,
             onCameraChange,
         },
         ref
@@ -248,9 +251,7 @@ export const NGLRenderer = forwardRef<NGLRendererRef, NGLRendererProps>(
             },
         }));
 
-        const getBackgroundColor = useCallback(() => {
-            return isDark ? '#2d2d2d' : '#f8f9fa';
-        }, [isDark]);
+        const getBackgroundColor = useCallback(() => background ?? (isDark ? '#222429' : '#ffffff'), [background, isDark]);
 
         // Create unit cell wireframe
         const createUnitCellShape = useCallback(

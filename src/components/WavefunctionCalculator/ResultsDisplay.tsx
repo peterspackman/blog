@@ -1,4 +1,5 @@
 import React from 'react';
+import { VizButton } from '../shared/controls';
 import styles from './ResultsDisplay.module.css';
 import { getEnergyValues, getOrbitalCount } from './types';
 import type { CalculationResult } from './types';
@@ -158,29 +159,26 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
         <div className={styles.exportSection}>
           <h4>Export Wavefunction</h4>
           <div className={styles.exportButtons}>
-            <button
-              className={results.wavefunctionData.owfJson ? styles.exportButton : `${styles.exportButton} ${styles.exportButtonDisabled}`}
+            <VizButton size="sm"
               onClick={() => results.wavefunctionData.owfJson ? downloadWavefunction('owf') : null}
               disabled={!results.wavefunctionData.owfJson}
               title="Download full wavefunction in OCC format"
             >
               ↓ OWF.JSON
-            </button>
-            <button
-              className={styles.exportButton}
+            </VizButton>
+            <VizButton size="sm"
               onClick={() => downloadWavefunction('summary')}
               title="Download calculation summary (energy, orbitals, properties)"
             >
               ↓ Summary
-            </button>
-            <button
-              className={results.wavefunctionData.fchk ? styles.exportButton : `${styles.exportButton} ${styles.exportButtonDisabled}`}
+            </VizButton>
+            <VizButton size="sm"
               onClick={() => results.wavefunctionData.fchk ? downloadWavefunction('fchk') : alert('FCHK data not available. Check the calculation logs for details.')}
               disabled={!results.wavefunctionData.fchk}
               title={results.wavefunctionData.fchk ? 'Download FCHK file' : 'FCHK generation not yet implemented via CLI'}
             >
               ↓ FCHK {!results.wavefunctionData.fchk && '(N/A)'}
-            </button>
+            </VizButton>
           </div>
         </div>
       )}
@@ -189,13 +187,12 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
         <div className={styles.exportSection}>
           <h4>Export Optimized Geometry</h4>
           <div className={styles.exportButtons}>
-            <button 
-              className={styles.exportButton}
+            <VizButton size="sm"
               onClick={downloadOptimizedXYZ}
               title="Download optimized geometry in XYZ format"
             >
               ↓ Optimized XYZ
-            </button>
+            </VizButton>
           </div>
           <div className={styles.optimizationInfo}>
             <div className={styles.infoItem}>

@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as NGL from 'ngl';
+import { useVizTheme } from '../shared/viz';
+import { Select, SliderWithInput, ToggleSwitch, VizButton } from '../shared/controls';
 import styles from './TrajectoryViewer.module.css';
+
+const hexToRgb = (hex: string): [number, number, number] => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+  return m ? [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255] : [1, 0.5, 0];
+};
 
 // Custom unit cell representation that we can update manually
 class CustomUnitCellRepresentation {
@@ -8,10 +15,12 @@ class CustomUnitCellRepresentation {
   private stage: any;
   private shapeComponent: any = null;
   private frameUnitcells: any[] = [];
+  private color: [number, number, number];
   
-  constructor(component: any, stage: any) {
+  constructor(component: any, stage: any, color: string) {
     this.component = component;
     this.stage = stage;
+    this.color = hexToRgb(color);
   }
   
   setFrameUnitcells(frameComments: string[]) {
@@ -86,7 +95,9 @@ class CustomUnitCellRepresentation {
       shape.addWideline(
         corners[i] as [number, number, number],
         corners[j] as [number, number, number],
-        [1, 0.5, 0] // orange color
+        this.color,
+        5,
+        'cell edge'
       );
     });
     
@@ -404,18 +415,15 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       .catch(err => console.warn('Failed to load element data:', err));
   }, []);
 
-  // Get theme-aware background color
-  const getBackgroundColor = () => {
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    return isDark ? '#1b1b1d' : '#ffffff';
-  };
+  const theme = useVizTheme();
+  const inferBonds = autoBond ? 'auto' : 'none';
 
   // Initialize NGL Stage
   useEffect(() => {
     if (!stageRef.current) return;
 
     nglStageRef.current = new NGL.Stage(stageRef.current, {
-      backgroundColor: getBackgroundColor(),
+      backgroundColor: theme.canvas,
       quality: 'medium',
       clipNear: 0.000001,
       clipFar: 100,
@@ -455,30 +463,19 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 
-    // Listen for theme changes
-    const handleThemeChange = () => {
-      if (nglStageRef.current) {
-        nglStageRef.current.setParameters({ backgroundColor: getBackgroundColor() });
-      }
-    };
-
-    // Use MutationObserver to watch for theme changes
-    const observer = new MutationObserver(handleThemeChange);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
-
     return () => {
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-      observer.disconnect();
       if (nglStageRef.current) {
         nglStageRef.current.dispose();
       }
     };
   }, []);
+
+  useEffect(() => {
+    nglStageRef.current?.setParameters({ backgroundColor: theme.canvas });
+  }, [theme.canvas]);
 
   // Parse energy from extended XYZ comment line
   const parseExtendedXYZEnergy = (comment: string): number | null => {
@@ -662,16 +659,16 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
         // URL
         structure = await nglStageRef.current.loadFile(structFile, {
           name: moleculeName,
-          autoBond: autoBond
-        });
+          inferBonds
+        }) as any;
       } else {
         // File object
         const ext = getFileExtension(structFile.name);
         structure = await nglStageRef.current.loadFile(structFile, {
           ext: ext,
           name: moleculeName,
-          autoBond: autoBond
-        });
+          inferBonds
+        }) as any;
       }
       
       componentRef.current = structure;
@@ -835,8 +832,8 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
         ext: 'pdb',
         name: moleculeName,
         asTrajectory: true,
-        autoBond: autoBond
-      });
+        inferBonds
+      }) as any;
       
       componentRef.current = structure;
       setTotalFrames(frames.length);
@@ -888,16 +885,12 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       nglStageRef.current.autoView();
       
       // Create custom unit cell representation if we have lattice data
-      console.log('Trajectory loaded. latticeDetected:', latticeDetected, 'comments.length:', comments.length);
       if (latticeDetected && comments.length > 0) {
-        console.log('Creating CustomUnitCellRepresentation...');
-        const unitCell = new CustomUnitCellRepresentation(structure, nglStageRef.current);
+        const unitCell = new CustomUnitCellRepresentation(structure, nglStageRef.current, theme.series[1]);
         unitCell.setFrameUnitcells(comments);
         setCustomUnitCell(unitCell);
         setHasLattice(true);
-        console.log('CustomUnitCellRepresentation created:', unitCell);
       } else {
-        console.log('Not creating unit cell: latticeDetected =', latticeDetected, 'comments =', comments.length);
         setHasLattice(false);
       }
       
@@ -1272,24 +1265,29 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [totalFrames, currentFrame, isPlaying]);
 
+  const energyText = (() => {
+    const e = frameEnergies[currentFrame];
+    if (e === null || e === undefined || minEnergy === null) return null;
+    const relativeKJ = (e - minEnergy) * 2625.5; // Ha to kJ/mol
+    return `${relativeKJ >= 0 ? '+' : ''}${relativeKJ.toFixed(2)} kJ/mol`;
+  })();
+  const volume = frameVolumes[currentFrame];
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h4>{moleculeName}</h4>
         <div className={styles.controls}>
-          <button 
-            onClick={() => setShowOverlayControls(!showOverlayControls)} 
-            className={styles.controlButton}
-            title="Toggle display options"
+          <VizButton
+            size="sm"
+            variant={showOverlayControls ? 'primary' : 'secondary'}
+            onClick={() => setShowOverlayControls(!showOverlayControls)}
+            aria-pressed={showOverlayControls}
           >
             Options
-          </button>
-          <button onClick={resetView} className={styles.controlButton}>
-            Reset View
-          </button>
-          <button onClick={toggleFullscreen} className={styles.controlButton}>
-            Fullscreen
-          </button>
+          </VizButton>
+          <VizButton size="sm" onClick={resetView}>Reset view</VizButton>
+          <VizButton size="sm" onClick={toggleFullscreen}>Fullscreen</VizButton>
         </div>
       </div>
 
@@ -1297,7 +1295,7 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
       <div className={styles.viewer} ref={stageRef}>
         {isLoading && (
           <div className={styles.loadingOverlay}>
-            <div className={styles.loadingSpinner}>Loading trajectory...</div>
+            <div className={styles.loadingSpinner}>Loading trajectory…</div>
           </div>
         )}
         {error && (
@@ -1305,239 +1303,152 @@ const TrajectoryViewer: React.FC<TrajectoryViewerProps> = ({
             <div className={styles.errorMessage}>{error}</div>
           </div>
         )}
-        
-        {/* Frame info overlay */}
+
         {totalFrames > 0 && (
           <div className={styles.frameInfoOverlay}>
             <div className={styles.frameNumber}>
-              Frame {currentFrame + 1}/{totalFrames}
+              Frame {currentFrame + 1} / {totalFrames}
             </div>
             {frameComments[currentFrame] && (
-              <div className={styles.frameComment}>
-                {frameComments[currentFrame]}
-              </div>
+              <div className={styles.frameComment}>{frameComments[currentFrame]}</div>
             )}
-            {frameEnergies[currentFrame] !== null && frameEnergies[currentFrame] !== undefined && minEnergy !== null && (
-              <div className={styles.frameEnergy}>
-                {(() => {
-                  const currentEnergy = frameEnergies[currentFrame]!;
-                  const relativeEnergy = currentEnergy - minEnergy;
-                  const relativeKJ = relativeEnergy * 2625.5; // Convert Ha to kJ/mol
-                  const sign = relativeEnergy >= 0 ? '+' : '';
-                  return `${sign}${relativeKJ.toFixed(2)} kJ/mol`;
-                })()}
-              </div>
-            )}
-            {frameVolumes[currentFrame] !== null && frameVolumes[currentFrame] !== undefined && (
-              <div className={styles.frameVolume}>
-                Volume: {frameVolumes[currentFrame]!.toFixed(2)} Å³
-              </div>
+            {energyText && <div className={styles.frameValue}>{energyText}</div>}
+            {volume !== null && volume !== undefined && (
+              <div className={styles.frameValue}>V = {volume.toFixed(2)} Å³</div>
             )}
           </div>
         )}
 
-        {/* Display controls overlay */}
         {showOverlayControls && (
           <div className={styles.displayControlsOverlay}>
-            <div className={styles.overlayControls}>
-              <div className={styles.overlayControlGroup}>
-                <label className={styles.overlayLabel}>Style:</label>
-                <select 
-                  value={representation} 
-                  onChange={(e) => setRepresentation(e.target.value)}
-                  className={styles.overlaySelect}
-                >
-                  <option value="ball+stick">Ball & Stick</option>
-                  <option value="line">Line</option>
-                  <option value="spacefill">Spacefill</option>
-                  <option value="licorice">Licorice</option>
-                  <option value="cartoon">Cartoon</option>
-                </select>
-              </div>
-              
-              <div className={styles.overlayControlGroup}>
-                <label className={styles.overlayLabel}>Color:</label>
-                <select 
-                  value={colorScheme}
-                  onChange={(e) => setColorScheme(e.target.value)}
-                  className={styles.overlaySelect}
-                >
-                  <option value="element">Element</option>
-                  <option value="chainname">Chain</option>
-                  <option value="residueindex">Residue</option>
-                  <option value="bfactor">B-factor</option>
-                </select>
-              </div>
-              
-              <div className={styles.overlayControlGroup}>
-                <input 
-                  type="checkbox" 
-                  checked={showHydrogens}
-                  onChange={(e) => setShowHydrogens(e.target.checked)}
-                  id="showH-overlay"
-                  className={styles.overlayCheckbox}
-                />
-                <label htmlFor="showH-overlay" className={styles.overlayLabel}>
-                  Show Hydrogens
-                </label>
-              </div>
-              
-              <div className={styles.overlayControlGroup}>
-                <label className={styles.overlayLabel}>FPS:</label>
-                <input
-                  type="range"
-                  min="10"
-                  max="60"
-                  step="5"
-                  value={playbackFPS}
-                  onChange={(e) => updateFPS(parseInt(e.target.value))}
-                  className={styles.overlaySlider}
-                />
-                <span className={styles.overlayValue}>{playbackFPS}</span>
-              </div>
-              
-              {/* Atom type mapping - only show when atom types are available */}
-              {atomTypes && atomTypes.length > 0 && elementMapping && onElementMappingChange && (
-                <div className={styles.overlaySection}>
-                  <div className={styles.overlaySectionHeader}>Atom Types</div>
-                  {atomTypes.map(({ type, mass }) => (
-                    <div key={type} className={styles.overlayControlGroup}>
-                      <label className={styles.overlayLabel}>
-                        Type {type}{mass > 0 ? ` (${mass.toFixed(1)})` : ''}:
-                      </label>
-                      <input
-                        type="text"
-                        list={`elements-list-${type}`}
-                        value={elementMapping.get(type) || ''}
-                        onChange={(e) => {
-                          const newMapping = new Map(elementMapping);
-                          newMapping.set(type, e.target.value);
-                          onElementMappingChange(newMapping);
-                        }}
-                        placeholder="Element"
-                        className={styles.overlayTextInput}
-                      />
-                      <datalist id={`elements-list-${type}`}>
-                        {elementData.map(el => (
-                          <option key={el.symbol} value={el.symbol}>
-                            {el.name} ({el.mass.toFixed(2)})
-                          </option>
-                        ))}
-                      </datalist>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <Select
+              label="Style"
+              value={representation}
+              onChange={setRepresentation}
+              options={[
+                { value: 'ball+stick', label: 'Ball and stick' },
+                { value: 'line', label: 'Line' },
+                { value: 'spacefill', label: 'Spacefill' },
+                { value: 'licorice', label: 'Licorice' },
+                { value: 'cartoon', label: 'Cartoon' },
+              ]}
+            />
+            <Select
+              label="Colour"
+              value={colorScheme}
+              onChange={setColorScheme}
+              options={[
+                { value: 'element', label: 'Element' },
+                { value: 'chainname', label: 'Chain' },
+                { value: 'residueindex', label: 'Residue' },
+                { value: 'bfactor', label: 'B-factor' },
+              ]}
+            />
+            <ToggleSwitch label="Show hydrogens" checked={showHydrogens} onChange={setShowHydrogens} />
+            <SliderWithInput
+              label="Playback"
+              value={playbackFPS}
+              onChange={(v) => updateFPS(Math.round(v))}
+              min={10} max={60} step={5} decimals={0} unit="fps"
+            />
 
-              {/* Unit cell controls - only show when lattice is available */}
-              {hasLattice && (
-                <>
-                  <div className={styles.overlayControlGroup}>
-                    <input 
-                      type="checkbox" 
-                      checked={showUnitCell}
-                      onChange={(e) => setShowUnitCell(e.target.checked)}
-                      id="showUnitCell-overlay"
-                      className={styles.overlayCheckbox}
-                    />
-                    <label htmlFor="showUnitCell-overlay" className={styles.overlayLabel}>
-                      Show Unit Cell
+            {/* Atom type mapping - only show when atom types are available */}
+            {atomTypes && atomTypes.length > 0 && elementMapping && onElementMappingChange && (
+              <div className={styles.overlaySection}>
+                <div className={styles.overlaySectionHeader}>Atom types</div>
+                {atomTypes.map(({ type, mass }) => (
+                  <div key={type} className={styles.overlayRow}>
+                    <label className={styles.overlayLabel} htmlFor={`element-${type}`}>
+                      Type {type}{mass > 0 ? ` (${mass.toFixed(1)})` : ''}
                     </label>
+                    <input
+                      id={`element-${type}`}
+                      type="text"
+                      list={`elements-list-${type}`}
+                      value={elementMapping.get(type) || ''}
+                      onChange={(e) => {
+                        const newMapping = new Map(elementMapping);
+                        newMapping.set(type, e.target.value);
+                        onElementMappingChange(newMapping);
+                      }}
+                      placeholder="Element"
+                      className={styles.overlayTextInput}
+                    />
+                    <datalist id={`elements-list-${type}`}>
+                      {elementData.map(el => (
+                        <option key={el.symbol} value={el.symbol}>
+                          {el.name} ({el.mass.toFixed(2)})
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
-                  
-                  {showUnitCell && (
-                    <>
-                      <div className={styles.overlayControlGroup}>
-                        <label className={styles.overlayLabel}>Supercell X:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="5"
-                          value={supercellX}
-                          onChange={(e) => setSupercellX(parseInt(e.target.value) || 1)}
-                          className={styles.overlayNumberInput}
-                        />
-                      </div>
-                      
-                      <div className={styles.overlayControlGroup}>
-                        <label className={styles.overlayLabel}>Supercell Y:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="5"
-                          value={supercellY}
-                          onChange={(e) => setSupercellY(parseInt(e.target.value) || 1)}
-                          className={styles.overlayNumberInput}
-                        />
-                      </div>
-                      
-                      <div className={styles.overlayControlGroup}>
-                        <label className={styles.overlayLabel}>Supercell Z:</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="5"
-                          value={supercellZ}
-                          onChange={(e) => setSupercellZ(parseInt(e.target.value) || 1)}
-                          className={styles.overlayNumberInput}
-                        />
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
+
+            {/* Unit cell controls - only show when lattice is available */}
+            {hasLattice && (
+              <div className={styles.overlaySection}>
+                <ToggleSwitch label="Show unit cell" checked={showUnitCell} onChange={setShowUnitCell} />
+                {showUnitCell && (
+                  <>
+                    <SliderWithInput label="Supercell a" value={supercellX} onChange={(v) => setSupercellX(Math.round(v))} min={1} max={5} step={1} decimals={0} />
+                    <SliderWithInput label="Supercell b" value={supercellY} onChange={(v) => setSupercellY(Math.round(v))} min={1} max={5} step={1} decimals={0} />
+                    <SliderWithInput label="Supercell c" value={supercellZ} onChange={(v) => setSupercellZ(Math.round(v))} min={1} max={5} step={1} decimals={0} />
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* Trajectory controls - horizontal layout */}
       <div className={styles.trajectoryControls}>
-        <div className={styles.compactControls}>
-          {/* Left side - Player controls */}
-          <div className={styles.playerControls}>
-            <button
-              onClick={() => setFrame(Math.max(0, currentFrame - 1))}
-              className={styles.playerButton}
-              disabled={totalFrames <= 1 || currentFrame === 0}
-              title="Previous frame"
-            >
-              ⏮
-            </button>
-            <button
-              onClick={isPlaying ? pause : play}
-              className={`${styles.playerButton} ${styles.playPauseButton}`}
-              disabled={totalFrames <= 1}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? '⏸' : '⏵'}
-            </button>
-            <button
-              onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
-              className={styles.playerButton}
-              disabled={totalFrames <= 1 || currentFrame === totalFrames - 1}
-              title="Next frame"
-            >
-              ⏭
-            </button>
-          </div>
-
-          {/* Center/Right - Frame slider */}
-          <div className={styles.frameControls}>
-            <input
-              type="range"
-              min="0"
-              max={Math.max(totalFrames - 1, 0)}
-              value={currentFrame}
-              onChange={(e) => setFrame(parseInt(e.target.value))}
-              className={styles.frameSlider}
-              disabled={totalFrames <= 1}
-            />
-          </div>
+        <div className={styles.playerControls}>
+          <button
+            onClick={() => setFrame(Math.max(0, currentFrame - 1))}
+            className={styles.playerButton}
+            disabled={totalFrames <= 1 || currentFrame === 0}
+            title="Previous frame (←)"
+            aria-label="Previous frame"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden><path d="M4 3h1.5v10H4zM13 3v10L6.5 8z" /></svg>
+          </button>
+          <button
+            onClick={isPlaying ? pause : play}
+            className={`${styles.playerButton} ${styles.playPauseButton}`}
+            disabled={totalFrames <= 1}
+            title={isPlaying ? 'Pause (space)' : 'Play (space)'}
+            aria-label={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? (
+              <svg viewBox="0 0 16 16" aria-hidden><path d="M4 3h3v10H4zM9 3h3v10H9z" /></svg>
+            ) : (
+              <svg viewBox="0 0 16 16" aria-hidden><path d="M4.5 2.5v11L13 8z" /></svg>
+            )}
+          </button>
+          <button
+            onClick={() => setFrame(Math.min(totalFrames - 1, currentFrame + 1))}
+            className={styles.playerButton}
+            disabled={totalFrames <= 1 || currentFrame === totalFrames - 1}
+            title="Next frame (→)"
+            aria-label="Next frame"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden><path d="M10.5 3H12v10h-1.5zM3 3v10l6.5-5z" /></svg>
+          </button>
         </div>
+        <input
+          type="range"
+          min="0"
+          max={Math.max(totalFrames - 1, 0)}
+          value={currentFrame}
+          onChange={(e) => setFrame(parseInt(e.target.value))}
+          className={styles.frameSlider}
+          disabled={totalFrames <= 1}
+          aria-label="Frame"
+        />
       </div>
     </div>
   );
 };
-
 export default TrajectoryViewer;

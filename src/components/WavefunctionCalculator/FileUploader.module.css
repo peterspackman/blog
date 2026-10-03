@@ -1,54 +1,11 @@
 .section {
-  margin-bottom: 1rem;
+  display: grid;
+  gap: 0.75rem;
 }
 
-.exampleSection {
-  margin-bottom: 0.75rem;
-}
-
-.exampleLabel {
-  display: block;
-  margin-bottom: 0.375rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-}
-
-.exampleSelect {
-  width: 100%;
-  padding: 0.375rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
-  cursor: pointer;
-}
-
-.exampleSelect:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-@media (max-width: 768px) {
-  .exampleSection {
-    margin-bottom: 0.5rem;
-  }
-  
-  .exampleLabel {
-    font-size: 0.7rem;
-  }
-  
-  .exampleSelect {
-    padding: 0.5rem;
-    font-size: 0.8rem;
-  }
-}
-
-/* PubChem search */
 .pubchemSection {
-  margin-bottom: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
 }
 
 .pubchemRow {
@@ -59,44 +16,23 @@
 .pubchemInput {
   flex: 1;
   padding: 0.375rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  background: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
+  background: var(--viz-surface);
+  color: var(--viz-text);
 }
 
 .pubchemInput:focus {
   outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.pubchemButton {
-  padding: 0.375rem 0.75rem;
-  border: none;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: var(--ifm-color-primary);
-  color: #fff;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.pubchemButton:hover:not(:disabled) {
-  background: var(--ifm-color-primary-dark);
-}
-
-.pubchemButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 2px var(--viz-accent-soft);
 }
 
 .pubchemError {
   margin-top: 0.25rem;
   font-size: 0.7rem;
-  color: var(--ifm-color-danger);
+  color: var(--viz-danger);
 }
 
 /* Size warning */
@@ -104,20 +40,14 @@
   padding: 0.4rem 0.6rem;
   margin-top: 0.25rem;
   font-size: 0.7rem;
-  color: var(--ifm-color-warning-darkest, #7c5e00);
-  background: var(--ifm-color-warning-lightest, #fff8e1);
-  border: 1px solid var(--ifm-color-warning-light, #ffcc02);
+  color: var(--viz-warning);
+  background: color-mix(in srgb, var(--viz-warning) 12%, transparent);
+  border: 1px solid var(--viz-warning);
   border-radius: 0.25rem;
 }
 
-[data-theme='dark'] .warningMessage {
-  color: #ffd54f;
-  background: rgba(255, 193, 7, 0.1);
-  border-color: rgba(255, 193, 7, 0.3);
-}
-
 .inputContainer {
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.25rem;
   overflow: hidden;
 }
@@ -127,14 +57,14 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.5rem;
-  background-color: var(--ifm-color-emphasis-100);
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background-color: var(--viz-surface-subtle);
+  border-bottom: 1px solid var(--viz-border);
 }
 
 .label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
+  color: var(--viz-muted);
 }
 
 .controls {
@@ -142,81 +72,43 @@
   gap: 0.25rem;
 }
 
-.browseButton {
-  padding: 0.125rem 0.5rem;
-  font-size: 0.625rem;
-  background-color: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  border-radius: 0.125rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.browseButton:hover {
-  background-color: var(--ifm-color-primary-dark);
-}
-
 .combinedInput {
   position: relative;
   transition: all 0.3s;
-  border: 2px solid transparent;
+  border: 1px solid transparent;
 }
 
 .combinedInput.dragging {
-  background-color: var(--ifm-color-primary-lightest);
-}
-
-.combinedInput.valid {
-  border-color: var(--ifm-color-success);
-  background-color: var(--ifm-color-success-lightest);
+  background-color: var(--viz-accent-soft);
 }
 
 .combinedInput.invalid {
-  border-color: var(--ifm-color-danger);
-  background-color: var(--ifm-color-danger-lightest);
+  border-color: var(--viz-danger);
+  background-color: color-mix(in srgb, var(--viz-danger) 12%, transparent);
 }
-
-
-.clearButton {
-  padding: 0.125rem 0.5rem;
-  font-size: 0.625rem;
-  background: none;
-  border: 1px solid var(--ifm-color-danger);
-  color: var(--ifm-color-danger);
-  border-radius: 0.125rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.clearButton:hover {
-  background-color: var(--ifm-color-danger);
-  color: white;
-}
-
 
 .xyzTextarea {
   width: 100%;
   padding: 0.5rem;
   border: none;
-  font-family: monospace;
+  font-family: var(--ifm-font-family-monospace);
   font-size: 0.75rem;
   resize: vertical;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
+  background-color: var(--viz-surface);
+  color: var(--viz-text);
   min-height: 150px;
 }
 
 .xyzTextarea:focus {
   outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 2px var(--viz-accent-soft);
 }
 
 .errorMessage {
   padding: 0.5rem;
-  background-color: var(--ifm-color-danger-contrast-background);
-  color: var(--ifm-color-danger-darker);
+  background-color: color-mix(in srgb, var(--viz-danger) 12%, transparent);
+  color: var(--viz-danger);
   font-size: 0.75rem;
-  border-top: 1px solid var(--ifm-color-danger);
+  border-top: 1px solid var(--viz-danger);
 }

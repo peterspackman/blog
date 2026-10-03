@@ -1,0 +1,68 @@
+.section {
+  margin: 1.5rem 0 2rem;
+}
+
+.sectionTitle {
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--viz-muted);
+  margin: 0 0 0.75rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: var(--viz-gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.9rem 1rem;
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card:hover,
+.card:focus-visible {
+  text-decoration: none;
+  color: inherit;
+  border-color: var(--viz-accent);
+  box-shadow: var(--viz-shadow);
+}
+
+.cardTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--viz-text);
+}
+
+.card:hover .cardTitle {
+  color: var(--viz-accent);
+}
+
+.cardDesc {
+  font-size: var(--viz-font-sm);
+  line-height: 1.45;
+  margin: 0;
+  color: var(--viz-muted);
+}
+
+.footer {
+  max-width: 46rem;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

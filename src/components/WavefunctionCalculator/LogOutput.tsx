@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ToggleSwitch } from '../shared/controls';
 import styles from './LogOutput.module.css';
 
 interface LogEntry {
@@ -21,14 +22,6 @@ const LogOutput: React.FC<LogOutputProps> = ({ logs }) => {
     }
   }, [logs, autoScroll]);
 
-  const clearLogs = () => {
-    // This would need to be handled by parent component
-    // For now, we'll just scroll to top
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = 0;
-    }
-  };
-
   const formatTimestamp = (date: Date) => {
     return date.toLocaleTimeString();
   };
@@ -36,23 +29,16 @@ const LogOutput: React.FC<LogOutputProps> = ({ logs }) => {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h3>Calculation Output</h3>
-        <div className={styles.controls}>
-          <button 
-            className={`${styles.button} ${autoScroll ? styles.buttonActive : ''}`}
-            onClick={() => setAutoScroll(!autoScroll)}
-          >
-            {autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}
-          </button>
-        </div>
+        <h3>Calculation output</h3>
+        <ToggleSwitch label="Auto-scroll" checked={autoScroll} onChange={setAutoScroll} />
       </div>
-      
+
       <div ref={logContainerRef} className={styles.logOutput}>
         {logs.length === 0 ? (
           <div className={styles.noLogs}>No output yet. Run a calculation to see logs.</div>
         ) : (
           logs.map((log, index) => (
-            <div key={index} className={`${styles.logEntry} ${styles[`log-${log.level}`]}`}>
+            <div key={index} className={`${styles.logEntry} ${styles[`log-${log.level}`] ?? ''}`}>
               <span className={styles.timestamp}>[{formatTimestamp(log.timestamp)}]</span>
               <span className={styles.message}>{log.message}</span>
             </div>

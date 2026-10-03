@@ -12,9 +12,9 @@
 }
 
 .modalContent {
-  background-color: var(--ifm-background-surface-color);
+  background-color: var(--viz-surface);
   border-radius: 0.5rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--viz-shadow);
   max-width: 500px;
   width: 90%;
   max-height: 80vh;
@@ -27,7 +27,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  border-bottom: 1px solid var(--viz-border);
 }
 
 .modalHeader h3 {
@@ -41,7 +41,7 @@
   font-size: 1.5rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
   padding: 0;
   width: 1.5rem;
   height: 1.5rem;
@@ -51,7 +51,7 @@
 }
 
 .closeButton:hover {
-  color: var(--ifm-color-emphasis-800);
+  color: var(--viz-text);
 }
 
 .modalBody {
@@ -62,7 +62,7 @@
 
 .modalFooter {
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--ifm-color-emphasis-200);
+  border-top: 1px solid var(--viz-border);
   display: flex;
   justify-content: space-between;
   gap: 0.5rem;
@@ -71,7 +71,7 @@
 .section {
   margin-bottom: 0.75rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-100);
+  border-bottom: 1px solid var(--viz-surface-subtle);
 }
 
 .section:last-child {
@@ -83,7 +83,7 @@
 .section h4 {
   font-size: 0.85rem;
   margin: 0 0 0.5rem 0;
-  color: var(--ifm-heading-color);
+  color: var(--viz-text);
   font-weight: 600;
 }
 
@@ -100,25 +100,25 @@
   margin-bottom: 0.125rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
+  color: var(--viz-muted);
 }
 
 .field input[type="number"],
 .field select {
   width: 100%;
   padding: 0.25rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
+  background-color: var(--viz-surface);
+  color: var(--viz-text);
 }
 
 .field input[type="number"]:focus,
 .field select:focus {
   outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 2px var(--viz-accent-soft);
 }
 
 .checkboxLabel {
@@ -137,14 +137,14 @@
 
 .checkboxLabel span {
   font-size: 0.8rem;
-  color: var(--ifm-font-color-base);
+  color: var(--viz-text);
 }
 
 .fieldDescription {
   display: block;
   margin-top: 0.125rem;
   font-size: 0.7rem;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
   line-height: 1.3;
 }
 
@@ -164,54 +164,22 @@
   font-size: 0.7rem;
   font-weight: 600;
   margin-bottom: 0.125rem;
-  color: var(--ifm-color-emphasis-600);
+  color: var(--viz-muted);
   text-transform: uppercase;
 }
 
 .vectorField input {
   padding: 0.25rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
+  border: 1px solid var(--viz-border);
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  font-family: monospace;
-  background-color: var(--ifm-background-surface-color);
-  color: var(--ifm-font-color-base);
+  font-family: var(--ifm-font-family-monospace);
+  background-color: var(--viz-surface);
+  color: var(--viz-text);
 }
 
 .vectorField input:focus {
   outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.primaryButton {
-  padding: 0.5rem 1.5rem;
-  background-color: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.primaryButton:hover {
-  background-color: var(--ifm-color-primary-dark);
-}
-
-.secondaryButton {
-  padding: 0.5rem 1.5rem;
-  background-color: var(--ifm-color-emphasis-200);
-  color: var(--ifm-font-color-base);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.secondaryButton:hover {
-  background-color: var(--ifm-color-emphasis-300);
+  border-color: var(--viz-accent);
+  box-shadow: 0 0 0 2px var(--viz-accent-soft);
 }

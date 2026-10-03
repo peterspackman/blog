@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useVizTheme } from '../shared/viz';
 import { NGLRenderer, type NGLRendererProps } from './NGLRenderer';
 import { VolumeRenderer, type VolumeRendererProps } from './VolumeRenderer';
 import type {
@@ -64,7 +65,8 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
     const volumeRef = useRef<VolumeRendererRef>(null);
     const syncIntervalRef = useRef<number | null>(null);
 
-    const isDark = theme.text.startsWith('#e') || theme.text.startsWith('#f');
+    const viz = useVizTheme();
+    const isDark = viz.isDark;
 
     // Overlay toggle state
     const [showSlice, setShowSlice] = useState(true);
@@ -106,10 +108,9 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                 width,
                 height,
                 position: 'relative',
-                borderRadius: '4px',
-                border: `1px solid ${theme.border}`,
+                borderRadius: 'var(--viz-radius)',
                 overflow: 'hidden',
-                background: isDark ? '#2d2d2d' : '#f8f9fa',
+                background: viz.surface,
             }}
         >
             {/* NGL Layer - structures, unit cells, textured slice */}
@@ -134,6 +135,7 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                     volumeGrid={volumeGrid}
                     autoRotate={autoRotate}
                     isDark={isDark}
+                    background={viz.surface}
                 />
             )}
 
@@ -192,8 +194,8 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                fontSize: '9px',
-                                color: isDark ? '#6b9eff' : '#2563eb',
+                                fontSize: 'var(--viz-font-xs)',
+                                color: viz.accent,
                                 cursor: 'pointer',
                                 userSelect: 'none',
                             }}
@@ -215,8 +217,8 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '4px',
-                                fontSize: '9px',
-                                color: isDark ? '#ffb347' : '#d97706',
+                                fontSize: 'var(--viz-font-xs)',
+                                color: viz.series[1],
                                 cursor: 'pointer',
                                 userSelect: 'none',
                             }}
@@ -245,7 +247,7 @@ export const Viewer3D: React.FC<Viewer3DProps> = ({
                     bottom: 6,
                     right: 8,
                     color: theme.textMuted,
-                    fontSize: '9px',
+                    fontSize: 'var(--viz-font-xs)',
                     pointerEvents: 'none',
                     zIndex: 10,
                 }}

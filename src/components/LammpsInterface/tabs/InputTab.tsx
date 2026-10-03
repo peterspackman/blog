@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import styles from '../LammpsInterface.module.css';
 import { isLikelyInputFile } from '../utils/fileDetection';
+import { VizButton } from '../../shared/controls';
 
 interface InputTabProps {
   uploadedFiles: Map<string, ArrayBuffer>;
@@ -102,34 +103,29 @@ export const InputTab: React.FC<InputTabProps> = ({
   const isEditingUploadedFile = selectedFile && uploadedFiles.has(selectedFile);
   const currentEditingFile = isEditingUploadedFile ? selectedFile : null;
 
+  const readOnly = currentEditingFile ? !isLikelyInputFile(currentEditingFile) : false;
+
   return (
     <div
-      className={`${styles.inputTabContainer} ${isDragging ? styles.inputTabDragging : ''}`}
+      className={styles.inputSplit}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drag overlay */}
       {isDragging && (
         <div className={styles.dragOverlay}>
-          <div className={styles.dragOverlayContent}>
-            <div className={styles.dragIcon}>+</div>
-            <div>Drop files here</div>
-          </div>
+          <div className={styles.dragIcon}>+</div>
+          <div>Drop files to add them</div>
         </div>
       )}
 
-      {/* Left panel: File browser */}
-      <div className={styles.fileBrowserPanel}>
-        <div className={styles.fileBrowserHeader}>
-          <h4>Files</h4>
-          <button
-            className={styles.addFileBtn}
-            onClick={() => fileInputRef.current?.click()}
-            title="Add files"
-          >
-            +
-          </button>
+      {/* Left: file browser */}
+      <section className={`${styles.pane} ${styles.filePane}`}>
+        <div className={styles.paneHeader}>
+          <h2 className={styles.paneTitle}>Files</h2>
+          <VizButton variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} title="Add files">
+            + Add
+          </VizButton>
         </div>
 
         <input
@@ -140,22 +136,20 @@ export const InputTab: React.FC<InputTabProps> = ({
           style={{ display: 'none' }}
         />
 
-        {/* File list */}
         <div className={styles.fileList}>
           {filenames.length === 0 ? (
-            <div
-              className={styles.emptyFileList}
+            <button
+              type="button"
+              className={styles.dropZone}
               onClick={() => fileInputRef.current?.click()}
             >
-              <div className={styles.dropZoneIcon}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </div>
-              <span>Drop files or click to upload</span>
-            </div>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span>Drop input and data files here, or click to upload. With no files, the default script runs.</span>
+            </button>
           ) : (
             filenames.map(filename => {
               const isInput = isLikelyInputFile(filename);
@@ -168,38 +162,29 @@ export const InputTab: React.FC<InputTabProps> = ({
                   className={`${styles.fileListItem} ${isSelected ? styles.fileListItemSelected : ''}`}
                   onClick={() => handleFileClick(filename)}
                 >
-                  <div className={styles.fileItemLeft}>
-                    {isInput && (
-                      <label
-                        className={styles.mainFileToggle}
-                        onClick={(e) => e.stopPropagation()}
-                        title="Set as main input file"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isMain}
-                          onChange={(e) => {
-                            onMainFileSelect(e.target.checked ? filename : '');
-                          }}
-                        />
-                        <span className={styles.checkmark} />
-                      </label>
-                    )}
-                    <span className={styles.fileName} title={filename}>
-                      {filename}
-                    </span>
-                    {isMain && <span className={styles.mainBadge}>MAIN</span>}
-                  </div>
+                  {isInput && (
+                    <input
+                      type="checkbox"
+                      className={styles.mainCheckbox}
+                      checked={isMain}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => onMainFileSelect(e.target.checked ? filename : '')}
+                      title="Run this file"
+                      aria-label={`Run ${filename}`}
+                    />
+                  )}
+                  <span className={styles.fileName} title={filename}>{filename}</span>
+                  {isMain && <span className={styles.badge}>main</span>}
                   <button
+                    type="button"
                     className={styles.fileDeleteBtn}
                     onClick={(e) => {
                       e.stopPropagation();
                       onFileDelete(filename);
-                      if (selectedFile === filename) {
-                        setSelectedFile(null);
-                      }
+                      if (selectedFile === filename) setSelectedFile(null);
                     }}
-                    title="Delete file"
+                    title="Remove file"
+                    aria-label={`Remove ${filename}`}
                   >
                     ×
                   </button>
@@ -208,71 +193,40 @@ export const InputTab: React.FC<InputTabProps> = ({
             })
           )}
         </div>
+      </section>
 
-        {filenames.length > 0 && (
-          <div
-            className={styles.dropZoneSmall}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            + Add more files
-          </div>
-        )}
-      </div>
-
-      {/* Right panel: Editor */}
-      <div className={styles.editorPanel}>
-        <div className={styles.editorHeader}>
-          <h4>
-            {currentEditingFile ? currentEditingFile : 'LAMMPS Script'}
-            {currentEditingFile && !isLikelyInputFile(currentEditingFile) && (
-              <span className={styles.readOnlyBadge}>Read-only</span>
-            )}
-          </h4>
-          {!currentEditingFile && (
-            <span className={styles.editorHint}>Default script (no file selected)</span>
-          )}
+      {/* Right: editor */}
+      <section className={styles.pane}>
+        <div className={styles.paneHeader}>
+          <h2 className={styles.paneTitle}>
+            {currentEditingFile ?? 'Input script'}
+            {readOnly && <span className={styles.badgeMuted}>read-only</span>}
+          </h2>
+          {!currentEditingFile && <span className={styles.paneHint}>default example</span>}
         </div>
 
         <textarea
           className={styles.editor}
           value={editorContent}
-          onChange={(e) => {
-            if (currentEditingFile) {
-              // Editing an uploaded file
-              onScriptChange(e.target.value);
-            } else {
-              // Editing the default script
-              onScriptChange(e.target.value);
-            }
-          }}
-          placeholder="Enter LAMMPS commands here..."
-          readOnly={currentEditingFile ? !isLikelyInputFile(currentEditingFile) : false}
+          onChange={(e) => onScriptChange(e.target.value)}
+          placeholder="Enter LAMMPS commands here…"
+          readOnly={readOnly}
+          spellCheck={false}
         />
 
-        <div className={styles.editorFooter}>
-          <div className={styles.buttonGroup}>
-            {!isRunning ? (
-              <button
-                onClick={onRun}
-                disabled={!isReady}
-                className="button button--primary"
-              >
-                Run LAMMPS
-              </button>
-            ) : (
-              <button
-                onClick={onCancel}
-                className="button button--danger"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-          <div className={styles.status}>
-            {status}
-          </div>
+        <div className={styles.paneFooter}>
+          {!isRunning ? (
+            <VizButton variant="primary" onClick={onRun} disabled={!isReady}>
+              Run LAMMPS
+            </VizButton>
+          ) : (
+            <VizButton variant="danger" onClick={onCancel}>
+              Cancel
+            </VizButton>
+          )}
+          <span className={styles.status}>{status}</span>
         </div>
-      </div>
+      </section>
     </div>
   );
 };

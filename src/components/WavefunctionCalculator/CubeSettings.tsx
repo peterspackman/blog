@@ -1,4 +1,5 @@
 import React from 'react';
+import { VizButton } from '../shared/controls';
 import styles from './CubeSettings.module.css';
 import type { CubeGeometrySettings } from './types';
 export type { CubeGeometrySettings } from './types';
@@ -287,8 +288,7 @@ const CubeSettings: React.FC<CubeSettingsProps> = ({
         </div>
 
         <div className={styles.modalFooter}>
-          <button
-            className={styles.secondaryButton}
+          <VizButton
             onClick={() => {
               // Reset to defaults
               updateSettings({
@@ -305,14 +305,11 @@ const CubeSettings: React.FC<CubeSettingsProps> = ({
               });
             }}
           >
-            Reset to Defaults
-          </button>
-          <button
-            className={styles.primaryButton}
-            onClick={onClose}
-          >
+            Reset to defaults
+          </VizButton>
+          <VizButton variant="primary" onClick={onClose}>
             Apply
-          </button>
+          </VizButton>
         </div>
       </div>
     </div>

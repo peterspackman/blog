@@ -176,28 +176,32 @@ const config: Config = {
           position: 'left',
           items: [
             {
-              label: 'All Utilities',
+              label: 'All utilities',
               to: '/utilities',
             },
             {
-              label: 'Wavefunction Calculator',
+              label: 'Wavefunction calculator',
               to: '/utilities/wavefunction-calculator',
             },
             {
-              label: 'XYZ Trajectory Viewer',
+              label: 'Trajectory viewer',
               to: '/utilities/xyz-trajectory',
             },
             {
-              label: 'Elastic Tensor Analysis',
+              label: 'Elastic tensor analysis',
               to: '/utilities/elastic-tensor',
             },
             {
-              label: 'SMILES Viewer',
+              label: 'SMILES viewer',
               to: '/utilities/smiles-viewer',
             },
             {
-              label: 'LAMMPS Interface',
+              label: 'LAMMPS in the browser',
               to: '/utilities/lammps-interface',
+            },
+            {
+              label: 'Infinite molecules',
+              to: '/utilities/infinite-molecules',
             },
           ],
         },

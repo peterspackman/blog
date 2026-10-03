@@ -3,6 +3,7 @@ import styles from '../LammpsInterface.module.css';
 import { OutputLine, VfsFile } from '../types';
 import { ThermoChart } from '../components/ThermoChart';
 import { HistogramChart } from '../components/HistogramChart';
+import { Select, SegmentedControl, VizButton } from '../../shared/controls';
 
 interface OutputTabProps {
   output: OutputLine[];
@@ -125,123 +126,84 @@ export const OutputTab: React.FC<OutputTabProps> = ({
   const outputFiles = vfsFiles.filter(file => !file.isDirectory);
 
   return (
-    <div className={styles.tabContent}>
-      <div className={styles.outputWithChart}>
-        {/* Console section */}
-        <div className={styles.consoleSection}>
-          <div className={styles.outputHeader}>
-            <h4>Console Output</h4>
-            <div className={styles.outputActions}>
-              <button
-                onClick={onClearOutput}
-                className="button button--secondary button--sm"
-              >
-                Clear
-              </button>
-              <button
-                onClick={onListFiles}
-                disabled={!isReady}
-                className="button button--secondary button--sm"
-              >
-                List Files
-              </button>
-            </div>
+    <div className={styles.outputSplit}>
+      <section className={styles.pane}>
+        <div className={styles.paneHeader}>
+          <h2 className={styles.paneTitle}>Console</h2>
+          <div className={styles.paneActions}>
+            <VizButton variant="ghost" size="sm" onClick={onClearOutput}>
+              Clear
+            </VizButton>
+            <VizButton variant="ghost" size="sm" onClick={onListFiles} disabled={!isReady}>
+              List files
+            </VizButton>
           </div>
-          <div ref={outputRef} className={styles.output}>
-            {output.length === 0 ? (
-              'Waiting for LAMMPS to initialize...'
-            ) : (
-              output.map((line, index) => (
-                <div
-                  key={index}
-                  className={line.isError ? styles.error : ''}
-                >
-                  {line.text}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Output Files */}
-          {outputFiles.length > 0 && (
-            <div className={styles.outputFilesSection}>
-              <h4>Output Files</h4>
-              <div className={styles.outputFilesList}>
-                {outputFiles.map(file => (
-                  <div key={file.name} className={styles.outputFileItem}>
-                    <span className={styles.outputFileName}>
-                      {file.name}
-                      <span className={styles.fileSize}>
-                        {file.size > 1024
-                          ? `${(file.size / 1024).toFixed(1)} KB`
-                          : `${file.size} B`}
-                      </span>
-                    </span>
-                    <button
-                      className="button button--primary button--sm"
-                      onClick={() => onDownloadFile(file.name)}
-                      disabled={!isReady}
-                    >
-                      Download
-                    </button>
-                  </div>
-                ))}
+        </div>
+        <div ref={outputRef} className={styles.console}>
+          {output.length === 0 ? (
+            <span className={styles.consoleIdle}>Waiting for LAMMPS to initialise…</span>
+          ) : (
+            output.map((line, index) => (
+              <div key={index} className={line.isError ? styles.error : undefined}>
+                {line.text}
               </div>
-            </div>
+            ))
           )}
         </div>
 
-        {/* Chart section with tabs */}
-        <div className={styles.chartSection}>
-          {/* Tab buttons */}
-          <div className={styles.chartSectionTabs}>
-            <button
-              className={`${styles.chartTabButton} ${chartTab === 'thermo' ? styles.chartTabButtonActive : ''}`}
-              onClick={() => setChartTab('thermo')}
-            >
-              Thermo
-            </button>
-            <button
-              className={`${styles.chartTabButton} ${chartTab === 'data' ? styles.chartTabButtonActive : ''}`}
-              onClick={() => setChartTab('data')}
-              disabled={dataFiles.length === 0 && !onFetchFileContent}
-            >
-              Data {dataFiles.length > 0 && `(${dataFiles.length})`}
-            </button>
+        {outputFiles.length > 0 && (
+          <div className={styles.outputFiles}>
+            <h3 className={styles.paneSubtitle}>Output files</h3>
+            <ul className={styles.outputFileList}>
+              {outputFiles.map(file => (
+                <li key={file.name} className={styles.outputFileItem}>
+                  <span className={styles.outputFileName}>{file.name}</span>
+                  <span className={styles.fileSize}>
+                    {file.size > 1024 ? `${(file.size / 1024).toFixed(1)} KB` : `${file.size} B`}
+                  </span>
+                  <VizButton variant="ghost" size="sm" onClick={() => onDownloadFile(file.name)} disabled={!isReady}>
+                    Download
+                  </VizButton>
+                </li>
+              ))}
+            </ul>
           </div>
+        )}
+      </section>
 
-          {/* Chart content */}
-          <div className={styles.chartContent}>
-            {chartTab === 'thermo' ? (
-              <ThermoChart output={output} isRunning={isRunning} />
-            ) : (
-              <>
-                {/* Data file selector */}
-                {dataFiles.length > 0 && (
-                  <div className={styles.dataFileSelector}>
-                    <label>File:</label>
-                    <select
-                      value={selectedDataFile}
-                      onChange={(e) => setSelectedDataFile(e.target.value)}
-                    >
-                      {dataFiles.map(file => (
-                        <option key={file.name} value={file.name}>
-                          {file.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <HistogramChart
-                  data={dataFileContent}
-                  filename={selectedDataFile}
-                  isLoading={isLoadingData}
-                />
-              </>
-            )}
-          </div>
+      <section className={styles.pane}>
+        <div className={styles.paneHeader}>
+          <SegmentedControl<ChartTab>
+            aria-label="Chart"
+            className={styles.chartTabs}
+            value={chartTab}
+            onChange={setChartTab}
+            options={[
+              { value: 'thermo', label: 'Thermo' },
+              {
+                value: 'data',
+                label: dataFiles.length > 0 ? `Data files (${dataFiles.length})` : 'Data files',
+                disabled: dataFiles.length === 0 && !onFetchFileContent,
+              },
+            ]}
+          />
+          {chartTab === 'data' && dataFiles.length > 0 && (
+            <div className={styles.dataFileSelect}>
+              <Select
+                aria-label="Data file"
+                value={selectedDataFile}
+                onChange={setSelectedDataFile}
+                options={dataFiles.map(file => ({ value: file.name, label: file.name }))}
+              />
+            </div>
+          )}
         </div>
-      </div>
+        {chartTab === 'thermo' ? (
+          <ThermoChart output={output} isRunning={isRunning} />
+        ) : (
+          <HistogramChart data={dataFileContent} filename={selectedDataFile} isLoading={isLoadingData} />
+        )}
+      </section>
     </div>
   );
 };

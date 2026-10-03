@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useMemo, useState, useCallback } from 'react';
-import * as echarts from 'echarts';
+import type * as echarts from 'echarts';
+import { echartsAxis, echartsBase, useVizTheme } from '../../shared/viz';
+import { Legend } from '../../shared/controls';
 import styles from '../LammpsInterface.module.css';
+import { useEChart } from '../../shared/viz/useEChart';
 
 interface ThermoData {
   step: number[];
@@ -13,11 +16,6 @@ interface ThermoChartProps {
   output: Array<{ text: string; isError: boolean }>;
   isRunning: boolean;
 }
-
-const COLORS = [
-  '#ee6666', '#5470c6', '#91cc75', '#fac858', '#73c0de',
-  '#ea7ccc', '#3ba272', '#fc8452', '#9a60b4', '#5c7bd9',
-];
 
 // Columns to skip plotting (not useful as time series)
 const SKIP_COLUMNS = new Set(['cpu', 'cpuleft', 'time']);
@@ -102,8 +100,8 @@ const parseThermoOutput = (output: Array<{ text: string; isError: boolean }>): T
 };
 
 export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) => {
-  const chartRef = useRef<HTMLDivElement>(null);
-  const chartInstance = useRef<echarts.ECharts | null>(null);
+  const theme = useVizTheme();
+  const [chartRef, chart] = useEChart();
   // Ordered array of selected columns (max 2). First = left axis, second = right axis.
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const prevColumnsRef = useRef<string>('');
@@ -141,114 +139,84 @@ export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) =
 
   const toggleColumn = useCallback((col: string) => {
     setSelectedColumns(prev => {
-      if (prev.includes(col)) {
-        // Deselect
-        return prev.filter(c => c !== col);
-      }
-      // Select — enforce FIFO if already at max
-      if (prev.length >= MAX_SELECTED) {
-        return [...prev.slice(1), col];
-      }
+      if (prev.includes(col)) return prev.filter(c => c !== col);
+      // Select, dropping the oldest if already at max
+      if (prev.length >= MAX_SELECTED) return [...prev.slice(1), col];
       return [...prev, col];
     });
   }, []);
 
-  // Color assignment for each column
+  // Colour for each column from the site series palette
   const colorMap = useMemo(() => {
     const map: Record<string, string> = {};
     plottableColumns.forEach((col, i) => {
-      map[col] = COLORS[i % COLORS.length];
+      map[col] = theme.series[i % theme.series.length];
     });
     return map;
-  }, [plottableColumns]);
+  }, [plottableColumns, theme]);
 
-  // Initialize chart
   useEffect(() => {
-    if (!chartRef.current) return;
-    chartInstance.current = echarts.init(chartRef.current);
-    const handleResize = () => chartInstance.current?.resize();
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chartInstance.current?.dispose();
-    };
-  }, []);
-
-  // Update chart
-  useEffect(() => {
-    if (!chartInstance.current || !hasData) return;
+    if (!chart) return;
 
     const activeCols = plottableColumns.filter(c => selectedColumns.includes(c));
-    if (activeCols.length === 0) {
-      chartInstance.current.clear();
+    if (!hasData || activeCols.length === 0) {
+      chart.clear();
       return;
     }
 
     const useDual = activeCols.length === 2;
+    const axis = echartsAxis(theme);
 
-    const yAxisConfigs: any[] = [{
-      type: 'value',
-      position: 'left',
-      axisLine: { show: true, lineStyle: { color: colorMap[activeCols[0]] } },
-      axisLabel: { formatter: '{value}' },
-    }];
-
-    if (useDual) {
-      yAxisConfigs.push({
-        type: 'value',
-        position: 'right',
-        axisLine: { show: true, lineStyle: { color: colorMap[activeCols[1]] } },
-        axisLabel: { formatter: '{value}' },
-      });
-    }
+    const yAxis = activeCols.map((col, idx) => ({
+      ...axis,
+      type: 'value' as const,
+      position: idx === 0 ? ('left' as const) : ('right' as const),
+      scale: true,
+      axisLine: { show: true, lineStyle: { color: colorMap[col] } },
+      splitLine: idx === 0 ? axis.splitLine : { show: false },
+    }));
 
     // Vertical markers at run boundaries (between multiple "run" commands)
     const boundaryMarkLine = thermoData.runBoundaries.length > 0 ? {
       silent: true,
       symbol: 'none',
-      lineStyle: {
-        type: 'dashed' as const,
-        color: 'var(--ifm-color-emphasis-400)',
-        width: 1,
-      },
+      lineStyle: { type: 'dashed' as const, color: theme.axis, width: 1 },
       label: { show: false },
-      data: thermoData.runBoundaries.map(step => ({
-        xAxis: String(step),
-      })),
+      data: thermoData.runBoundaries.map(step => ({ xAxis: String(step) })),
     } : undefined;
 
     const series = activeCols.map((col, idx) => ({
       name: col,
-      type: 'line',
+      type: 'line' as const,
       yAxisIndex: useDual ? idx : 0,
       data: thermoData.series[col],
-      smooth: true,
       symbol: 'none',
       itemStyle: { color: colorMap[col] },
-      lineStyle: { color: colorMap[col], width: 2 },
+      lineStyle: { color: colorMap[col], width: 1.75 },
       // Attach boundary markers to the first series only
       ...(idx === 0 && boundaryMarkLine ? { markLine: boundaryMarkLine } : {}),
     }));
 
     const option: echarts.EChartsOption = {
+      ...echartsBase(theme),
       animation: false,
-      grid: {
-        left: '12%',
-        right: useDual ? '12%' : '5%',
-        top: '10%',
-        bottom: '15%',
-      },
+      legend: { show: false },
+      grid: { left: 12, right: useDual ? 12 : 20, top: 16, bottom: 32, containLabel: true },
       tooltip: {
+        ...echartsBase(theme).tooltip,
         trigger: 'axis',
-        axisPointer: { type: 'cross' },
+        axisPointer: { type: 'line', lineStyle: { color: theme.axis } },
       },
       xAxis: {
+        ...axis,
         type: 'category',
         data: thermoData.step.map(String),
         name: 'Step',
         nameLocation: 'middle',
-        nameGap: 25,
+        nameGap: 26,
+        splitLine: { show: false },
         axisLabel: {
+          ...axis.axisLabel,
           formatter: (value: string) => {
             const num = parseInt(value);
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -257,43 +225,35 @@ export const ThermoChart: React.FC<ThermoChartProps> = ({ output, isRunning }) =
           },
         },
       },
-      yAxis: yAxisConfigs,
-      series: series as any[],
+      yAxis,
+      series,
     };
 
-    chartInstance.current.setOption(option, true);
-  }, [thermoData, hasData, selectedColumns, plottableColumns, colorMap]);
-
-  if (!hasData) {
-    return (
-      <div className={styles.thermoChartEmpty}>
-        <span>{isRunning ? 'Waiting for thermo data...' : 'No thermo data'}</span>
-      </div>
-    );
-  }
+    chart.setOption(option, true);
+  }, [chart, theme, thermoData, hasData, selectedColumns, plottableColumns, colorMap]);
 
   return (
-    <div className={styles.thermoChart}>
-      <div className={styles.thermoColumnSelector}>
-        {plottableColumns.map(col => {
-          const active = selectedColumns.includes(col);
-          return (
-            <button
-              key={col}
-              className={`${styles.thermoColumnChip} ${active ? styles.thermoColumnChipActive : ''}`}
-              onClick={() => toggleColumn(col)}
-              title={active ? 'Click to deselect' : 'Click to select (max 2)'}
-            >
-              <span
-                className={styles.thermoColumnDot}
-                style={{ background: active ? colorMap[col] : 'var(--ifm-color-emphasis-400)' }}
-              />
-              {col}
-            </button>
-          );
-        })}
+    <div className={styles.chartPane}>
+      {hasData && (
+        <Legend
+          className={styles.chartToolbar}
+          items={plottableColumns.map(col => ({
+            key: col,
+            label: col,
+            color: colorMap[col],
+            active: selectedColumns.includes(col),
+          }))}
+          onToggle={toggleColumn}
+        />
+      )}
+      <div className={styles.chartCanvas}>
+        <div ref={chartRef} className={styles.chartFill} />
+        {!hasData && (
+          <div className={styles.chartEmpty}>
+            {isRunning ? 'Waiting for thermo data…' : 'Run a simulation to plot its thermo output.'}
+          </div>
+        )}
       </div>
-      <div ref={chartRef} style={{ flex: 1, width: '100%', minHeight: 0 }} />
     </div>
   );
 };

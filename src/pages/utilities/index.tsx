@@ -1,93 +1,68 @@
 import React from 'react';
-import Layout from '@theme/Layout';
-import Link from '@docusaurus/Link';
-import styles from './utilities.module.css';
+import { CardIndex, type IndexSection } from '@site/src/components/shared/viz/CardIndex';
 
-const utilities = [
+const SECTIONS: IndexSection[] = [
   {
-    title: 'Wavefunction Calculator',
-    description: 'Perform quantum chemistry calculations (HF, DFT) directly in your browser. Compute energies, orbitals, and molecular properties.',
-    href: '/utilities/wavefunction-calculator'
+    title: 'Quantum chemistry',
+    cards: [
+      {
+        title: 'Wavefunction calculator',
+        href: '/utilities/wavefunction-calculator',
+        description: 'Hartree–Fock and DFT in the browser: energies, orbitals, geometry optimisation and frequencies.',
+      },
+      {
+        title: 'Elastic tensor analysis',
+        href: '/utilities/elastic-tensor',
+        description: "Mechanical properties from a 6×6 elastic tensor, with directional Young's modulus, shear and Poisson's ratio.",
+      },
+    ],
   },
   {
-    title: 'XYZ Trajectory Viewer',
-    description: 'Visualize molecular trajectories and animations. Support for optimization paths, MD simulations, and unit cell visualization.',
-    href: '/utilities/xyz-trajectory'
+    title: 'Simulation',
+    cards: [
+      {
+        title: 'LAMMPS in the browser',
+        href: '/utilities/lammps-interface',
+        description: 'Run LAMMPS input scripts with WebAssembly, then plot thermo output and view the trajectory.',
+      },
+      {
+        title: 'Trajectory viewer',
+        href: '/utilities/xyz-trajectory',
+        description: 'Play back optimisation paths and MD trajectories from multi-frame XYZ files, with unit cells.',
+      },
+    ],
   },
   {
-    title: 'Elastic Tensor Analysis',
-    description: 'Analyze elastic tensors and mechanical properties. Interactive 2D/3D visualizations of directional dependencies.',
-    href: '/utilities/elastic-tensor'
+    title: 'Molecules',
+    cards: [
+      {
+        title: 'SMILES viewer',
+        href: '/utilities/smiles-viewer',
+        description: 'Draw 2D structures from SMILES strings with RDKit.js.',
+      },
+      {
+        title: 'Infinite molecules',
+        href: '/utilities/infinite-molecules',
+        description: 'Generate random valid molecules from SELFIES strings and browse them as a scrolling grid.',
+      },
+    ],
   },
-  {
-    title: 'SMILES Viewer',
-    description: 'Convert SMILES strings to molecular structures. Instant 2D visualization powered by RDKit.js.',
-    href: '/utilities/smiles-viewer'
-  },
-  {
-    title: 'LAMMPS Interface',
-    description: 'Run LAMMPS molecular dynamics simulations directly in your browser. Upload input files and run simulations using WebAssembly.',
-    href: '/utilities/lammps-interface'
-  }
 ];
-
-function UtilityCard({ utility }: { utility: typeof utilities[0] }) {
-  return (
-    <div className="col col--6 margin-bottom--lg">
-      <div className={`card ${styles.utilityCard}`}>
-        <div className={`card__header ${styles.cardHeader}`}>
-          <h3 className={styles.cardTitle}>{utility.title}</h3>
-        </div>
-        <div className={`card__body ${styles.cardBody}`}>
-          <p className={styles.cardDescription}>{utility.description}</p>
-        </div>
-        <div className={`card__footer ${styles.cardFooter}`}>
-          <Link
-            className="button button--primary button--block"
-            to={utility.href}>
-            Open Tool
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Utilities() {
   return (
-    <Layout
+    <CardIndex
       title="Utilities"
-      description="Interactive Quantum Chemistry Tools and Calculators">
-      <main className={styles.utilitiesMain}>
-        <div className="container">
-          <div className={styles.heroSection}>
-            <h1 className={styles.heroTitle}>
-              Quantum Chemistry Utilities
-            </h1>
-            <p className={styles.heroSubtitle}>
-              Interactive tools and calculators running entirely in your browser using WebAssembly
-            </p>
-          </div>
-
-          <div className={styles.utilitiesSection}>
-            <div className="row">
-              {utilities.map((utility, idx) => (
-                <UtilityCard key={idx} utility={utility} />
-              ))}
-            </div>
-          </div>
-
-          <div className={styles.infoSection}>
-            <h2>Technologies</h2>
-            <p>
-              These tools are powered by <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">OCC (Open Computational Chemistry)</a> for quantum chemistry calculations, 
-              <a href="https://www.rdkit.org/" target="_blank" rel="noopener noreferrer"> RDKit.js</a> for molecular structure manipulation, 
-              and <a href="https://nglviewer.org/" target="_blank" rel="noopener noreferrer"> NGL Viewer</a> for 3D visualization.
-              All computations run locally in your browser.
-            </p>
-          </div>
-        </div>
-      </main>
-    </Layout>
+      description="Interactive chemistry tools that run entirely in your browser"
+      intro="Chemistry tools that run entirely in your browser. Nothing is uploaded: calculations run locally with WebAssembly."
+      sections={SECTIONS}
+      footer={
+        <p>
+          Built with <a href="https://github.com/peterspackman/occ">OCC</a> for quantum chemistry,{' '}
+          <a href="https://www.rdkit.org/">RDKit.js</a> for cheminformatics, <a href="https://www.lammps.org/">LAMMPS</a>{' '}
+          for molecular dynamics and <a href="https://nglviewer.org/">NGL</a> for 3D structures.
+        </p>
+      }
+    />
   );
 }

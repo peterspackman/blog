@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { VizButton } from '../shared/controls';
 import styles from './MatrixDisplay.module.css';
 import type { MatrixData } from './types';
 
@@ -60,20 +61,18 @@ const MatrixDisplay: React.FC<MatrixDisplayProps> = ({
         <div className={styles.controls}>
           <span className={styles.dimensions}>{rows} × {cols}</span>
           {isLarge && (
-            <button 
-              className={styles.toggleButton}
+            <VizButton size="sm" variant="ghost"
               onClick={() => setShowFullMatrix(!showFullMatrix)}
             >
               {showFullMatrix ? 'Show Preview' : 'Show Full'}
-            </button>
+            </VizButton>
           )}
-          <button 
-            className={styles.downloadButton}
+          <VizButton size="sm" variant="ghost"
             onClick={downloadMatrix}
             title="Download as CSV"
           >
             ↓ CSV
-          </button>
+          </VizButton>
         </div>
       </div>
 

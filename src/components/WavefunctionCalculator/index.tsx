@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import clsx from 'clsx';
 import styles from './WavefunctionCalculator.module.css';
+import { VizPanel, VizPanelSection, VizPlotHeader, VizWorkbench } from '../shared/viz';
+import { ControlGroup, ControlHint, Select, SliderWithInput, ToggleSwitch, VizButton } from '../shared/controls';
 import FileUploader from './FileUploader';
-import CalculationSettings from './CalculationSettings';
+import CalculationSettings, { BASIS_SETS, METHODS } from './CalculationSettings';
 import CubeSettings from './CubeSettings';
 import ResultsDisplay from './ResultsDisplay';
 import LogOutput from './LogOutput';
@@ -22,7 +25,19 @@ import type {
   MoleculeInfo,
 } from './types';
 
-const WavefunctionCalculator: React.FC = () => {
+type Tab = 'output' | 'results' | 'structure' | 'properties' | 'optimization' | 'settings' | 'about';
+
+const TOLERANCES = ['1e-6', '1e-7', '1e-8', '1e-9', '1e-10'].map((v) => ({ value: v, label: v }));
+
+const LOG_LEVELS = [
+  { value: '0', label: 'Trace' },
+  { value: '1', label: 'Debug' },
+  { value: '2', label: 'Info' },
+  { value: '3', label: 'Warning' },
+  { value: '4', label: 'Error' },
+];
+
+const WavefunctionCalculator: React.FC<{ title: string }> = ({ title }) => {
   // Calculation state via hook
   const calc = useCalculation();
   const {
@@ -37,13 +52,9 @@ const WavefunctionCalculator: React.FC = () => {
   // UI-only state (not calculation logic)
   const [currentXYZData, setCurrentXYZData] = useState<string>('');
   const [moleculeInfo, setMoleculeInfo] = useState<MoleculeInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<'output' | 'results' | 'structure' | 'properties' | 'optimization' | 'settings' | 'about'>('structure');
+  const [activeTab, setActiveTab] = useState<Tab>('structure');
   const [validationError, setValidationError] = useState<string>('');
   const [isXYZValid, setIsXYZValid] = useState<boolean>(true);
-
-  // Collapsible sections
-  const [isInputExpanded, setIsInputExpanded] = useState(true);
-  const [isSettingsExpanded, setIsSettingsExpanded] = useState(true);
 
   // Resume banner
   interface SavedSession {
@@ -155,7 +166,6 @@ const WavefunctionCalculator: React.FC = () => {
   const [trajectoryMode, setTrajectoryMode] = useState<'optimization' | 'normal_mode'>('optimization');
   const [selectedNormalMode, setSelectedNormalMode] = useState<number | null>(null);
   const [hideLowModes, setHideLowModes] = useState<boolean>(true);
-  const [isTrajectoryControlsExpanded, setIsTrajectoryControlsExpanded] = useState<boolean>(true);
 
 
   const handleFileLoad = (xyzContent: string) => {
@@ -351,512 +361,396 @@ const WavefunctionCalculator: React.FC = () => {
     try { localStorage.removeItem('wfn-calc-session'); } catch {}
   };
 
+  const methodLabel = METHODS.find((m) => m.value === settings.method)?.label ?? settings.method;
+  const basisLabel = BASIS_SETS.find((b) => b.value === settings.basisSet)?.label ?? settings.basisSet;
+  const readout = !moleculeInfo
+    ? 'Load a molecule to begin'
+    : [
+        `${moleculeInfo.formula} · ${moleculeInfo.numAtoms} atoms`,
+        `${methodLabel}/${basisLabel}`,
+        results ? `E = ${results.energy.toFixed(6)} Ha` : isCalculating ? 'running…' : null,
+      ].filter(Boolean).join(' · ');
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'structure', label: 'Structure' },
+    { id: 'output', label: 'Output' },
+    { id: 'results', label: 'Results' },
+    { id: 'properties', label: 'Properties' },
+    ...(results?.optimization ? [{ id: 'optimization' as const, label: 'Optimisation' }] : []),
+    { id: 'settings', label: 'Settings' },
+    { id: 'about', label: 'About' },
+  ];
+
+  const sidebar = (
+    <VizPanel stack>
+      <ControlGroup label="Molecule">
+        <FileUploader onFileLoad={handleFileLoad} onValidationChange={handleValidationChange} />
+        {moleculeInfo && (
+          <ControlHint>
+            <strong>{moleculeInfo.formula}</strong>, {moleculeInfo.numAtoms} atoms
+          </ControlHint>
+        )}
+      </ControlGroup>
+
+      {currentXYZData && (
+        <ControlGroup label="Calculation">
+          <CalculationSettings settings={settings} updateSettings={updateSettings} />
+          <VizButton variant="primary" block onClick={handleRunCalculation} disabled={isCalculating || !isXYZValid}>
+            {isCalculating ? 'Calculating…' : 'Run calculation'}
+          </VizButton>
+          {isCalculating && (
+            <VizButton variant="danger" block onClick={cancelCalculation}>
+              Cancel
+            </VizButton>
+          )}
+          {isWorking && (
+            <span className={styles.workingIndicator}>
+              {isCubeComputing ? 'Computing cube…' : 'Running SCF…'}
+            </span>
+          )}
+        </ControlGroup>
+      )}
+    </VizPanel>
+  );
+
   return (
-    <div className={styles.container}>
+    <>
       {savedSession && !results && (
         <div className={styles.resumeBanner}>
           <p>
-            Previous session found: <strong>{savedSession.formula || 'molecule'}</strong> ({savedSession.method}/{savedSession.basis},
+            Previous session: <strong>{savedSession.formula || 'molecule'}</strong> ({savedSession.method}/{savedSession.basis},
             E = {savedSession.results.energy.toFixed(6)} Ha
             {savedSession.results.optimization ? ', optimised' : ''}
             {savedSession.results.frequencies ? `, ${savedSession.results.frequencies.frequencies.length} modes` : ''}
-            ). Resume?
+            ).
           </p>
-          <button className={styles.resumeButton} onClick={handleResumeSession}>Resume</button>
-          <button className={styles.dismissButton} onClick={dismissSavedSession}>Dismiss</button>
+          <VizButton size="sm" variant="primary" onClick={handleResumeSession}>Resume</VizButton>
+          <VizButton size="sm" variant="ghost" onClick={dismissSavedSession}>Dismiss</VizButton>
         </div>
       )}
-      <div className={styles.layout}>
-        <div className={styles.sidebar}>
-          <div className={`${styles.status} ${styles.statusReady}`}>
-            ✓ Ready
-          </div>
 
-          <div className={styles.scrollableContent}>
-            <div className={styles.collapsibleSection}>
-            <button 
-              className={styles.sectionHeader}
-              onClick={() => setIsInputExpanded(!isInputExpanded)}
-            >
-              <span className={styles.sectionTitle}>Molecule Input</span>
-              <span className={`${styles.chevron} ${isInputExpanded ? styles.chevronExpanded : ''}`}>
-                ▼
-              </span>
-            </button>
-            {isInputExpanded && (
-              <div className={styles.sectionContent}>
-                <FileUploader 
-              onFileLoad={handleFileLoad} 
-              onValidationChange={handleValidationChange}
-            />
-                {moleculeInfo && (
-                  <div className={styles.moleculeInfo}>
-                    <div><strong>{moleculeInfo.formula}</strong> ({moleculeInfo.numAtoms} atoms)</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      <VizWorkbench sidebarSide="left" sidebar={sidebar} className={styles.workbench}>
+        <VizPanel flush className={styles.mainPanel}>
+          <VizPanelSection className={styles.headerSection}>
+            <VizPlotHeader title={title} readout={readout} />
+          </VizPanelSection>
 
           {currentXYZData && (
-            <div className={styles.collapsibleSection}>
-              <button 
-                className={styles.sectionHeader}
-                onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
-              >
-                <span className={styles.sectionTitle}>Calculation Settings</span>
-                <span className={`${styles.chevron} ${isSettingsExpanded ? styles.chevronExpanded : ''}`}>
-                  ▼
-                </span>
-              </button>
-              {isSettingsExpanded && (
-                <div className={styles.sectionContent}>
-                  <CalculationSettings
-                    settings={settings}
-                    updateSettings={updateSettings}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-          </div>
-
-          {currentXYZData && (
-            <div className={styles.stickyButtons}>
-              <button
-                className={`${styles.button} ${styles.buttonPrimary}`}
-                onClick={handleRunCalculation}
-                disabled={isCalculating || !isXYZValid}
-              >
-                {isCalculating ? 'Calculating...' : 'Run Calculation'}
-              </button>
-              {isCalculating && (
+            <div className={styles.tabs} role="tablist">
+              {tabs.map((tab) => (
                 <button
-                  className={`${styles.button} ${styles.buttonDanger}`}
-                  onClick={cancelCalculation}
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  className={clsx(styles.tab, activeTab === tab.id && styles.tabActive)}
+                  onClick={() => setActiveTab(tab.id)}
                 >
-                  Cancel
+                  {tab.label}
                 </button>
-              )}
-              {isWorking && (
-                <span className={styles.workingIndicator}>
-                  {isCubeComputing ? 'Computing cube...' : 'Running SCF...'}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className={styles.content}>
-          {currentXYZData && (
-            <div className={styles.tabs}>
-              <button
-                className={`${styles.tab} ${activeTab === 'output' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('output')}
-              >
-                Output
-              </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'results' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('results')}
-              >
-                Results
-              </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'structure' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('structure')}
-              >
-                Structure
-              </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'properties' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('properties')}
-              >
-                Properties
-              </button>
-              {results?.optimization && (
-                <button
-                  className={`${styles.tab} ${activeTab === 'optimization' ? styles.tabActive : ''}`}
-                  onClick={() => setActiveTab('optimization')}
-                >
-                  Optimization
-                </button>
-              )}
-              <button
-                className={`${styles.tab} ${activeTab === 'settings' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('settings')}
-              >
-                Settings
-              </button>
-              <button
-                className={`${styles.tab} ${activeTab === 'about' ? styles.tabActive : ''}`}
-                onClick={() => setActiveTab('about')}
-              >
-                About
-              </button>
+              ))}
             </div>
           )}
 
-          <div className={styles.tabContent}>
+          <div className={clsx(styles.tabContent, (activeTab === 'structure' || activeTab === 'output') && styles.tabContentFlush)}>
             {activeTab === 'output' && <LogOutput logs={logs} />}
             {activeTab === 'results' && <ResultsDisplay results={results} />}
             {activeTab === 'structure' && (
-              <div className={styles.structureTab}>
-                {currentXYZData ? (
-                  <MoleculeViewer
-                    xyzData={getStructureXYZ()}
-                    moleculeName={`${moleculeInfo?.name || 'Molecule'}${results?.optimization ? ' (Optimized)' : ''}`}
-                    wavefunctionResults={results}
-                    cubeResults={cubeResults}
-                    cubeGridInfo={cubeGridInfo}
-                    cubeSettings={cubeSettings}
-                    onRequestCubeComputation={handleRequestCubeComputation}
-                    onOpenCubeSettings={() => setShowCubeSettings(true)}
-                  />
-                ) : (
-                  <div className={styles.noStructure}>
-                    <h3>No Structure Loaded</h3>
-                    <p>Load a molecule to see its 3D structure visualization.</p>
-                  </div>
-                )}
+              currentXYZData ? (
+                <MoleculeViewer
+                  xyzData={getStructureXYZ()}
+                  moleculeName={`${moleculeInfo?.name || 'Molecule'}${results?.optimization ? ' (Optimized)' : ''}`}
+                  wavefunctionResults={results}
+                  cubeResults={cubeResults}
+                  cubeGridInfo={cubeGridInfo}
+                  cubeSettings={cubeSettings}
+                  onRequestCubeComputation={handleRequestCubeComputation}
+                  onOpenCubeSettings={() => setShowCubeSettings(true)}
+                />
+              ) : (
+                <div className={styles.empty}>
+                  <p>Choose an example, search PubChem or paste XYZ coordinates to see the structure.</p>
+                </div>
+              )
+            )}
+            {activeTab === 'properties' && !results && (
+              <div className={styles.empty}>
+                <p>Run a calculation to see orbital energies and matrices.</p>
               </div>
             )}
             {activeTab === 'properties' && results && (
-              <div className={styles.propertiesTab}>
+              <div className={styles.stack}>
                 {results.orbitalEnergies && results.orbitalOccupations && (() => {
-                    const orbitals = getOrbitalList(results.orbitalEnergies!, results.orbitalOccupations!);
-                    const isUnrestr = isUnrestrictedOrbitals(results.orbitalEnergies!);
-                    const alphaOrbitals = orbitals.filter(o => o.spin === 'alpha');
-                    const betaOrbitals = orbitals.filter(o => o.spin === 'beta');
-                    const restrictedOrbitals = orbitals.filter(o => !o.spin);
-                    const HA_TO_EV = 27.2114;
+                  const orbitals = getOrbitalList(results.orbitalEnergies!, results.orbitalOccupations!);
+                  const isUnrestr = isUnrestrictedOrbitals(results.orbitalEnergies!);
+                  const alphaOrbitals = orbitals.filter(o => o.spin === 'alpha');
+                  const betaOrbitals = orbitals.filter(o => o.spin === 'beta');
+                  const restrictedOrbitals = orbitals.filter(o => !o.spin);
+                  const HA_TO_EV = 27.2114;
 
-                    return (
-                  <div className={styles.orbitalsCard}>
-                    <h4>Orbital Energies</h4>
+                  const list = (items: typeof orbitals, limit: number, key: string, noun: string) => (
+                    <>
+                      <div className={styles.orbitalGrid}>
+                        {items.slice(0, limit).map((o) => (
+                          <OrbitalItem key={`${key}-${o.index}`} orbital={{ ...o, energy: o.energy * HA_TO_EV }} />
+                        ))}
+                      </div>
+                      {items.length > limit && (
+                        <p className={styles.more}>… and {items.length - limit} more {noun}</p>
+                      )}
+                    </>
+                  );
 
-                    {isUnrestr ? (
-                      <>
-                        <h5 style={{ marginTop: '1rem', color: '#3b82f6' }}>Alpha Orbitals (↑)</h5>
-                        <div className={styles.orbitalGrid}>
-                          {alphaOrbitals.slice(0, 10).map((o) => (
-                            <OrbitalItem key={`alpha-${o.index}`} orbital={{ ...o, energy: o.energy * HA_TO_EV }} />
-                          ))}
-                        </div>
-                        {alphaOrbitals.length > 10 && (
-                          <div className={styles.moreOrbitals}>... and {alphaOrbitals.length - 10} more alpha orbitals</div>
-                        )}
-
-                        <h5 style={{ marginTop: '1.5rem', color: '#f97316' }}>Beta Orbitals (↓)</h5>
-                        <div className={styles.orbitalGrid}>
-                          {betaOrbitals.slice(0, 10).map((o) => (
-                            <OrbitalItem key={`beta-${o.index}`} orbital={{ ...o, energy: o.energy * HA_TO_EV }} />
-                          ))}
-                        </div>
-                        {betaOrbitals.length > 10 && (
-                          <div className={styles.moreOrbitals}>... and {betaOrbitals.length - 10} more beta orbitals</div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div className={styles.orbitalGrid}>
-                          {restrictedOrbitals.slice(0, 20).map((o) => (
-                            <OrbitalItem key={o.index} orbital={{ ...o, energy: o.energy * HA_TO_EV }} />
-                          ))}
-                        </div>
-                        {restrictedOrbitals.length > 20 && (
-                          <div className={styles.moreOrbitals}>... and {restrictedOrbitals.length - 20} more orbitals</div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                    );
+                  return (
+                    <section>
+                      <h3 className={styles.heading}>Orbital energies</h3>
+                      {isUnrestr ? (
+                        <>
+                          <h4 className={clsx(styles.subheading, styles.alpha)}>α orbitals (↑)</h4>
+                          {list(alphaOrbitals, 10, 'alpha', 'α orbitals')}
+                          <h4 className={clsx(styles.subheading, styles.beta)}>β orbitals (↓)</h4>
+                          {list(betaOrbitals, 10, 'beta', 'β orbitals')}
+                        </>
+                      ) : (
+                        list(restrictedOrbitals, 20, 'mo', 'orbitals')
+                      )}
+                    </section>
+                  );
                 })()}
 
                 {results.matrices && Object.keys(results.matrices).length > 0 ? (
-                  <div className={styles.matricesSection}>
-                    {Object.entries(results.matrices).map(([name, matrix]) => 
+                  <section>
+                    {Object.entries(results.matrices).map(([name, matrix]) =>
                       matrix ? (
                         <MatrixDisplay
                           key={name}
                           matrix={matrix}
-                          title={`${name.charAt(0).toUpperCase()}${name.slice(1)} Matrix`}
+                          title={`${name.charAt(0).toUpperCase()}${name.slice(1)} matrix`}
                           precision={6}
                           maxDisplaySize={6}
                         />
                       ) : null
                     )}
-                  </div>
+                  </section>
                 ) : (
-                  <div className={styles.noMatrices}>
-                    <p>No matrix data available. Matrices are generated during SCF calculations and may depend on the calculation method and settings.</p>
-                  </div>
+                  <p className={styles.note}>
+                    No matrix data available. Matrices are generated during SCF calculations and may depend on the
+                    method and settings.
+                  </p>
                 )}
               </div>
             )}
-            
+
             {activeTab === 'optimization' && results?.optimization && (
-              <div className={styles.optimizationTab}>
-                <div className={styles.optimizationHeader}>
-                  <div className={styles.optimizationSummary}>
-                    <h4>Optimization Summary</h4>
-                    <div className={styles.summaryGrid}>
-                      <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Converged:</span>
-                        <span className={`${styles.summaryValue} ${results.optimization.trajectory.converged ? styles.converged : styles.notConverged}`}>
-                          {results.optimization.trajectory.converged ? 'Yes' : 'No'}
-                        </span>
-                      </div>
-                      <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Steps:</span>
-                        <span className={styles.summaryValue}>{results.optimization.steps}</span>
-                      </div>
-                      <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Final Energy:</span>
-                        <span className={styles.summaryValue}>{results.energy.toFixed(8)} Ha</span>
-                      </div>
-                      <div className={styles.summaryItem}>
-                        <span className={styles.summaryLabel}>Final Energy:</span>
-                        <span className={styles.summaryValue}>{results.energyInEV.toFixed(4)} eV</span>
-                      </div>
-                    </div>
+              <div className={styles.stack}>
+                <dl className={styles.summaryGrid}>
+                  <div>
+                    <dt>Converged</dt>
+                    <dd className={results.optimization.trajectory.converged ? styles.converged : styles.notConverged}>
+                      {results.optimization.trajectory.converged ? 'Yes' : 'No'}
+                    </dd>
                   </div>
-                </div>
+                  <div>
+                    <dt>Steps</dt>
+                    <dd>{results.optimization.steps}</dd>
+                  </div>
+                  <div>
+                    <dt>Final energy</dt>
+                    <dd>{results.energy.toFixed(8)} Ha</dd>
+                  </div>
+                  <div>
+                    <dt>Final energy</dt>
+                    <dd>{results.energyInEV.toFixed(4)} eV</dd>
+                  </div>
+                </dl>
 
                 <div className={styles.optimizationLayout}>
-                  {/* Left side - Trajectory Viewer */}
-                  <div className={styles.trajectoryViewerSection}>
-                    <div className={styles.trajectoryViewerContainer}>
-                      <TrajectoryViewer
-                        trajectoryData={getCurrentTrajectoryData()}
-                        moleculeName={getCurrentTrajectoryName()}
-                        autoPlay={trajectoryMode === 'normal_mode'}
-                        initialSpeed={trajectoryMode === 'normal_mode' ? 60 : 20}
-                      />
-                    </div>
+                  <div className={styles.trajectoryViewer}>
+                    <TrajectoryViewer
+                      trajectoryData={getCurrentTrajectoryData()}
+                      moleculeName={getCurrentTrajectoryName()}
+                      autoPlay={trajectoryMode === 'normal_mode'}
+                      initialSpeed={trajectoryMode === 'normal_mode' ? 60 : 20}
+                    />
                   </div>
 
-                  {/* Right side - Controls */}
-                  <div className={styles.trajectoryControlsPanel}>
-                    <div className={styles.trajectoryControlsHeader}>
-                      <h4>Trajectory Controls</h4>
-                    </div>
+                  <div className={styles.trajectoryControls}>
+                    <VizButton
+                      block
+                      variant={trajectoryMode === 'optimization' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setTrajectoryMode('optimization');
+                        setSelectedNormalMode(null);
+                      }}
+                    >
+                      Optimisation path
+                    </VizButton>
 
-                    {/* Mode Selection */}
-                    <div className={styles.trajectoryModeSection}>
-                      <button
-                        onClick={() => {
-                          setTrajectoryMode('optimization');
-                          setSelectedNormalMode(null);
-                        }}
-                        className={`${styles.modeButton} ${trajectoryMode === 'optimization' ? styles.active : ''}`}
-                      >
-                        Optimization Path
-                      </button>
-                    </div>
-
-                    {/* Frequencies Section */}
                     {results.frequencies && results.frequencies.frequencies.length > 0 && (
-                      <div className={styles.frequenciesControlSection}>
-                        <div className={styles.frequenciesSectionHeader}>
-                          <h5>Normal Modes</h5>
-                          <div className={styles.frequencySettings}>
-                            <label className={styles.checkboxLabel}>
-                              <input
-                                type="checkbox"
-                                checked={hideLowModes}
-                                onChange={(e) => {
-                                  setHideLowModes(e.target.checked);
-                                  // Reset selection if currently selected mode is being hidden
-                                  if (e.target.checked && selectedNormalMode !== null && results.frequencies.frequencies[selectedNormalMode] && Math.abs(results.frequencies.frequencies[selectedNormalMode]) < 50) {
-                                    setSelectedNormalMode(null);
-                                    setTrajectoryMode('optimization');
-                                  }
-                                }}
-                                className={styles.checkbox}
-                              />
-                              Hide low modes (&lt; 50 cm⁻¹)
-                            </label>
-                          </div>
-                        </div>
-                        
+                      <>
+                        <h4 className={styles.subheading}>Normal modes</h4>
+                        <ToggleSwitch
+                          label="Hide modes below 50 cm⁻¹"
+                          checked={hideLowModes}
+                          onChange={(checked) => {
+                            setHideLowModes(checked);
+                            // Reset selection if the selected mode is being hidden
+                            const f = selectedNormalMode !== null ? results.frequencies.frequencies[selectedNormalMode] : undefined;
+                            if (checked && f !== undefined && Math.abs(f) < 50) {
+                              setSelectedNormalMode(null);
+                              setTrajectoryMode('optimization');
+                            }
+                          }}
+                        />
                         <div className={styles.modesList}>
                           {getFilteredFrequencies().map(({ freq, index }) => {
                             const isSelected = trajectoryMode === 'normal_mode' && selectedNormalMode === index;
                             return (
-                              <div 
-                                key={index} 
-                                className={`${styles.modeItem} ${isSelected ? styles.modeSelected : ''}`}
+                              <button
+                                key={index}
+                                type="button"
+                                className={clsx(styles.modeItem, isSelected && styles.modeSelected)}
                                 onClick={() => {
                                   setTrajectoryMode('normal_mode');
                                   setSelectedNormalMode(index);
                                 }}
-                                style={{ cursor: 'pointer' }}
-                                title={`Click to visualize mode ${index + 1}`}
+                                title={`Animate mode ${index + 1}`}
                               >
-                                <div className={styles.modeInfo}>
-                                  <div className={styles.modeNumber}>Mode {index + 1}</div>
-                                  <div className={styles.modeValue}>
-                                    {freq < 0 ? `${Math.abs(freq).toFixed(1)}i` : freq.toFixed(1)} cm⁻¹
-                                  </div>
-                                  {freq < 0 && <div className={styles.imaginaryBadge}>imag</div>}
-                                </div>
-                                {isSelected && (
-                                  <div className={styles.modeSelectedIndicator}>
-                                    ▶ Playing
-                                  </div>
-                                )}
-                              </div>
+                                <span className={styles.modeNumber}>Mode {index + 1}</span>
+                                <span className={styles.modeValue}>
+                                  {freq < 0 ? `${Math.abs(freq).toFixed(1)}i` : freq.toFixed(1)} cm⁻¹
+                                </span>
+                                {freq < 0 && <span className={styles.imaginaryBadge}>imaginary</span>}
+                              </button>
                             );
                           })}
                         </div>
-                        
-                        <div className={styles.frequencySummary}>
+                        <ControlHint>
                           Showing {getFilteredFrequencies().length} of {results.frequencies.frequencies.length} modes
-                        </div>
-                      </div>
+                        </ControlHint>
+                      </>
                     )}
                   </div>
                 </div>
               </div>
             )}
+
             {activeTab === 'settings' && (
-              <div className={styles.settingsTab}>
-                <div className={styles.aboutSection}>
-                  <h3>Calculation Parameters</h3>
-                  <div className={styles.settingsGrid}>
-                    <div className={styles.settingsField}>
-                      <label>Charge</label>
-                      <input type="number" min="-5" max="5" step="1" value={settings.charge}
-                        onChange={(e) => updateSettings({ charge: parseInt(e.target.value) || 0 })} />
-                    </div>
-                    <div className={styles.settingsField}>
-                      <label>Multiplicity</label>
-                      <input type="number" min="1" max="7" step="1" value={settings.multiplicity}
-                        onChange={(e) => updateSettings({ multiplicity: parseInt(e.target.value) || 1 })} />
-                      <small>2S+1: 1=singlet, 2=doublet, 3=triplet</small>
-                    </div>
-                    <div className={styles.settingsField}>
-                      <label>SCF Max Iterations</label>
-                      <input type="number" min="10" max="500" value={settings.maxIterations}
-                        onChange={(e) => updateSettings({ maxIterations: parseInt(e.target.value) })} />
-                    </div>
-                    <div className={styles.settingsField}>
-                      <label>Energy Tolerance</label>
-                      <select value={settings.energyTolerance.toString()}
-                        onChange={(e) => updateSettings({ energyTolerance: parseFloat(e.target.value) })}>
-                        <option value="1e-6">1e-6</option>
-                        <option value="1e-7">1e-7</option>
-                        <option value="1e-8">1e-8</option>
-                        <option value="1e-9">1e-9</option>
-                        <option value="1e-10">1e-10</option>
-                      </select>
-                    </div>
-                    <div className={styles.settingsField}>
-                      <label>Threads</label>
-                      <input type="number" min="1" max="16" value={settings.threads}
-                        onChange={(e) => updateSettings({ threads: parseInt(e.target.value) || 1 })} />
-                    </div>
-                    <div className={styles.settingsField}>
-                      <label>Log Level</label>
-                      <select value={settings.logLevel} onChange={(e) => updateSettings({ logLevel: parseInt(e.target.value) })}>
-                        <option value="0">Trace</option>
-                        <option value="1">Debug</option>
-                        <option value="2">Info</option>
-                        <option value="3">Warning</option>
-                        <option value="4">Error</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-                <div className={styles.aboutSection}>
-                  <h3>Defaults</h3>
-                  <div className={styles.settingsGrid}>
-                    <div className={styles.settingsField}>
-                      <label>Default Basis Set</label>
-                      <select value={settings.basisSet}
-                        onChange={(e) => {
-                          updateSettings({ basisSet: e.target.value });
-                          try { localStorage.setItem('wfn-calc-default-basis', e.target.value); } catch {}
-                        }}>
-                        <option value="sto-3g">STO-3G</option>
-                        <option value="3-21g">3-21G</option>
-                        <option value="6-31g">6-31G</option>
-                        <option value="6-31g(d,p)">6-31G(d,p)</option>
-                        <option value="def2-svp">def2-SVP</option>
-                        <option value="def2-tzvp">def2-TZVP</option>
-                        <option value="cc-pvdz">cc-pVDZ</option>
-                      </select>
-                      <small>Changing here also sets it as the default for future sessions</small>
-                    </div>
-                  </div>
-                </div>
+              <div className={styles.settingsGrid}>
+                <ControlGroup label="Electronic state">
+                  <SliderWithInput
+                    label="Charge"
+                    value={settings.charge}
+                    onChange={(v) => updateSettings({ charge: Math.round(v) })}
+                    min={-5} max={5} step={1} decimals={0}
+                  />
+                  <SliderWithInput
+                    label="Multiplicity"
+                    value={settings.multiplicity}
+                    onChange={(v) => updateSettings({ multiplicity: Math.round(v) })}
+                    min={1} max={7} step={1} decimals={0}
+                  />
+                  <ControlHint>2S + 1: 1 = singlet, 2 = doublet, 3 = triplet.</ControlHint>
+                </ControlGroup>
+                <ControlGroup label="SCF">
+                  <SliderWithInput
+                    label="Max iterations"
+                    value={settings.maxIterations}
+                    onChange={(v) => updateSettings({ maxIterations: Math.round(v) })}
+                    min={10} max={500} step={10} decimals={0}
+                  />
+                  <Select
+                    label="Energy tolerance"
+                    value={TOLERANCES.find((o) => parseFloat(o.value) === settings.energyTolerance)?.value ?? '1e-8'}
+                    onChange={(v) => updateSettings({ energyTolerance: parseFloat(v) })}
+                    options={TOLERANCES}
+                  />
+                </ControlGroup>
+                <ControlGroup label="Runtime">
+                  <SliderWithInput
+                    label="Threads"
+                    value={settings.threads}
+                    onChange={(v) => updateSettings({ threads: Math.round(v) })}
+                    min={1} max={16} step={1} decimals={0}
+                  />
+                  <Select
+                    label="Log level"
+                    value={String(settings.logLevel)}
+                    onChange={(v) => updateSettings({ logLevel: parseInt(v) })}
+                    options={LOG_LEVELS}
+                  />
+                </ControlGroup>
+                <ControlGroup label="Defaults">
+                  <Select
+                    label="Default basis set"
+                    value={settings.basisSet}
+                    onChange={(v) => {
+                      updateSettings({ basisSet: v });
+                      try { localStorage.setItem('wfn-calc-default-basis', v); } catch {}
+                    }}
+                    options={BASIS_SETS}
+                  />
+                  <ControlHint>Also used as the default for future sessions.</ControlHint>
+                </ControlGroup>
               </div>
             )}
+
             {activeTab === 'about' && (
-              <div className={styles.aboutTab}>
-                <div className={styles.aboutSection}>
-                  <h3>About this calculator</h3>
-                  <p>
-                    This wavefunction calculator runs <strong>entirely in your web browser</strong> using
-                    WebAssembly. Your molecular data never leaves your computer &mdash; there is no server
-                    involved. All quantum-chemical calculations (SCF, geometry optimisation, frequency
-                    analysis, cube generation) are performed locally on your machine using the OCC library
-                    compiled to WASM.
-                  </p>
-                </div>
+              <div className={clsx('markdown', styles.prose)}>
+                <h3>About this calculator</h3>
+                <p>
+                  This wavefunction calculator runs <strong>entirely in your web browser</strong> using
+                  WebAssembly. Your molecular data never leaves your computer &mdash; there is no server
+                  involved. All quantum-chemical calculations (SCF, geometry optimisation, frequency
+                  analysis, cube generation) are performed locally on your machine using the OCC library
+                  compiled to WASM.
+                </p>
 
-                <div className={styles.aboutSection}>
-                  <h3>Privacy</h3>
-                  <p>
-                    No molecular structures, calculation inputs, or results are transmitted over the
-                    network. The only external request made is when you use the PubChem search to fetch
-                    a structure by name &mdash; that query goes directly to the
-                    NIH&rsquo;s <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubChem</a> public
-                    API. Everything else stays on your device.
-                  </p>
-                </div>
+                <h3>Privacy</h3>
+                <p>
+                  No molecular structures, calculation inputs, or results are transmitted over the
+                  network. The only external request made is when you use the PubChem search to fetch
+                  a structure by name &mdash; that query goes directly to the
+                  NIH&rsquo;s <a href="https://pubchem.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubChem</a> public
+                  API. Everything else stays on your device.
+                </p>
 
-                <div className={styles.aboutSection}>
-                  <h3>Powered by OCC</h3>
-                  <p>
-                    The computational engine is <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">OCC
-                    (Open Computational Chemistry)</a>, an open-source quantum chemistry library.
-                    If you use this tool in your work, please cite:
-                  </p>
-                  <blockquote className={styles.citation}>
-                    Spackman, P. R. (2026). Open Computational Chemistry (OCC) &ndash; A portable
-                    software library and program for quantum chemistry and crystallography.
-                    <em> Journal of Open Source Software</em>, 11(117), 9609.
-                    <a href="https://doi.org/10.21105/joss.09609" target="_blank" rel="noopener noreferrer" style={{ marginLeft: '0.3em' }}>
-                      doi:10.21105/joss.09609
-                    </a>
-                  </blockquote>
-                </div>
+                <h3>Powered by OCC</h3>
+                <p>
+                  The computational engine is <a href="https://github.com/peterspackman/occ" target="_blank" rel="noopener noreferrer">OCC
+                  (Open Computational Chemistry)</a>, an open-source quantum chemistry library.
+                  If you use this tool in your work, please cite:
+                </p>
+                <blockquote>
+                  Spackman, P. R. (2026). Open Computational Chemistry (OCC) &ndash; A portable
+                  software library and program for quantum chemistry and crystallography.
+                  <em> Journal of Open Source Software</em>, 11(117), 9609.{' '}
+                  <a href="https://doi.org/10.21105/joss.09609" target="_blank" rel="noopener noreferrer">
+                    doi:10.21105/joss.09609
+                  </a>
+                </blockquote>
 
-                <div className={styles.aboutSection}>
-                  <h3>Capabilities</h3>
-                  <ul>
-                    <li><strong>Methods:</strong> Hartree-Fock, B3LYP, PBE, PBE0, BLYP, wB97X</li>
-                    <li><strong>Basis sets:</strong> STO-3G, 3-21G, 6-31G, 6-31G(d,p), def2-SVP, def2-TZVP, cc-pVDZ</li>
-                    <li><strong>Geometry optimisation</strong> with trajectory visualisation</li>
-                    <li><strong>Harmonic frequency analysis</strong> with animated normal modes</li>
-                    <li><strong>Volumetric data:</strong> electron density, electrostatic potential, and molecular orbital isosurfaces</li>
-                    <li><strong>Matrix export:</strong> overlap, kinetic, nuclear attraction, Fock, density, and MO coefficients</li>
-                  </ul>
-                </div>
+                <h3>Capabilities</h3>
+                <ul>
+                  <li><strong>Methods:</strong> Hartree-Fock, B3LYP, PBE, PBE0, BLYP, wB97X</li>
+                  <li><strong>Basis sets:</strong> STO-3G, 3-21G, 6-31G, 6-31G(d,p), def2-SVP, def2-TZVP, cc-pVDZ</li>
+                  <li><strong>Geometry optimisation</strong> with trajectory visualisation</li>
+                  <li><strong>Harmonic frequency analysis</strong> with animated normal modes</li>
+                  <li><strong>Volumetric data:</strong> electron density, electrostatic potential, and molecular orbital isosurfaces</li>
+                  <li><strong>Matrix export:</strong> overlap, kinetic, nuclear attraction, Fock, density, and MO coefficients</li>
+                </ul>
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </VizPanel>
+      </VizWorkbench>
 
       {error && !validationError && (
-        <div className={styles.errorModal}>
+        <div className={styles.errorModal} role="alertdialog" aria-labelledby="wfn-error-title">
           <div className={styles.errorContent}>
-            <h3>Error</h3>
+            <h3 id="wfn-error-title">Error</h3>
             <p>{error}</p>
-            <button onClick={() => setError('')}>Close</button>
+            <VizButton onClick={() => setError('')}>Close</VizButton>
           </div>
         </div>
       )}
@@ -867,7 +761,7 @@ const WavefunctionCalculator: React.FC = () => {
         show={showCubeSettings}
         onClose={() => setShowCubeSettings(false)}
       />
-    </div>
+    </>
   );
 };
 

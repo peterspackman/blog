@@ -1,1616 +1,485 @@
-/* Tensor color scheme - CSS custom properties */
-:root {
-  --tensor-test-color: #ff6600;      /* Orange for test/primary tensor */
-  --tensor-reference-color: #0066cc; /* Blue for reference tensor */
-  --tensor-difference-color: #cc0066; /* Purple for differences */
-  
-  /* Multi-tensor color palette */
-  --tensor-color-0: #ff6600;  /* Orange */
-  --tensor-color-1: #0066cc;  /* Blue */
-  --tensor-color-2: #cc0066;  /* Purple */
-  --tensor-color-3: #00cc66;  /* Green */
-  --tensor-color-4: #cc6600;  /* Brown */
-  --tensor-color-5: #6600cc;  /* Violet */
-  --tensor-color-6: #00cccc;  /* Cyan */
-  --tensor-color-7: #cc6666;  /* Red */
-  --tensor-color-8: #66cc00;  /* Lime */
-  --tensor-color-9: #6666cc;  /* Indigo */
-  
-  /* Matrix colors */
-  --tensor-matrix-single-low: #ffffff;
-  --tensor-matrix-single-mid: #9e9e9e;
-  --tensor-matrix-single-high: #757575;
-  
-  --tensor-matrix-diff-negative: #2196f3;  /* Blue (reference higher) */
-  --tensor-matrix-diff-zero: #ffffff;      /* White (no difference) */
-  --tensor-matrix-diff-positive: #f44336;  /* Red (test higher) */
-  
-  /* Text colors */
-  --tensor-text-light: #000000;
-  --tensor-text-dark: #ffffff;
-  --tensor-text-small-diff: #666666;
+/* Elastic tensor analysis: everything takes its colour from the --viz-* tokens. */
+
+/* Inputs come first on narrow screens: there is nothing to see until you analyse. */
+@media (max-width: 996px) {
+  /* Doubled class to outrank the shared .workbenchLeft .sidebar rule. */
+  .workbench.workbench > aside {
+    order: 0;
+  }
 }
 
-/* Utility classes for tensor colors */
-.testTensorColor {
-  color: var(--tensor-test-color) !important;
-}
+/* ---------- Sidebar: tensor list ---------- */
 
-.referenceTensorColor {
-  color: var(--tensor-reference-color) !important;
-}
-
-.differenceTensorColor {
-  color: var(--tensor-difference-color) !important;
-}
-
-.testTensorText {
-  color: var(--tensor-test-color);
-  font-weight: 600;
-}
-
-.referenceTensorText {
-  color: var(--tensor-reference-color);
-  margin-left: 0.25rem;
-}
-
-.container {
-  min-height: calc(100vh - 60px);
-  background-color: var(--ifm-background-surface-color);
-}
-
-.mainGrid {
-  display: flex;
-  min-height: calc(100vh - 60px);
-}
-
-.inputColumn {
-  width: 380px;
-  min-width: 380px;
-  max-width: 420px;
-  background-color: var(--ifm-background-color);
-  border-right: 1px solid var(--ifm-color-emphasis-200);
-  padding: 1rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.inputSection {
-  padding: 0;
-  background: transparent;
-  border: none;
-  height: fit-content;
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.header h3 {
-  margin: 0 0 1rem 0;
-  color: var(--ifm-color-emphasis-800);
-  font-size: 1.1rem;
-}
-
-.workerStatus {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-700);
-}
-
-.statusIndicator {
-  font-size: 1rem;
-  font-weight: bold;
-}
-
-.statusIndicator.ready {
-  color: var(--ifm-color-success);
-}
-
-.statusIndicator.loading {
-  color: var(--ifm-color-warning);
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.exampleButtons {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.exampleButton {
-  padding: 0.375rem 0.75rem;
-  background: var(--ifm-color-secondary);
-  color: var(--ifm-color-secondary-contrast-foreground);
-  border: none;
-  border-radius: 0;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  flex: 1;
-}
-
-.exampleButton:hover {
-  background: var(--ifm-color-secondary-dark);
-}
-
-.tensorInput {
-  width: 100%;
-  font-family: var(--ifm-font-family-monospace);
-  padding: 0.75rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-  font-size: 0.75rem;
-  line-height: 1.2;
-  resize: vertical;
-  background: var(--ifm-background-color);
-  color: var(--ifm-color-content);
-  transition: border-color 0.2s;
-  margin-bottom: 0.75rem;
-}
-
-.tensorInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.analyzeButton {
-  padding: 0.75rem 1.5rem;
-  background: var(--ifm-color-success);
-  color: white;
-  border: none;
-  border-radius: 0;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 1rem;
-  width: 100%;
-  margin-top: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.analyzeButton:hover:not(:disabled) {
-  background: var(--ifm-color-success-dark);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.analyzeButton:disabled {
-  background: var(--ifm-color-emphasis-300);
-  color: var(--ifm-color-emphasis-600);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.errorMessage {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: #fed7d7;
-  color: #c53030;
-  border-radius: 6px;
-  border-left: 4px solid #e53e3e;
-  font-size: 0.875rem;
-}
-
-.logOutput {
-  margin-top: 0.75rem;
-  padding: 0.5rem;
-  background: #f8f8f8;
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.logEntries {
-  max-height: 80px;
-  overflow-y: auto;
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  color: #000;
-}
-
-.logEntry {
-  margin-bottom: 0.125rem;
-  padding: 0.125rem 0;
-}
-
-.logEntry.info {
-  color: var(--ifm-color-info);
-}
-
-.logEntry.warning {
-  color: var(--ifm-color-warning);
-}
-
-.logEntry.error {
-  color: var(--ifm-color-danger);
-}
-
-.logEntry.debug {
-  color: var(--ifm-color-emphasis-600);
-}
-
-.message {
-  display: block;
-}
-
-.resultsColumn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 1rem;
-  gap: 1rem;
-}
-
-
-.propertiesCard {
-  background: var(--ifm-background-surface-color);
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  padding: 0.75rem;
-}
-
-.propertiesCard h3 {
-  margin: 0 0 0.5rem 0;
-  color: var(--ifm-color-emphasis-800);
-  font-size: 0.95rem;
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
-  padding-bottom: 0.25rem;
-}
-
-.copyButton {
-  background: none;
-  border: none;
-  font-size: 0.875rem;
-  cursor: pointer;
-  margin-left: 0.5rem;
-  padding: 0.25rem;
-  border-radius: 3px;
-  opacity: 0.7;
-  transition: opacity 0.2s, background-color 0.2s;
-}
-
-.copyButton:hover {
-  opacity: 1;
-  background-color: var(--ifm-color-emphasis-200);
-}
-
-.propertiesCard h3:not(:first-child) {
-  margin-top: 1.25rem;
-}
-
-.tablesGrid {
-  display: grid;
-  grid-template-columns: fit-content min-content;
-  grid-template-rows: auto auto;
-  gap: 1.5rem;
-  justify-content: start;
-  width: 100%;
-  overflow-x: auto;
-}
-
-.tableCell {
-  display: flex;
-  flex-direction: column;
-}
-
-.eigenvaluesCell {
-  grid-row: 1 / 3;
-  grid-column: 2;
-}
-
-.tableCell h3 {
-  margin-top: 0;
-}
-
-.propertiesTable {
-  width: 100%;
-  min-width: max-content;
-  border-collapse: collapse;
-  background: transparent;
-  margin-bottom: 1rem;
-}
-
-.propertiesTable th,
-.propertiesTable td {
-  padding: 0.25rem 0.5rem;
-  text-align: center;
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
-  vertical-align: middle;
-  line-height: 1.2;
-}
-
-.propertiesTable td:first-child {
-  text-align: left;
-  font-weight: 600;
-}
-
-.propertiesTable th:first-child {
-  text-align: left;
-}
-
-.propertiesTable th {
-  background: transparent;
-  color: var(--ifm-color-emphasis-800);
-  font-weight: 600;
-  font-size: 0.8rem;
-  border-bottom: 2px solid var(--ifm-color-emphasis-300);
-  padding: 0.375rem 0.5rem;
-}
-
-.propertiesTable td {
-  font-family: var(--ifm-font-family-base);
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-800);
-  white-space: nowrap;
-}
-
-.propertiesTable tr:hover {
-  background: var(--ifm-color-primary-lightest);
-}
-
-.highlightRow {
-  background: rgba(var(--ifm-color-primary-rgb), 0.05) !important;
-}
-
-.highlightRow:hover {
-  background: rgba(var(--ifm-color-primary-rgb), 0.1) !important;
-}
-
-.naCell {
-  color: var(--ifm-color-emphasis-500);
-  font-style: italic;
-  text-align: center;
-}
-
-.chartsSection {
-  background: var(--ifm-background-color);
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.chartControls {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  align-items: center;
-}
-
-
-.propertySelect,
-.planeSelect {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-  background: var(--ifm-background-color);
-  color: var(--ifm-color-content);
-  font-size: 0.75rem;
-  transition: border-color 0.2s;
-}
-
-.propertySelect:focus,
-.planeSelect:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.checkboxLabel {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-800);
-  cursor: pointer;
-  user-select: none;
-}
-
-.checkbox {
-  width: 1rem;
-  height: 1rem;
-  cursor: pointer;
-}
-
-.radioGroup {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-}
-
-.radioLabel {
-  display: flex;
+.status {
+  display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  font-size: 0.875rem;
-  color: var(--ifm-color-emphasis-800);
-  cursor: pointer;
-  user-select: none;
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
 }
 
-.radio {
-  width: 1rem;
-  height: 1rem;
-  cursor: pointer;
+.status::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--viz-warning);
 }
 
-.modeToggle {
-  margin-bottom: 1rem;
-  padding: 0.5rem;
-  background: var(--ifm-color-emphasis-100);
-  border-radius: 0;
+.statusReady::before {
+  background: var(--viz-success);
+  border-color: var(--viz-success);
 }
 
-.tensorNameInput {
-  width: 100%;
-  padding: 0.375rem 0.75rem;
-  margin-bottom: 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-  font-size: 0.875rem;
-  background: var(--ifm-background-color);
-  color: var(--ifm-color-content);
-}
-
-.tensorNameInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
-}
-
-.tensorActions {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-  position: relative;
-}
-
-.saveButton, .loadButton {
-  padding: 0.375rem 0.75rem;
-  border: 1px solid var(--ifm-color-primary);
-  border-radius: 0;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  flex: 1;
-}
-
-.saveButton {
-  background: var(--ifm-color-primary);
-  color: var(--ifm-color-primary-contrast-foreground);
-}
-
-.saveButton:hover:not(:disabled) {
-  background: var(--ifm-color-primary-dark);
-}
-
-.saveButton:disabled {
-  background: var(--ifm-color-emphasis-300);
-  color: var(--ifm-color-emphasis-600);
-  border-color: var(--ifm-color-emphasis-300);
-  cursor: not-allowed;
-}
-
-.loadButton {
-  background: var(--ifm-background-color);
-  color: var(--ifm-color-primary);
-}
-
-.loadButton:hover:not(:disabled) {
-  background: var(--ifm-color-primary-lightest);
-}
-
-.loadDropdown {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  width: 100%;
-  min-width: 250px;
-  z-index: 1000;
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.loadDropdownItem {
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.875rem;
-  line-height: 1.2;
-}
-
-.loadDropdownItem:last-child {
-  border-bottom: none;
-}
-
-.loadDropdownItem:hover {
-  background: var(--ifm-color-primary-lightest);
-}
-
-.tensorInfo {
-  flex: 1;
-  font-size: 0.875rem;
-}
-
-.tensorTimestamp {
-  font-size: 0.65rem;
-  color: var(--ifm-color-emphasis-600);
-  margin-top: 0;
-  line-height: 1.2;
-}
-
-.deleteButton {
-  background: none;
-  border: none;
-  color: var(--ifm-color-danger);
-  cursor: pointer;
-  padding: 0.25rem;
-  margin-left: 0.5rem;
-  border-radius: 3px;
-  opacity: 0.7;
-  transition: opacity 0.2s, background-color 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.deleteButton svg {
-  width: 14px;
-  height: 14px;
-}
-
-.deleteButton:hover {
-  opacity: 1;
-  background: var(--ifm-color-danger-lightest);
-  color: var(--ifm-color-danger-dark);
-}
-
-.polarChartsGrid {
+.dropZone {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.sectionTitle {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-800);
-  margin: 1.5rem 0 1rem 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--ifm-color-primary);
-}
-
-.chartLabel {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-700);
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.875rem 0.75rem;
+  border: 1.5px dashed var(--viz-border);
+  border-radius: var(--viz-radius);
+  background: var(--viz-surface-subtle);
+  color: var(--viz-text);
+  font: inherit;
+  font-size: var(--viz-font-md);
   text-align: center;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.25rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.surfaceChartContainer {
-  background: var(--ifm-background-surface-color);
-  padding: 0.75rem;
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  min-height: auto;
-  height: auto;
-  margin-bottom: 1rem;
-  container-type: inline-size;
+.dropZone span {
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
 }
 
-.directionalChartsGrid {
+.dropZone:hover,
+.dropZone:focus-visible,
+.dragActive {
+  border-color: var(--viz-accent);
+  background: var(--viz-accent-soft);
+}
+
+.listBlock {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
 }
 
-.directionalChartContainer {
-  min-height: 250px;
-  background: var(--ifm-background-surface-color);
-  padding: 0.75rem;
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-200);
-}
-
-.chartsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  flex: 1;
-  min-height: 0;
-}
-
-.chartContainer {
-  background: var(--ifm-background-surface-color);
-  padding: 0.75rem;
-  border-radius: 0;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  display: flex;
-  flex-direction: column;
-  aspect-ratio: 1/1;
-  min-height: 250px;
+.input {
   width: 100%;
-  box-sizing: border-box;
-  container-type: inline-size;
-}
-
-/* Container queries for responsive chart scaling */
-@container (max-width: 200px) {
-  .chartContainer {
-    padding: 0.25rem;
-    font-size: 0.7rem;
-  }
-}
-
-@container (max-width: 300px) {
-  .chartContainer {
-    padding: 0.5rem;
-    font-size: 0.8rem;
-  }
-}
-
-@container (min-width: 500px) {
-  .chartContainer {
-    padding: 1rem;
-  }
-}
-
-/* Matrix chart specific container queries */
-@container (min-width: 600px) {
-  .surfaceChartContainer {
-    min-height: 600px;
-  }
-}
-
-@container (min-width: 800px) {
-  .surfaceChartContainer {
-    min-height: 700px;
-  }
-}
-
-/* Extra large screens */
-@media (min-width: 1400px) {
-  .inputColumn {
-    width: 420px;
-    min-width: 420px;
-    max-width: 450px;
-  }
-}
-
-/* Large screens */
-@media (max-width: 1399px) and (min-width: 1201px) {
-  .polarChartsGrid,
-  .directionalChartsGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* Medium-large screens */
-@media (max-width: 1000px) and (min-width: 769px) {
-  .polarChartsGrid,
-  .directionalChartsGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-/* Tablet responsive design */
-@media (max-width: 1200px) and (min-width: 1001px) {
-  .inputColumn {
-    width: 340px;
-    min-width: 340px;
-    max-width: 380px;
-  }
-  
-  .tablesGrid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    gap: 1rem;
-  }
-  
-  .eigenvaluesCell {
-    grid-row: auto;
-    grid-column: 1;
-  }
-}
-
-/* Small tablet responsive design */
-@media (max-width: 1000px) and (min-width: 769px) {
-  .inputColumn {
-    width: 320px;
-    min-width: 320px;
-    max-width: 360px;
-  }
-  
-  .tablesGrid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    gap: 1rem;
-  }
-  
-  .eigenvaluesCell {
-    grid-row: auto;
-    grid-column: 1;
-  }
-}
-
-/* Mobile responsive design */
-@media (max-width: 768px) {
-  .container {
-    min-height: 100vh;
-    padding: 0;
-  }
-  
-  .mainGrid {
-    flex-direction: column;
-    min-height: 100vh;
-  }
-  
-  .inputColumn {
-    width: 100%;
-    min-width: unset;
-    max-width: unset;
-    border-right: none;
-    border-bottom: 1px solid var(--ifm-color-emphasis-200);
-    padding: 0.75rem;
-    order: 1;
-    flex-shrink: 1;
-  }
-  
-  .resultsColumn {
-    order: 2;
-    padding: 0.75rem;
-  }
-  
-  .tablesGrid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    gap: 1rem;
-  }
-  
-  .eigenvaluesCell {
-    grid-row: auto;
-    grid-column: 1;
-  }
-  
-  .polarChartsGrid {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  
-  .directionalChartsGrid {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-  }
-  
-  .directionalChartContainer {
-    min-height: 250px;
-    padding: 0.5rem;
-  }
-  
-  .sectionTitle {
-    font-size: 1rem;
-    margin: 1rem 0 0.75rem 0;
-  }
-  
-  .chartLabel {
-    font-size: 0.85rem;
-    margin-bottom: 0.375rem;
-  }
-  
-  .chartsGrid {
-    grid-template-columns: 1fr;
-  }
-  
-  .chartControls {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-  }
-  
-  .propertySelect,
-  .planeSelect {
-    flex: 1;
-    min-width: 120px;
-  }
-  
-  .checkboxLabel,
-  .radioLabel {
-    font-size: 0.8rem;
-    white-space: nowrap;
-  }
-  
-  .exampleButtons {
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-  
-  .exampleButton {
-    padding: 0.5rem;
-    font-size: 0.8rem;
-  }
-  
-  .surfaceChartContainer {
-    min-height: 300px;
-    margin-bottom: 0.75rem;
-    padding: 0.5rem;
-  }
-  
-  .tensorInput {
-    font-size: 0.7rem;
-    padding: 0.5rem;
-    min-height: 120px;
-  }
-  
-  .loadDropdown {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 90vw;
-    max-width: 400px;
-    max-height: 60vh;
-  }
-}
-
-/* Small mobile devices */
-@media (max-width: 480px) {
-  .container {
-    padding: 0;
-  }
-  
-  .inputColumn {
-    padding: 0.5rem;
-  }
-  
-  .resultsColumn {
-    padding: 0.5rem;
-  }
-  
-  .directionalChartContainer,
-  .surfaceChartContainer {
-    padding: 0.25rem;
-  }
-  
-  .chartControls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .propertySelect,
-  .planeSelect {
-    width: 100%;
-    margin-bottom: 0.25rem;
-  }
-  
-  .radioGroup {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-  
-  .propertiesTable {
-    font-size: 0.7rem;
-  }
-  
-  .propertiesTable th,
-  .propertiesTable td {
-    padding: 0.125rem 0.25rem;
-  }
-}
-
-/* Rotation Controls */
-.rotationSection {
-  margin: 1rem 0;
-  padding: 1rem;
-  background-color: var(--ifm-background-color);
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 4px;
-}
-
-.rotationSection h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 1rem;
-  color: var(--ifm-color-emphasis-800);
-}
-
-.rotationControls {
-  margin-top: 0.75rem;
-}
-
-.rotationRow {
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.rotationLabel {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-700);
-  min-width: 120px;
-}
-
-.rotationInput {
   padding: 0.375rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  width: 80px;
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
+  background: var(--viz-canvas);
+  color: var(--viz-text);
+  font: inherit;
+  font-size: var(--viz-font-md);
 }
 
-.rotationInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+.input:focus {
+  outline: 2px solid var(--viz-accent);
+  outline-offset: -1px;
 }
 
-.axisSelect {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  min-width: 200px;
-  background-color: var(--ifm-background-surface-color);
+.textarea {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-sm);
+  line-height: 1.5;
+  resize: vertical;
 }
 
-.axisSelect:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 2px var(--ifm-color-primary-lightest);
+.tensorList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
 }
 
-.customAxisInputs {
-  display: flex;
-  gap: 0.75rem;
-  margin-left: 120px;
-}
-
-.axisComponent {
+.tensorItem {
+  --tensor-color: transparent;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: var(--ifm-color-emphasis-700);
+  padding-right: 0.375rem;
+  border-left: 3px solid var(--tensor-color);
 }
 
-.axisInput {
-  padding: 0.25rem 0.375rem;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 3px;
-  font-size: 0.85rem;
-  width: 60px;
+.tensorItem + .tensorItem {
+  border-top: 1px solid var(--viz-border);
 }
 
-.axisInput:focus {
-  outline: none;
-  border-color: var(--ifm-color-primary);
-  box-shadow: 0 0 0 1px var(--ifm-color-primary-lightest);
+.tensorItem:hover {
+  background: var(--viz-surface-subtle);
 }
 
-.rotationButton {
-  padding: 0.5rem 1rem;
-  background-color: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.selected,
+.selected:hover {
+  background: color-mix(in srgb, var(--tensor-color) 12%, transparent);
 }
 
-.rotationButton:hover:not(:disabled) {
-  background-color: var(--ifm-color-primary-dark);
-  transform: translateY(-1px);
-}
-
-.rotationButton:disabled {
-  background-color: var(--ifm-color-emphasis-300);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-/* Mobile responsiveness for rotation controls */
-@media (max-width: 768px) {
-  .rotationRow {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-  }
-  
-  .rotationLabel {
-    min-width: auto;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-  }
-  
-  .customAxisInputs {
-    margin-left: 0;
-    justify-content: space-between;
-  }
-  
-  .axisSelect {
-    min-width: auto;
-    width: 100%;
-  }
-}
-
-/* Modal Styles */
-.modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+.tensorToggle {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.5rem 0.5rem 0.625rem;
+  border: 0;
+  background: none;
+  color: var(--viz-text);
+  font: inherit;
+  font-size: var(--viz-font-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tensorSwatch {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 3px;
+  border: 1.5px solid var(--viz-border);
+}
+
+.selected .tensorSwatch {
+  background: var(--tensor-color);
+  border-color: var(--tensor-color);
+}
+
+.tensorName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unnamed {
+  color: var(--viz-muted);
+  font-style: italic;
+}
+
+.iconButton {
+  flex: none;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--viz-muted);
+  font: inherit;
+  font-size: var(--viz-font-xs);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  border-color: var(--viz-border);
+  color: var(--viz-text);
+}
+
+.iconDanger {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.iconDanger:hover {
+  border-color: var(--viz-danger);
+  background: var(--viz-danger);
+  color: #fff;
+}
+
+.listActions {
+  display: flex;
+  justify-content: space-between;
+}
+
+.dangerText {
+  color: var(--viz-danger);
+}
+
+.empty {
+  margin: 0;
+  padding: 1rem 0.5rem;
+  text-align: center;
+  font-size: var(--viz-font-md);
+  color: var(--viz-muted);
+}
+
+.errorMessage {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid color-mix(in srgb, var(--viz-danger) 45%, transparent);
+  border-radius: var(--viz-radius);
+  background: color-mix(in srgb, var(--viz-danger) 10%, transparent);
+  color: var(--viz-danger);
+  font-size: var(--viz-font-sm);
+}
+
+.log {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--viz-radius);
+  background: var(--viz-surface-subtle);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--viz-font-xs);
+  line-height: 1.45;
+  color: var(--viz-muted);
+  overflow-wrap: anywhere;
+}
+
+.debug {
+  opacity: 0.75;
+}
+
+.warning {
+  color: var(--viz-warning);
+}
+
+.error {
+  color: var(--viz-danger);
+}
+
+/* ---------- Results ---------- */
+
+.placeholder {
+  display: grid;
+  gap: 0.375rem;
+  justify-items: center;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 4rem 1rem;
+  text-align: center;
+  color: var(--viz-muted);
+  font-size: var(--viz-font-md);
+}
+
+.placeholder strong {
+  color: var(--viz-text);
+  font-size: 1rem;
+}
+
+.banner {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--viz-danger) 40%, transparent);
+  border-left: 4px solid var(--viz-danger);
+  border-radius: var(--viz-radius);
+  background: color-mix(in srgb, var(--viz-danger) 8%, var(--viz-surface));
+  color: var(--viz-text);
+  font-size: var(--viz-font-md);
+}
+
+.banner strong {
+  color: var(--viz-danger);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+/* Reset Infima's table styles: no zebra, no outer border, numbers right-aligned. */
+.table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: var(--viz-font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table tr,
+.table tr:nth-child(2n) {
+  background: none;
+  border: 0;
+}
+
+.table th,
+.table td {
+  padding: 0.375rem 0.625rem;
+  border: 0;
+  border-bottom: 1px solid var(--viz-border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table th {
+  white-space: normal;
+  vertical-align: bottom;
+  font-weight: 600;
+  color: var(--viz-muted);
+  background: var(--viz-surface-subtle);
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover {
+  background: var(--viz-surface-subtle);
+}
+
+.tableCompact th,
+.tableCompact td {
+  padding: 0.3125rem 0.5rem;
+  font-size: var(--viz-font-xs);
+}
+
+.groupHeader {
+  text-align: center !important;
+  border-left: 1px solid var(--viz-border) !important;
+}
+
+.tensorCell {
+  border-left: 3px solid var(--tensor-color) !important;
+  font-weight: 500;
+  color: var(--viz-text);
+}
+
+.flagged {
+  color: var(--viz-danger);
+  font-weight: 600;
+}
+
+.chartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+}
+
+.chart {
+  margin: 0;
+  min-width: 0;
+}
+
+.chart figcaption {
+  font-size: var(--viz-font-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--viz-muted);
+  text-align: center;
+}
+
+/* ---------- Add-tensors dialog ---------- */
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
   z-index: 1000;
-  padding: 20px;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / 0.45);
 }
 
 .modal {
-  background: var(--ifm-background-surface-color);
-  border: 2px solid var(--ifm-color-emphasis-400);
-  border-radius: 8px;
-  width: 100%;
-  max-width: 600px;
-  max-height: 85vh;
-  overflow: hidden;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3);
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  background: var(--viz-surface);
+  color: var(--viz-text);
+  box-shadow: var(--viz-shadow);
+}
+
+.modalHeader,
+.modalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
 }
 
 .modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-background-surface-color);
+  border-bottom: 1px solid var(--viz-border);
 }
 
 .modalHeader h3 {
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--ifm-color-emphasis-900);
-}
-
-.closeButton {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  color: var(--ifm-color-emphasis-600);
-  transition: all 0.2s;
-}
-
-.closeButton:hover {
-  background: var(--ifm-color-emphasis-200);
-  color: var(--ifm-color-emphasis-900);
-}
-
-.modalContent {
-  padding: 20px;
-  max-height: calc(85vh - 140px);
-  overflow-y: auto;
-  background: var(--ifm-background-surface-color);
+  font-size: 1rem;
 }
 
 .modalFooter {
-  display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--ifm-color-emphasis-200);
-  background: var(--ifm-background-surface-color);
+  border-top: 1px solid var(--viz-border);
 }
 
-/* Drop Zone */
-.dropZone {
-  border: 2px dashed var(--ifm-color-emphasis-400);
-  border-radius: 8px;
-  padding: 24px 16px;
-  text-align: center;
-  background: var(--ifm-color-emphasis-100);
-  transition: all 0.3s;
-  margin-bottom: 16px;
-}
-
-.dropZone.dragActive {
-  border-color: var(--ifm-color-primary);
-  background: var(--ifm-color-primary-lightest);
-}
-
-.dropZoneContent {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.dropZoneContent svg {
-  opacity: 0.5;
-  color: var(--ifm-color-emphasis-600);
-}
-
-.dropZoneContent p {
-  margin: 0;
-  color: var(--ifm-color-emphasis-700);
-  font-size: 1rem;
-}
-
-.selectFilesButton {
-  background: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+.closeButton {
+  border: 0;
+  background: none;
+  color: var(--viz-muted);
+  font-size: 1.5rem;
+  line-height: 1;
   cursor: pointer;
-  font-size: 0.95rem;
-  transition: background-color 0.2s;
 }
 
-.selectFilesButton:hover {
-  background: var(--ifm-color-primary-dark);
+.closeButton:hover {
+  color: var(--viz-text);
 }
 
-/* Manual Entry */
-.manualEntry {
-  margin-bottom: 16px;
-  padding: 16px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 8px;
-  background: var(--ifm-background-color);
-}
-
-.manualEntry h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-800);
-}
-
-.addButton {
-  background: var(--ifm-color-success);
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  margin-top: 12px;
-  transition: background-color 0.2s;
-}
-
-.addButton:hover:not(:disabled) {
-  background: var(--ifm-color-success-dark);
-}
-
-.addButton:disabled {
-  background: var(--ifm-color-emphasis-400);
-  cursor: not-allowed;
-}
-
-/* Example Section */
-.exampleSection {
-  margin-bottom: 16px;
-}
-
-.exampleSection h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-800);
-}
-
-.exampleButtons {
-  display: flex;
-  gap: 8px;
-}
-
-.exampleButton {
-  background: var(--ifm-color-emphasis-200);
-  border: 1px solid var(--ifm-color-emphasis-400);
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-}
-
-.exampleButton:hover {
-  background: var(--ifm-color-emphasis-300);
-}
-
-/* Saved Tensors */
-.savedSection {
-  margin-bottom: 16px;
-}
-
-.savedSection h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-800);
-}
-
-.savedList {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 150px;
+.modalContent {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
   overflow-y: auto;
 }
 
-.savedTensorButton {
-  background: var(--ifm-background-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  padding: 10px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.savedTensorButton:hover {
-  background: var(--ifm-color-emphasis-100);
-  border-color: var(--ifm-color-primary);
-}
-
-.savedDate {
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-600);
-}
-
-/* Pending Tensors */
-.pendingSection {
-  margin-bottom: 12px;
-}
-
-.pendingSection h4 {
-  margin: 0 0 8px 0;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-800);
-}
-
-.pendingList {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  border: 1px solid var(--ifm-color-emphasis-300);
-}
-
-.pendingItem {
-  background: var(--ifm-background-surface-color);
-  border-bottom: 1px solid var(--ifm-color-emphasis-300);
-  padding: 6px 8px;
-  border-radius: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.pendingItem:last-child {
-  border-bottom: none;
-}
-
-.pendingInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.pendingSource {
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-600);
-  font-style: italic;
-}
-
-.removePending {
-  background: var(--ifm-color-danger);
-  color: white;
-  border: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 14px;
+.modalContent .dropZone {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s;
+  gap: 0.5rem;
+  cursor: default;
 }
 
-.removePending:hover {
-  background: var(--ifm-color-danger-dark);
+.modalSection {
+  display: grid;
+  gap: 0.5rem;
 }
 
-/* Modal Footer Buttons */
-.cancelButton {
-  background: var(--ifm-color-emphasis-300);
-  color: var(--ifm-color-emphasis-800);
-  border: 1px solid var(--ifm-color-emphasis-400);
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.cancelButton:hover {
-  background: var(--ifm-color-emphasis-400);
-}
-
-.addAllButton {
-  background: var(--ifm-color-primary);
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.addAllButton:hover:not(:disabled) {
-  background: var(--ifm-color-primary-dark);
-}
-
-.addAllButton:disabled {
-  background: var(--ifm-color-emphasis-400);
-  cursor: not-allowed;
-}
-
-/* Tensor List Styles */
-.tensorList {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 16px;
-}
-
-.tensorItem {
-  background: var(--ifm-background-surface-color);
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-  padding: 6px 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s;
-  margin-bottom: 0;
-  min-width: 0;
-  width: 100%;
-}
-
-.tensorItem:hover {
-  border-color: var(--ifm-color-primary);
-  background: var(--ifm-color-primary-lightest);
-}
-
-.tensorItem.selected {
-  border-width: 2px;
-  background: var(--ifm-color-primary-lightest);
-}
-
-/* Individual tensor color classes */
-.tensorItem.selected.tensor-color-0 { border-color: var(--tensor-color-0); }
-.tensorItem.selected.tensor-color-1 { border-color: var(--tensor-color-1); }
-.tensorItem.selected.tensor-color-2 { border-color: var(--tensor-color-2); }
-.tensorItem.selected.tensor-color-3 { border-color: var(--tensor-color-3); }
-.tensorItem.selected.tensor-color-4 { border-color: var(--tensor-color-4); }
-.tensorItem.selected.tensor-color-5 { border-color: var(--tensor-color-5); }
-.tensorItem.selected.tensor-color-6 { border-color: var(--tensor-color-6); }
-.tensorItem.selected.tensor-color-7 { border-color: var(--tensor-color-7); }
-.tensorItem.selected.tensor-color-8 { border-color: var(--tensor-color-8); }
-.tensorItem.selected.tensor-color-9 { border-color: var(--tensor-color-9); }
-
-.tensorColorIndicator {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  margin-right: 8px;
-  border: 2px solid transparent;
-}
-
-.tensorColorIndicator.tensor-color-0 { background-color: var(--tensor-color-0); }
-.tensorColorIndicator.tensor-color-1 { background-color: var(--tensor-color-1); }
-.tensorColorIndicator.tensor-color-2 { background-color: var(--tensor-color-2); }
-.tensorColorIndicator.tensor-color-3 { background-color: var(--tensor-color-3); }
-.tensorColorIndicator.tensor-color-4 { background-color: var(--tensor-color-4); }
-.tensorColorIndicator.tensor-color-5 { background-color: var(--tensor-color-5); }
-.tensorColorIndicator.tensor-color-6 { background-color: var(--tensor-color-6); }
-.tensorColorIndicator.tensor-color-7 { background-color: var(--tensor-color-7); }
-.tensorColorIndicator.tensor-color-8 { background-color: var(--tensor-color-8); }
-.tensorColorIndicator.tensor-color-9 { background-color: var(--tensor-color-9); }
-
-.tensorCheckbox {
-  width: 18px;
-  height: 18px;
-}
-
-.tensorInfo {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.tensorName {
-  font-weight: normal;
-  color: var(--ifm-color-emphasis-900);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tensorName.empty {
-  color: var(--ifm-color-emphasis-600);
-  font-style: italic;
-}
-
-.tensorStats {
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-700);
-}
-
-.tensorActions {
-  display: flex;
-  gap: 6px;
-}
-
-.tensorActionButton {
-  background: none;
-  border: 1px solid var(--ifm-color-emphasis-400);
-  padding: 2px 6px;
-  border-radius: 3px;
-  cursor: pointer;
-  font-size: 0.7rem;
-  transition: all 0.2s;
-  min-width: 32px;
-  height: 22px;
-}
-
-.tensorActionButton:hover {
-  background: var(--ifm-color-emphasis-200);
-  border-color: var(--ifm-color-emphasis-600);
-}
-
-.tensorActionButton.primary {
-  background: var(--ifm-color-primary);
-  color: white;
-  border-color: var(--ifm-color-primary);
-}
-
-.tensorActionButton.danger {
-  background: var(--ifm-color-danger);
-  color: white;
-  border-color: var(--ifm-color-danger);
-}
-
-.matrixComponentsTable {
-  max-height: 600px;
-  overflow-y: auto;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 0;
-}
-
-.matrixComponentsTable table {
-  width: 100%;
+.modalSection h4 {
   margin: 0;
-}
-
-.matrixComponentsTable th:first-child,
-.matrixComponentsTable td:first-child {
-  position: sticky;
-  left: 0;
-  background: var(--ifm-background-surface-color);
-  z-index: 2;
-  border-right: 1px solid var(--ifm-color-emphasis-300);
-}
-
-.matrixComponentsTable thead th {
-  position: sticky;
-  top: 0;
-  background: var(--ifm-background-surface-color);
-  z-index: 3;
-  border-bottom: 2px solid var(--ifm-color-emphasis-400);
-}
-
-.matrixComponentsTable thead th:first-child {
-  z-index: 4;
-}
-
-.tensorActionButton.danger:hover {
-  background: var(--ifm-color-danger-dark);
-}
-
-.addTensorButton {
-  background: var(--ifm-color-success);
-  color: white;
-  border: none;
-  padding: 12px 20px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1rem;
+  font-size: var(--viz-font-sm);
   font-weight: 600;
-  transition: background-color 0.2s;
+  color: var(--viz-muted);
+}
+
+.buttonWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pendingList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
+}
+
+.pendingItem {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 0.375rem 0.625rem;
+  font-size: var(--viz-font-md);
 }
 
-.addTensorButton:hover {
-  background: var(--ifm-color-success-dark);
+.pendingItem + .pendingItem {
+  border-top: 1px solid var(--viz-border);
 }
 
-.tensorSelectionSection {
-  margin-bottom: 20px;
-  padding: 16px;
-  border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 8px;
-  background: var(--ifm-color-emphasis-100);
-}
-
-.tensorSelectionSection h4 {
-  margin: 0 0 12px 0;
-  color: var(--ifm-color-emphasis-900);
-}
-
-.tensorSelector {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.tensorSelector label {
-  font-weight: 600;
-  color: var(--ifm-color-emphasis-800);
-  min-width: 80px;
-}
-
-.tensorSelector select {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid var(--ifm-color-emphasis-400);
-  border-radius: 4px;
-  background: var(--ifm-background-color);
+.pendingSource {
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
 }
