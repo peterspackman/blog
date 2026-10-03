@@ -1,36 +1,153 @@
-.canvas {
+/* Previews: thin lines, flat translucent fills, nothing else. */
+.thumb {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 2 / 1;
 }
 
-/* Particle in a 3D box (vector) */
-.boxEdge {
+.thumb * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.line {
+  fill: none;
   stroke: var(--viz-axis);
   stroke-width: 1;
 }
 
-.cloud {
-  fill: var(--viz-accent);
+.faint {
+  fill: none;
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+
+.cloud,
+.cloudPositive,
+.cloudNegative {
   fill-opacity: 0.18;
 }
 
-.slosh {
-  animation: slosh 2s ease-in-out infinite alternate;
+.cloud {
+  fill: var(--viz-accent);
 }
 
-@keyframes slosh {
-  to { opacity: 0.25; }
+.cloudPositive {
+  fill: var(--viz-positive);
 }
 
-/* Paused until the card is hovered or focused (CardIndex runs it). */
+.cloudNegative {
+  fill: var(--viz-negative);
+}
+
+.shape {
+  fill: var(--viz-accent);
+  fill-opacity: 0.18;
+  stroke: var(--viz-accent);
+  stroke-width: 1;
+}
+
+.dot {
+  fill: var(--viz-accent);
+  fill-opacity: 0.6;
+}
+
+.dotOpen {
+  fill: none;
+  stroke: var(--viz-accent);
+  stroke-width: 1;
+}
+
+.atom {
+  fill: var(--viz-axis);
+}
+
+.ray {
+  fill: none;
+  stroke: var(--viz-accent);
+  stroke-width: 1;
+}
+
+.rayFaint {
+  stroke-opacity: 0.45;
+}
+
+.spot {
+  fill: var(--viz-accent);
+  fill-opacity: 0.45;
+}
+
+.particle {
+  fill: var(--viz-series-1);
+}
+
+.particleB {
+  fill: var(--viz-series-2);
+}
+
+/* Motion */
 .slosh {
+  animation: fade 2s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes fade {
+  to { opacity: 0.3; }
+}
+
+.spin {
+  animation: spin 10s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.twinkle {
+  animation: fade 2.2s ease-in-out infinite alternate;
+  animation-delay: var(--delay, 0s);
+}
+
+.slide {
+  transform-box: view-box;
+  animation: slide 1.6s linear infinite;
+}
+
+@keyframes slide {
+  to { transform: translateX(20px); }
+}
+
+.jiggle {
+  animation: jiggle var(--period) ease-in-out infinite alternate;
+}
+
+@keyframes jiggle {
+  to { transform: translate(var(--dx), var(--dy)); }
+}
+
+.blink {
+  animation: blink 3s ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes blink {
+  0%, 40% { opacity: 1; }
+  55%, 85% { opacity: 0; }
+}
+
+/* Paused until the card is hovered or focused (CardIndex runs it). Must come
+   after the animation shorthands above, which reset the play state. */
+.slosh,
+.spin,
+.twinkle,
+.slide,
+.jiggle,
+.blink {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .slosh {
-    animation: none;
+  .thumb * {
+    animation: none !important;
   }
 }
