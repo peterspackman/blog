@@ -3,6 +3,13 @@ import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 import rehypeKatex from 'rehype-katex';
 import remarkMath from 'remark-math';
+import { readFileSync } from 'fs';
+import path from 'path';
+
+// Version of the OCC WebAssembly build; copy-wasm serves static/wasm from this package.
+const occVersion: string = JSON.parse(
+  readFileSync(path.join(__dirname, 'node_modules/@peterspackman/occjs/package.json'), 'utf8'),
+).version;
 
 const config: Config = {
   title: 'Peter R. Spackman',
@@ -15,6 +22,7 @@ const config: Config = {
   projectName: 'blog',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
+  customFields: { occVersion },
 
   i18n: {
     defaultLocale: 'en',

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import clsx from 'clsx';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './WavefunctionCalculator.module.css';
 import { VizPanel, VizPanelSection, VizPlotHeader, VizWorkbench } from '../shared/viz';
 import { ControlGroup, ControlHint, Select, SliderWithInput, ToggleSwitch, VizButton } from '../shared/controls';
@@ -36,6 +37,52 @@ const LOG_LEVELS = [
   { value: '3', label: 'Warning' },
   { value: '4', label: 'Error' },
 ];
+
+/** Versions and runtime details for the About tab. */
+const EngineInfo: React.FC = () => {
+  const { siteConfig } = useDocusaurusContext();
+  const occVersion = siteConfig.customFields?.occVersion as string | undefined;
+  // Browser-only facts; read after mount so the static render matches.
+  const [runtime, setRuntime] = useState<{ isolated: boolean; cores: number } | null>(null);
+  useEffect(() => {
+    setRuntime({
+      isolated: typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated,
+      cores: navigator.hardwareConcurrency || 1,
+    });
+  }, []);
+
+  return (
+    <table>
+      <tbody>
+        <tr>
+          <th scope="row">OCC</th>
+          <td>
+            {occVersion ? (
+              <a href={`https://www.npmjs.com/package/@peterspackman/occjs/v/${occVersion}`} target="_blank" rel="noopener noreferrer">
+                v{occVersion}
+              </a>
+            ) : 'unknown'}
+            {' '}(<code>@peterspackman/occjs</code>, the <code>occ</code> program compiled to WebAssembly)
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Runs in</th>
+          <td>a Web Worker, started fresh for each calculation</td>
+        </tr>
+        <tr>
+          <th scope="row">Threads</th>
+          <td>
+            {runtime === null
+              ? '…'
+              : runtime.isolated
+                ? `up to ${runtime.cores} (this page is cross-origin isolated, so shared memory is available)`
+                : '1 (this page is not cross-origin isolated, so shared memory is unavailable)'}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+};
 
 const WavefunctionCalculator: React.FC<{ title: string }> = ({ title }) => {
   // Calculation state via hook
@@ -706,6 +753,9 @@ const WavefunctionCalculator: React.FC<{ title: string }> = ({ title }) => {
                   compiled to WASM.
                 </p>
 
+                <h3>Version</h3>
+                <EngineInfo />
+
                 <h3>Privacy</h3>
                 <p>
                   No molecular structures, calculation inputs, or results are transmitted over the
@@ -732,8 +782,8 @@ const WavefunctionCalculator: React.FC<{ title: string }> = ({ title }) => {
 
                 <h3>Capabilities</h3>
                 <ul>
-                  <li><strong>Methods:</strong> Hartree-Fock, B3LYP, PBE, PBE0, BLYP, wB97X</li>
-                  <li><strong>Basis sets:</strong> STO-3G, 3-21G, 6-31G, 6-31G(d,p), def2-SVP, def2-TZVP, cc-pVDZ</li>
+                  <li><strong>Methods:</strong> {METHODS.map((m) => m.label).join(', ')}</li>
+                  <li><strong>Basis sets:</strong> {BASIS_SETS.map((b) => b.label).join(', ')}</li>
                   <li><strong>Geometry optimisation</strong> with trajectory visualisation</li>
                   <li><strong>Harmonic frequency analysis</strong> with animated normal modes</li>
                   <li><strong>Volumetric data:</strong> electron density, electrostatic potential, and molecular orbital isosurfaces</li>

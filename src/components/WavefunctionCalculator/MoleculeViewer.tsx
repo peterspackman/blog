@@ -59,22 +59,16 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const [showBothPhases, setShowBothPhases] = useState<boolean>(false);
   const [opacity, setOpacity] = useState<number>(1.0);
   const [isComputingMO, setIsComputingMO] = useState(false);
-  // Initialize orbital colors from localStorage
-  const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(() => {
-    try {
-      const savedColors = localStorage.getItem('orbitalColors');
-      if (savedColors) {
-        const parsed = JSON.parse(savedColors);
-        return new Map(Object.entries(parsed).map(([k, v]) => [parseInt(k), v as string]));
-      }
-    } catch (error) {
-      console.warn('Failed to load orbital colors from localStorage:', error);
-    }
-    return new Map();
-  });
+  // Colours picked by hand; everything else takes the series palette in the
+  // order the orbitals are shown, so the first is the primary series colour.
+  const [orbitalColors, setOrbitalColors] = useState<Map<number, string>>(() => new Map());
+  const orbitalColor = (idx: number): string | undefined => {
+    const slot = Array.from(selectedOrbitals).indexOf(idx);
+    if (slot < 0) return undefined;
+    return orbitalColors.get(idx) ?? viz.series[slot % viz.series.length];
+  };
   const [gridSteps, setGridSteps] = useState<number>(cubeSettings?.gridSteps || 50);
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showGridBounds, setShowGridBounds] = useState<boolean>(false);
   const gridBoundsComponentRef = useRef<any>(null);
   const [lastGridInfo, setLastGridInfo] = useState<any>(null);
@@ -403,32 +397,13 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       if (updateTimeoutRef.current) {
         clearTimeout(updateTimeoutRef.current);
       }
-      if (colorChangeTimeoutRef.current) {
-        clearTimeout(colorChangeTimeoutRef.current);
-      }
     };
   }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps]);
 
   // Handle orbital color changes
   const handleOrbitalColorChange = (orbitalIndex: number, color: string) => {
-    setOrbitalColors(prev => {
-      const newColors = new Map(prev);
-      newColors.set(orbitalIndex, color);
-      return newColors;
-    });
-    
-    // Clear any pending color change timeout
-    if (colorChangeTimeoutRef.current) {
-      clearTimeout(colorChangeTimeoutRef.current);
-    }
-    
-    // If this orbital is currently visible, re-render all MOs to update the color
-    if (selectedOrbitals.has(orbitalIndex)) {
-      colorChangeTimeoutRef.current = setTimeout(() => {
-        visualizeAllSelectedMOs();
-        colorChangeTimeoutRef.current = null;
-      }, 50);
-    }
+    // The visualisation effect re-renders with the new colour.
+    setOrbitalColors(prev => new Map(prev).set(orbitalIndex, color));
   };
 
   const computeAndVisualizeMOs = async (orbitalIndices: number[]) => {
@@ -470,13 +445,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       sliceDirection, 
       slicePosition 
     });
-    
-    // Clear any pending color change timeout when orbital selection changes
-    if (colorChangeTimeoutRef.current) {
-      clearTimeout(colorChangeTimeoutRef.current);
-      colorChangeTimeoutRef.current = null;
-    }
-    
+
     if (!nglStageRef.current) return;
 
     // If no orbitals selected, clear visualizations
@@ -505,7 +474,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         setIsComputingMO(false);
       }
     }
-  }, [cubeResults, selectedOrbitals, isosurfaceValue, showBothPhases, opacity, orbitalRenderStyle, sliceDirection, slicePosition, colorScale, colorRange]);
+  }, [cubeResults, selectedOrbitals, isosurfaceValue, showBothPhases, opacity, orbitalRenderStyle, sliceDirection, slicePosition, colorScale, colorRange, viz, orbitalColors]);
 
   // Simple slice position - use the actual position value
   const calculateSlicePosition = (cubeComponent: any, direction: 'x' | 'y' | 'z', position: number) => {
@@ -608,17 +577,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
           });
 
           if (cubeComponent) {
-            // Use stored color if available, otherwise assign next default color
-            let color = orbitalColors.get(orbitalIndex);
-            if (!color) {
-              color = colors[index % colors.length];
-              // Store the new default color assignment
-              setOrbitalColors(prev => {
-                const updated = new Map(prev);
-                updated.set(orbitalIndex, color);
-                return updated;
-              });
-            }
+            const color = orbitalColors.get(orbitalIndex) ?? colors[index % colors.length];
 
             // Add representation based on selected style
             if (orbitalRenderStyle === 'surface') {
@@ -850,16 +809,6 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
   useEffect(() => {
     updateGridBoundsVisualization();
   }, [showGridBounds, cubeGridInfo]);
-
-  // Save orbital colors to localStorage whenever they change
-  useEffect(() => {
-    try {
-      const colorsObject = Object.fromEntries(orbitalColors);
-      localStorage.setItem('orbitalColors', JSON.stringify(colorsObject));
-    } catch (error) {
-      console.warn('Failed to save orbital colors to localStorage:', error);
-    }
-  }, [orbitalColors]);
 
   if (!xyzData) {
     return (
@@ -1112,7 +1061,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                             const isHOMO = idx === alphaHOMOIdx;
                             const isLUMO = idx === alphaLUMOIdx;
                             const isSelected = selectedOrbitals.has(idx);
-                            const orbitalColor = orbitalColors.get(idx);
+                            const swatch = orbitalColor(idx);
 
                             return (
                               <OrbitalItem
@@ -1121,7 +1070,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                                 isHOMO={isHOMO}
                                 isLUMO={isLUMO}
                                 isSelected={isSelected}
-                                colorIndicator={orbitalColor}
+                                colorIndicator={swatch}
                                 onColorChange={(color) => handleOrbitalColorChange(idx, color)}
                                 onClick={() => toggleOrbitalSelection(idx)}
                               />
@@ -1139,7 +1088,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                             const isHOMO = idx === betaHOMOIdx;
                             const isLUMO = idx === betaLUMOIdx;
                             const isSelected = selectedOrbitals.has(idx);
-                            const orbitalColor = orbitalColors.get(idx);
+                            const swatch = orbitalColor(idx);
 
                             return (
                               <OrbitalItem
@@ -1148,7 +1097,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                                 isHOMO={isHOMO}
                                 isLUMO={isLUMO}
                                 isSelected={isSelected}
-                                colorIndicator={orbitalColor}
+                                colorIndicator={swatch}
                                 onColorChange={(color) => handleOrbitalColorChange(idx, color)}
                                 onClick={() => toggleOrbitalSelection(idx)}
                               />
@@ -1172,7 +1121,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                       const isHOMO = idx === homoIndex;
                       const isLUMO = idx === lumoIndex;
                       const isSelected = selectedOrbitals.has(idx);
-                      const orbitalColor = orbitalColors.get(idx);
+                      const swatch = orbitalColor(idx);
 
                       return (
                         <OrbitalItem
@@ -1181,7 +1130,7 @@ ${vertices.length.toString().padStart(3, ' ')}${edges.length.toString().padStart
                           isHOMO={isHOMO}
                           isLUMO={isLUMO}
                           isSelected={isSelected}
-                          colorIndicator={orbitalColor}
+                          colorIndicator={swatch}
                           onColorChange={(color) => handleOrbitalColorChange(idx, color)}
                           onClick={() => toggleOrbitalSelection(idx)}
                         />
