@@ -10,7 +10,7 @@ export default function SmilesViewerPage(): React.JSX.Element {
       intro={
         <>
           Type a SMILES string to draw its 2D structure and a few common descriptors. Runs in your browser
-          with <a href="https://www.rdkit.org/docs/JSMol.html" target="_blank" rel="noopener noreferrer">RDKit.js</a>.
+          with <a href="https://github.com/rdkit/rdkit-js" target="_blank" rel="noopener noreferrer">RDKit.js</a>.
         </>
       }
     >

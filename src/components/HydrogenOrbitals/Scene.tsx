@@ -168,6 +168,15 @@ export const Scene: React.FC<SceneProps> = ({
     ...orbitalProps
 }) => {
     const bg = orbitalProps.background;
+    // react-three-fiber forces a context loss on the old canvas when it
+    // unmounts; ignore that, or each remount would trigger another one.
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
     const camR = boundingRadius * 1.6;
     const cameraInit: [number, number, number] = [camR, camR * 0.75, camR];
     const cameraFar = boundingRadius * 20;
@@ -190,7 +199,7 @@ export const Scene: React.FC<SceneProps> = ({
                     gl.domElement.addEventListener('webglcontextlost', (e) => {
                         // Allow restoration instead of a permanently dead canvas.
                         e.preventDefault();
-                        onContextLost?.();
+                        if (mounted.current) onContextLost?.();
                     });
                 }}
                 camera={{ position: cameraInit, fov: 45, near: 0.1, far: cameraFar }}

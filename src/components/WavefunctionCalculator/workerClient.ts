@@ -59,8 +59,13 @@ export function runSCFWorker(
     };
 
     worker.onerror = (err) => {
-        callbacks.onError(`Worker error: ${err.message}`);
+        // e.g. /wasm/occ.js failed to load: finish the run so the UI doesn't wait forever.
+        callbacks.onError(`Worker error: ${err.message || 'could not start the OCC worker'}`);
         worker.terminate();
+        if (!hasExited) {
+            hasExited = true;
+            onComplete({ type: 'exit', code: 1, files: {}, stdout: '' });
+        }
     };
 
     const { settings } = request;
@@ -122,8 +127,13 @@ export function runCubeWorker(
     };
 
     worker.onerror = (err) => {
-        callbacks.onError(`Cube worker error: ${err.message}`);
+        // e.g. /wasm/occ.js failed to load: finish the run so the UI doesn't wait forever.
+        callbacks.onError(`Cube worker error: ${err.message || 'could not start the OCC worker'}`);
         worker.terminate();
+        if (!hasExited) {
+            hasExited = true;
+            onComplete({ type: 'exit', code: 1, files: {}, stdout: '' });
+        }
     };
 
     const { cubeSettings } = request;

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useColorMode } from '@docusaurus/theme-common';
 import type { ControlTheme } from '../controls';
 
@@ -55,10 +55,13 @@ const DARK: typeof LIGHT = {
 const FONT_SANS = "'Source Sans 3 Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 const FONT_MONO = "'Source Code Pro Variable', SFMono-Regular, Menlo, Consolas, monospace";
 
-function readTokens(isDark: boolean): VizTheme {
+function readTokens(isDark: boolean, fromCss: boolean): VizTheme {
     const fb = isDark ? DARK : LIGHT;
     let get = (_name: string, fallback: string) => fallback;
-    if (typeof document !== 'undefined') {
+    // Only trust the computed CSS once the page's data-theme agrees with the
+    // requested mode; during hydration Docusaurus reports the default mode
+    // while the stylesheet may already be dark.
+    if (fromCss && typeof document !== 'undefined' && document.documentElement.dataset.theme === (isDark ? 'dark' : 'light')) {
         const cs = getComputedStyle(document.documentElement);
         get = (name, fallback) => cs.getPropertyValue(name).trim() || fallback;
     }
@@ -106,7 +109,11 @@ function readTokens(isDark: boolean): VizTheme {
 export function useVizTheme(): VizTheme {
     const { colorMode } = useColorMode();
     const isDark = colorMode === 'dark';
-    return useMemo(() => readTokens(isDark), [isDark]);
+    // Render the built-in palette until mounted so the first client render
+    // matches the server HTML, then switch to the live CSS tokens.
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    return useMemo(() => readTokens(isDark, mounted), [isDark, mounted]);
 }
 
 /** Canvas font shorthand using the site fonts, e.g. canvasFont(theme, 11, 'mono'). */

@@ -127,7 +127,8 @@ function Hydrogen() {
 // Hückel chain: N levels on the band E(k) = 2β cos k, the lower half filled.
 function Bands() {
     const x0 = 60, x1 = 180, top = 16, bottom = 104, n = 8;
-    const y = (k: number) => (top + bottom) / 2 - 2 * Math.cos(k) * ((bottom - top) / 4.2);
+    // E(k) = 2β cos k with β < 0: lowest at k = 0, drawn at the bottom.
+    const y = (k: number) => (top + bottom) / 2 + 2 * Math.cos(k) * ((bottom - top) / 4.2);
     const band = range(61).map((i): Pt => [x0 + ((x1 - x0) * i) / 60, y((Math.PI * i) / 60)]);
     return (
         <Svg label="Molecular orbital levels lying on an energy band">

@@ -244,7 +244,7 @@
   padding: 0.4rem 0.6rem;
   background: var(--viz-surface);
   border: 1px solid var(--viz-border);
-  border-radius: var(--viz-radius-md);
+  border-radius: var(--viz-radius);
   color: var(--viz-text);
   font: inherit;
   text-align: left;

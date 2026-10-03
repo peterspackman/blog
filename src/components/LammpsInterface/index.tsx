@@ -227,7 +227,6 @@ const LammpsInterface: React.FC<LammpsInterfaceProps> = ({ title }) => {
         savedState.output.forEach(line => appendOutput(line.text, line.isError));
       }
 
-      console.log('[LAMMPS] Restored state from local storage');
     }
   }, [savedState, isReady, uploadFile, appendOutput]);
 

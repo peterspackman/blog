@@ -49,6 +49,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   const nglStageRef = useRef<NGL.Stage | null>(null);
   const componentRef = useRef<any>(null);
   const moComponentRef = useRef<any>(null);
+  const moRunRef = useRef(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [representation, setRepresentation] = useState<RepresentationType>('ball+stick');
@@ -401,9 +402,17 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
   }, [selectedOrbitals, availableOrbitals.length, cubeResults, gridSteps]);
 
   // Handle orbital color changes
+  // Colour inputs fire continuously while dragging; rebuild the surfaces once it settles.
+  const colorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (colorTimeoutRef.current) clearTimeout(colorTimeoutRef.current);
+  }, []);
   const handleOrbitalColorChange = (orbitalIndex: number, color: string) => {
-    // The visualisation effect re-renders with the new colour.
-    setOrbitalColors(prev => new Map(prev).set(orbitalIndex, color));
+    if (colorTimeoutRef.current) clearTimeout(colorTimeoutRef.current);
+    colorTimeoutRef.current = setTimeout(() => {
+      // The visualisation effect re-renders with the new colour.
+      setOrbitalColors(prev => new Map(prev).set(orbitalIndex, color));
+    }, 80);
   };
 
   const computeAndVisualizeMOs = async (orbitalIndices: number[]) => {
@@ -438,13 +447,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
   // Watch for cube results and visualize them
   useEffect(() => {
-    console.log('MO visualization effect triggered:', { 
-      selectedOrbitals: selectedOrbitals.size, 
-      cubeResults: cubeResults.size, 
-      orbitalRenderStyle, 
-      sliceDirection, 
-      slicePosition 
-    });
 
     if (!nglStageRef.current) return;
 
@@ -478,7 +480,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
   // Simple slice position - use the actual position value
   const calculateSlicePosition = (cubeComponent: any, direction: 'x' | 'y' | 'z', position: number) => {
-    console.log(`Slice position: direction=${direction}, position=${position}`);
     return position;
   };
 
@@ -509,7 +510,7 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
       const origin = header.origin || header.gridOrigin;
 
       if (!nx || !ny || !nz || !vx || !vy || !vz || !origin) {
-        console.log('Missing grid data in volume header:', header);
+        console.warn('Missing grid data in volume header:', header);
         return null;
       }
 
@@ -530,6 +531,9 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
 
   const visualizeAllSelectedMOs = async () => {
     if (!nglStageRef.current) return;
+    // Runs can overlap (loadFile is async); a superseded run removes what it added.
+    const run = ++moRunRef.current;
+    const isStale = () => run !== moRunRef.current;
 
     try {
       // Remove existing MO surfaces
@@ -546,7 +550,8 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         moComponentRef.current = null;
       }
 
-      const moComponents = [];
+      const moComponents: any[] = [];
+      const discard = () => moComponents.forEach((c) => nglStageRef.current?.removeComponent(c));
       const colors = viz.series;
 
       // If no orbitals selected, clear everything and return
@@ -571,10 +576,15 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         if (cubeData) {
           // Create blob from cube data and load it
           const blob = new Blob([cubeData], { type: 'text/plain' });
-          const cubeComponent = await nglStageRef.current.loadFile(blob, {
+          const cubeComponent = await nglStageRef.current?.loadFile(blob, {
             ext: 'cube',
             name: `MO_${orbitalIndex}`
           });
+          if (isStale()) {
+            if (cubeComponent) nglStageRef.current?.removeComponent(cubeComponent);
+            discard();
+            return;
+          }
 
           if (cubeComponent) {
             const color = orbitalColors.get(orbitalIndex) ?? colors[index % colors.length];
@@ -638,7 +648,6 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
             } else if (orbitalRenderStyle === 'slice') {
               // Add slice volume rendering using proper NGL API
               const slicePos = calculateSlicePosition(cubeComponent, sliceDirection, slicePosition);
-              console.log(`Adding slice representation: direction=${sliceDirection}, normalizedPos=${slicePosition}, coordinatePos=${slicePos}`);
               
               cubeComponent.addRepresentation('slice', {
                 visible: true,
@@ -659,8 +668,12 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         }
       }
 
+      if (isStale()) {
+        discard();
+        return;
+      }
       moComponentRef.current = moComponents;
-      nglStageRef.current.autoView();
+      nglStageRef.current?.autoView();
     } catch (error) {
       console.error('Error visualizing molecular orbitals:', error);
       setError('Failed to visualize molecular orbitals: ' + error.message);
@@ -727,13 +740,12 @@ const MoleculeViewer: React.FC<MoleculeViewerProps> = ({
         const max = [maxBohr[0] * bohrToAngstrom, maxBohr[1] * bohrToAngstrom, maxBohr[2] * bohrToAngstrom];
         
         bounds = { min, max };
-        console.log('Grid bounds (converted to Angstrom):', bounds);
       }
     }
     
     // If no grid info available, we can't show accurate bounds
     if (!bounds) {
-      console.log('No cube grid info available - cannot show accurate grid bounds');
+      console.warn('No cube grid info available - cannot show accurate grid bounds');
       return;
     }
     

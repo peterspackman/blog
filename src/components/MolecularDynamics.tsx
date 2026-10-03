@@ -411,7 +411,9 @@ const MolecularDynamics: React.FC<{ title: string }> = ({ title }) => {
         analytics,
     });
 
-    // Animated energy minimization
+    // Animated energy minimization (cancelled on unmount)
+    const minimizeRafRef = useRef(0);
+    useEffect(() => () => cancelAnimationFrame(minimizeRafRef.current), []);
     const runMinimization = useCallback(() => {
         if (minimizing || running) return;
         setMinimizing(true);
@@ -425,13 +427,14 @@ const MolecularDynamics: React.FC<{ title: string }> = ({ title }) => {
             steps++;
 
             if (converged || steps >= maxSteps) {
+                minimizeRafRef.current = 0;
                 setMinimizing(false);
             } else {
-                requestAnimationFrame(animateStep);
+                minimizeRafRef.current = requestAnimationFrame(animateStep);
             }
         };
 
-        requestAnimationFrame(animateStep);
+        minimizeRafRef.current = requestAnimationFrame(animateStep);
     }, [minimizing, running, minimizeStep]);
 
     // Initialize particles when dependencies change

@@ -55,7 +55,7 @@ const BraggLaw: React.FC<{ title: string }> = ({ title }) => {
                         aria-label="Bragg order"
                         columns={2}
                         value={nearest?.order ?? 0}
-                        onChange={(n) => setTheta(Math.round(orders[n - 1].theta * 100) / 100)}
+                        onChange={(n) => setTheta(Math.min(89, Math.round(orders[n - 1].theta * 100) / 100))}
                         options={orders.slice(0, 8).map((o) => ({ value: o.order, label: `n=${o.order} · ${o.theta.toFixed(1)}°` }))}
                     />
                 ) : (
