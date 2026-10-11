@@ -293,7 +293,7 @@ export function EveryMolecule({ title }: { title: string }) {
 
   // Keep the address in the URL so a view can be shared.
   useEffect(() => {
-    if (!started.current || !stream.items.length) return;
+    if (!started.current) return;
     const t = setTimeout(() => window.history.replaceState(null, '', linkTo(current, settings)), 300);
     return () => clearTimeout(t);
   }, [current.L, current.pos, settings.symbols]);
