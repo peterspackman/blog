@@ -189,6 +189,35 @@
 
 /* Sidebar */
 
+.chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.5rem, 1fr));
+  gap: 0.25rem;
+}
+
+.chip {
+  padding: 0.25rem 0;
+  font: inherit;
+  font-size: var(--viz-font-sm);
+  font-weight: 600;
+  color: var(--viz-muted);
+  background: var(--viz-surface-subtle);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  color: var(--viz-on-accent);
+  background: var(--viz-accent);
+  border-color: var(--viz-accent);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--viz-accent);
+  outline-offset: 1px;
+}
+
 .form {
   display: flex;
   gap: 0.375rem;

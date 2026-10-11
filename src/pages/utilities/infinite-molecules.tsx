@@ -21,8 +21,9 @@ export default function InfiniteMoleculesPage(): React.JSX.Element {
             </Admonition>
             <Admonition type="note" title="What's left out">
               Only the symbols SELFIES treats as always valid: no stereochemistry, no explicit hydrogens, no metals, one
-              molecule per string. Charged atoms are off by default because they make up most of the alphabet and most
-              of the page.
+              molecule per string. You pick the atoms; charged forms are off by default because they're most of the
+              full alphabet and most of the page. Smaller alphabets thin out faster, so their exact listing stops
+              sooner.
             </Admonition>
           </>
         }

@@ -18,6 +18,24 @@ import type { RDKitModule } from '@rdkit/rdkit';
 
 const ALL_SYMBOLS: string[] = Array.from(getSemanticRobustAlphabet());
 
+/** Elements that can be switched on and off, in display order. */
+export const ELEMENTS = ['C', 'N', 'O', 'S', 'P', 'B', 'F', 'Cl', 'Br', 'I', 'H'] as const;
+
+/** Which atom symbols an alphabet has. Bond, ring and branch symbols are always in. */
+export interface SymbolSet {
+  elements: readonly string[];
+  charged: boolean;
+}
+
+const elementOf = (symbol: string) => /^\[[=#]?([A-Z][a-z]?)/.exec(symbol)?.[1] ?? null;
+const isStructural = (symbol: string) => /Ring|Branch/.test(symbol);
+
+/** Stable name for a symbol set (used as a cache key and in links). */
+export function symbolSetKey(set: SymbolSet): string {
+  const els = ELEMENTS.filter((e) => set.elements.includes(e));
+  return els.join('') + (set.charged ? '±' : '');
+}
+
 /** One alphabet's address space. */
 export class Library {
   readonly alphabet: string[];
@@ -27,18 +45,22 @@ export class Library {
   private readonly F: bigint;
   private readonly symbolIndex: Map<string, bigint>;
   private readonly firstIndex: Map<string, bigint>;
-  private readonly key: number;
+  readonly key: number;
   readonly charged: boolean;
+  readonly name: string;
 
-  constructor(charged: boolean) {
-    this.charged = charged;
-    this.alphabet = charged ? ALL_SYMBOLS : ALL_SYMBOLS.filter((s) => !/[+-]\d\]$/.test(s));
+  constructor(set: SymbolSet) {
+    this.charged = set.charged;
+    this.name = symbolSetKey(set);
+    this.alphabet = ALL_SYMBOLS.filter(
+      (s) => isStructural(s) || (set.elements.includes(elementOf(s)!) && (set.charged || !/[+-]\d\]$/.test(s))),
+    );
     this.first = this.alphabet.filter((s) => /^\[[A-Z][a-z]?([+-]\d)?\]$/.test(s));
     this.N = BigInt(this.alphabet.length);
     this.F = BigInt(this.first.length);
     this.symbolIndex = new Map(this.alphabet.map((s, i) => [s, BigInt(i)]));
     this.firstIndex = new Map(this.first.map((s, i) => [s, BigInt(i)]));
-    this.key = charged ? 0x51ed : 0x0a7e;
+    this.key = [...this.name].reduce((h, c) => fmix32(h ^ c.charCodeAt(0)), 0x51ed) & 0xffff;
   }
 
   /** Number of positions in the block of strings with L symbols. */
@@ -85,11 +107,18 @@ export class Library {
   }
 }
 
-const libraries = new Map<boolean, Library>();
-export function library(charged: boolean): Library {
-  let lib = libraries.get(charged);
-  if (!lib) libraries.set(charged, (lib = new Library(charged)));
+const libraries = new Map<string, Library>();
+export function library(set: SymbolSet): Library {
+  const key = symbolSetKey(set);
+  let lib = libraries.get(key);
+  if (!lib) libraries.set(key, (lib = new Library(set)));
   return lib;
+}
+
+/** Longest exact block that still fills a page in about a second (smaller alphabets thin out faster). */
+export function maxCap(lib: Library): number {
+  const n = lib.alphabet.length;
+  return n >= 60 ? 8 : n >= 45 ? 7 : n >= 35 ? 6 : n >= 23 ? 5 : 4;
 }
 
 // --- Scrambling -------------------------------------------------------------
@@ -353,7 +382,7 @@ function grow(
 
 /** The molecule at a built position: always L symbols, all of them used. */
 export function builtAt(lib: Library, L: number, pos: bigint): Molecule {
-  const rand = rng(L + (lib.charged ? 7919 : 0), pos);
+  const rand = rng(L + lib.key * 7919, pos);
   const atoms = atomsOf(lib);
   const first = weightedOrder(
     atoms.filter(([a]) => lib.first.includes(a)),

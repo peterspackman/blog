@@ -60,7 +60,7 @@ export function useMoleculeStream(settings: Settings, theme: VizTheme, visible: 
   const live = useRef({ settings, theme, visible, cols });
   live.current = { settings, theme, visible, cols };
 
-  const blockSize = (L: number) => library(live.current.settings.charged).blockSize(L);
+  const blockSize = (L: number) => library(live.current.settings.symbols).blockSize(L);
   const after = (a: Address): Address => (a.pos + 1n < blockSize(a.L) ? { L: a.L, pos: a.pos + 1n } : { L: a.L + 1, pos: 0n });
   const before = (a: Address): Address => (a.pos > 0n ? { L: a.L, pos: a.pos - 1n } : { L: a.L - 1, pos: a.L > 1 ? blockSize(a.L - 1) - 1n : 0n });
 
@@ -70,7 +70,7 @@ export function useMoleculeStream(settings: Settings, theme: VizTheme, visible: 
     s.slots.set(id, slot);
     const { settings, theme } = live.current;
     const worker = workers[s.nextWorker++ % workers.length];
-    worker.postMessage({ type: 'render', id, gen: s.gen, addr: { L: slot.L, pos: slot.pos }, charged: settings.charged, theme, size: DEPICTION } satisfies WorkerRequest);
+    worker.postMessage({ type: 'render', id, gen: s.gen, addr: { L: slot.L, pos: slot.pos }, symbols: settings.symbols, theme, size: DEPICTION } satisfies WorkerRequest);
   };
 
   /** Lay out built slots from the cursor; returns how many were added. */
@@ -240,7 +240,7 @@ export function useMoleculeStream(settings: Settings, theme: VizTheme, visible: 
         const id = s.nextId++;
         s.finds.set(id, resolve);
         const { settings, theme } = live.current;
-        pool.current[0]?.postMessage({ type: 'find', id, smiles, charged: settings.charged, theme, size: DEPICTION } satisfies WorkerRequest);
+        pool.current[0]?.postMessage({ type: 'find', id, smiles, symbols: settings.symbols, theme, size: DEPICTION } satisfies WorkerRequest);
       }),
     [],
   );

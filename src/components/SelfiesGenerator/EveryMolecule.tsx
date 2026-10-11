@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { useContainerSize, useVizTheme, VizPanel, VizPlotHeader, VizWorkbench } from '../shared/viz';
 import { ControlGroup, ControlHint, SliderWithInput, ToggleSwitch, VizButton } from '../shared/controls';
-import { library, type FindResult } from './engine';
-import { MAX_CAP, MAX_LENGTH, MIN_LENGTH, type Address, type Item, type Settings } from './protocol';
+import { ELEMENTS, library, maxCap, symbolSetKey, type FindResult, type Library, type SymbolSet } from './engine';
+import { MAX_LENGTH, MIN_LENGTH, type Address, type Item, type Settings } from './protocol';
 import { isSlot, lastLength, useMoleculeStream, type Entry } from './useMoleculeStream';
 import styles from './EveryMolecule.module.css';
 
@@ -31,6 +31,19 @@ function randomBelow(n: bigint): bigint {
   return x % n;
 }
 
+const PRESETS: { label: string; symbols: SymbolSet }[] = [
+  { label: 'Organic', symbols: { elements: ['C', 'N', 'O', 'S', 'F', 'Cl', 'Br', 'I'], charged: false } },
+  { label: 'CNO', symbols: { elements: ['C', 'N', 'O'], charged: false } },
+  { label: 'Everything', symbols: { elements: [...ELEMENTS], charged: true } },
+];
+const DEFAULT_SYMBOLS = PRESETS[0].symbols;
+
+/** Inverse of symbolSetKey, e.g. "CNOCl±". */
+function parseSymbolSet(key: string): SymbolSet | null {
+  const elements = (key.match(/[A-Z][a-z]?/g) ?? []).filter((e) => (ELEMENTS as readonly string[]).includes(e));
+  return elements.length ? { elements, charged: key.includes('±') } : null;
+}
+
 const plural = (L: number) => `${L} symbol${L === 1 ? '' : 's'}`;
 
 function parseBig(text: string): bigint | null {
@@ -40,7 +53,8 @@ function parseBig(text: string): bigint | null {
 
 function linkTo(addr: Address, settings: Settings): string {
   const q = new URLSearchParams({ L: String(addr.L), pos: addr.pos.toString() });
-  if (settings.charged) q.set('charged', '1');
+  const set = symbolSetKey(settings.symbols);
+  if (set !== symbolSetKey(DEFAULT_SYMBOLS)) q.set('set', set);
   return `${window.location.origin}${window.location.pathname}?${q}`;
 }
 
@@ -50,7 +64,10 @@ function fromUrl(): { settings: Partial<Settings>; addr: Address | null } {
   const L = Number(q.get('L'));
   const pos = parseBig(q.get('pos') ?? '');
   return {
-    settings: q.get('charged') === '1' ? { charged: true } : {},
+    settings: (() => {
+      const symbols = parseSymbolSet(q.get('set') ?? '');
+      return symbols ? { symbols } : {};
+    })(),
     addr: Number.isInteger(L) && L >= MIN_LENGTH && pos !== null ? { L, pos } : null,
   };
 }
@@ -58,7 +75,7 @@ function fromUrl(): { settings: Partial<Settings>; addr: Address | null } {
 /** Clamp an address into the blocks the settings allow. */
 function clampAddress(addr: Address, settings: Settings): Address {
   const L = Math.max(MIN_LENGTH, Math.min(lastLength(settings), Math.floor(addr.L)));
-  const size = library(settings.charged).blockSize(L);
+  const size = library(settings.symbols).blockSize(L);
   return { L, pos: addr.pos < 0n ? 0n : addr.pos >= size ? size - 1n : addr.pos };
 }
 
@@ -125,8 +142,8 @@ function PendingCard({ slot }: { slot: Entry & { failed?: boolean } }) {
 }
 
 /** Track for the current block: position within it, drag or click to jump. */
-function BlockScrollbar({ addr, charged, onJump }: { addr: Address; charged: boolean; onJump: (a: Address) => void }) {
-  const size = library(charged).blockSize(addr.L);
+function BlockScrollbar({ addr, lib, onJump }: { addr: Address; lib: Library; onJump: (a: Address) => void }) {
+  const size = lib.blockSize(addr.L);
   const fraction = size > 1n ? Number((addr.pos * 1_000_000n) / (size - 1n)) / 1_000_000 : 0;
   const track = useRef<HTMLDivElement>(null);
   const last = useRef(0);
@@ -162,7 +179,8 @@ function BlockScrollbar({ addr, charged, onJump }: { addr: Address; charged: boo
 
 export function EveryMolecule({ title }: { title: string }) {
   const theme = useVizTheme();
-  const [settings, setSettings] = useState<Settings>({ charged: false, cap: 5, infinite: false });
+  const [settings, setSettings] = useState<Settings>({ symbols: DEFAULT_SYMBOLS, cap: 5, infinite: false });
+  const lib = library(settings.symbols);
   const [gridRef, gridSize] = useContainerSize();
   const [rows, setRows] = useState(3);
   useEffect(() => {
@@ -194,6 +212,7 @@ export function EveryMolecule({ title }: { title: string }) {
     started.current = true;
     const { settings: fromQuery, addr } = fromUrl();
     const s = { ...settings, ...fromQuery };
+    s.cap = Math.min(s.cap, maxCap(library(s.symbols)));
     if (addr && addr.L > s.cap) s.infinite = true;
     setSettings(s);
     go(addr ?? { L: MIN_LENGTH, pos: 0n }, s, !!addr);
@@ -210,10 +229,10 @@ export function EveryMolecule({ title }: { title: string }) {
 
   const update = (patch: Partial<Settings>) => {
     const s = { ...settings, ...patch };
-    s.cap = Math.min(s.cap, s.charged ? MAX_CAP.charged : MAX_CAP.neutral);
+    s.cap = Math.min(s.cap, maxCap(library(s.symbols)));
     setSettings(s);
     // A different alphabet is a different library: start its block from the top.
-    go(patch.charged !== undefined ? { L: current.L, pos: 0n } : current, s);
+    go(patch.symbols ? { L: current.L, pos: 0n } : current, s);
   };
 
   // Wheel, touch and keys move whole rows; the page scrolls once past either end.
@@ -263,7 +282,7 @@ export function EveryMolecule({ title }: { title: string }) {
       PageUp: () => scroll(-rows),
       ' ': () => scroll(e.shiftKey ? -rows : rows),
       Home: () => go({ L: current.L, pos: 0n }),
-      End: () => go({ L: current.L, pos: library(settings.charged).blockSize(current.L) - 1n }),
+      End: () => go({ L: current.L, pos: lib.blockSize(current.L) - 1n }),
     };
     const action = keys[e.key];
     if (action) {
@@ -277,7 +296,7 @@ export function EveryMolecule({ title }: { title: string }) {
     if (!started.current || !stream.items.length) return;
     const t = setTimeout(() => window.history.replaceState(null, '', linkTo(current, settings)), 300);
     return () => clearTimeout(t);
-  }, [current.L, current.pos, settings.charged]);
+  }, [current.L, current.pos, settings.symbols]);
 
   // Go to: length and position.
   const [goL, setGoL] = useState('');
@@ -301,10 +320,15 @@ export function EveryMolecule({ title }: { title: string }) {
     setFound(await stream.findMolecule(query));
   };
 
-  const lib = library(settings.charged);
   const blockSize = lib.blockSize(current.L);
   const exact = current.L <= settings.cap;
-  const maxCap = settings.charged ? MAX_CAP.charged : MAX_CAP.neutral;
+  const toggleElement = (e: string) => {
+    const has = settings.symbols.elements.includes(e);
+    if (has && settings.symbols.elements.length === 1) return;
+    const elements = has ? settings.symbols.elements.filter((x) => x !== e) : [...settings.symbols.elements, e];
+    update({ symbols: { ...settings.symbols, elements } });
+  };
+  const setKey = symbolSetKey(settings.symbols);
 
   const sidebar = (
     <VizPanel stack>
@@ -388,18 +412,51 @@ export function EveryMolecule({ title }: { title: string }) {
         </div>
       </ControlGroup>
 
-      <ControlGroup label="Library">
+      <ControlGroup label={`Alphabet · ${lib.alphabet.length} symbols`}>
+        <div className={styles.chips} role="group" aria-label="Elements">
+          {ELEMENTS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              className={styles.chip}
+              aria-pressed={settings.symbols.elements.includes(e)}
+              onClick={() => toggleElement(e)}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+        <ToggleSwitch
+          label="Charged forms"
+          checked={settings.symbols.charged}
+          onChange={(v) => update({ symbols: { ...settings.symbols, charged: v } })}
+        />
+        <div className={styles.buttons}>
+          {PRESETS.map((p) => (
+            <VizButton
+              key={p.label}
+              size="sm"
+              variant={symbolSetKey(p.symbols) === setKey ? 'primary' : 'secondary'}
+              onClick={() => update({ symbols: p.symbols })}
+            >
+              {p.label}
+            </VizButton>
+          ))}
+        </div>
+        <ControlHint>Bonds, rings and branches are always in. Each alphabet numbers its molecules differently.</ControlHint>
+      </ControlGroup>
+
+      <ControlGroup label="Listing">
         <SliderWithInput
           label="Exactly once, up to (symbols)"
           value={settings.cap}
           onChange={(v) => update({ cap: v })}
           min={1}
-          max={maxCap}
+          max={maxCap(lib)}
           step={1}
           decimals={0}
         />
         <ToggleSwitch label="Keep going past that" checked={settings.infinite} onChange={(v) => update({ infinite: v })} />
-        <ToggleSwitch label="Charged atoms" checked={settings.charged} onChange={(v) => update({ charged: v })} />
         <ControlHint>
           {settings.infinite
             ? `Past ${settings.cap} symbols molecules are grown from their address instead, up to ${MAX_LENGTH} symbols.`
@@ -458,7 +515,7 @@ export function EveryMolecule({ title }: { title: string }) {
               </p>
             ) : null}
           </div>
-          <BlockScrollbar addr={current} charged={settings.charged} onJump={(a) => go(a)} />
+          <BlockScrollbar addr={current} lib={lib} onJump={(a) => go(a)} />
         </div>
       </VizPanel>
     </VizWorkbench>

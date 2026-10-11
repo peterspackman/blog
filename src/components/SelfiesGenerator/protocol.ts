@@ -1,14 +1,11 @@
 import type { VizTheme } from '../shared/viz';
-import type { FindResult } from './engine';
+import type { FindResult, SymbolSet } from './engine';
 
 /** Shortest strings listed: single atoms (hydrides) aren't worth a block. */
 export const MIN_LENGTH = 2;
 
 /** Longest string the built blocks go up to; past this a page takes seconds. */
 export const MAX_LENGTH = 400;
-
-/** Longest exact block allowed, with and without charged atoms (pages get slow past these). */
-export const MAX_CAP = { neutral: 6, charged: 8 };
 
 /** A position in the block of strings with L symbols. */
 export interface Address {
@@ -17,8 +14,8 @@ export interface Address {
 }
 
 export interface Settings {
-  /** Include charged atom symbols. */
-  charged: boolean;
+  /** The alphabet: which atoms, and whether charged forms are in. */
+  symbols: SymbolSet;
   /** Blocks up to this length show each molecule exactly once. */
   cap: number;
   /** Keep going past the cap with built molecules. */
@@ -55,9 +52,9 @@ export type WorkerRequest =
       theme: VizTheme;
       size: Size;
     }
-  | { type: 'render'; id: number; gen: number; addr: Address; charged: boolean; theme: VizTheme; size: Size }
+  | { type: 'render'; id: number; gen: number; addr: Address; symbols: SymbolSet; theme: VizTheme; size: Size }
   | { type: 'cancel'; gen: number }
-  | { type: 'find'; id: number; smiles: string; charged: boolean; theme: VizTheme; size: Size };
+  | { type: 'find'; id: number; smiles: string; symbols: SymbolSet; theme: VizTheme; size: Size };
 
 export type WorkerResponse =
   | { type: 'ready' }

@@ -40,7 +40,7 @@ function draw(smiles: string, theme: VizTheme, size: { width: number; height: nu
 /** Scan an exact block range for canonical strings, never past `maxL`. */
 async function scan(msg: Extract<WorkerRequest, { type: 'scan' }>) {
   const { id, gen, forward, count, settings, maxL, theme, size } = msg;
-  const lib = library(settings.charged);
+  const lib = library(settings.symbols);
   let { L, pos } = msg.from;
   if (!forward) pos -= 1n;
   let found = 0;
@@ -88,7 +88,7 @@ async function pump() {
   while (queue.length) {
     const msg = queue.shift()!;
     if (msg.gen < minGen) continue;
-    const mol = builtAt(library(msg.charged), msg.addr.L, msg.addr.pos);
+    const mol = builtAt(library(msg.symbols), msg.addr.L, msg.addr.pos);
     const svg = draw(mol.smiles, msg.theme, msg.size);
     post({ type: 'rendered', id: msg.id, item: svg ? { ...msg.addr, ...mol, svg } : null });
     await tick();
@@ -110,7 +110,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
     queue.push(msg);
     void pump();
   } else if (msg.type === 'find') {
-    const result = find(rdkit, library(msg.charged), msg.smiles);
+    const result = find(rdkit, library(msg.symbols), msg.smiles);
     const svg = result.found ? draw(result.smiles, msg.theme, msg.size) : null;
     post({ type: 'found', id: msg.id, result, svg });
   }
