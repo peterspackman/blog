@@ -1,42 +1,51 @@
 import React from 'react';
 import Admonition from '@theme/Admonition';
 import { VizExplanation, VizPage } from '../../components/shared/viz';
-import { InfiniteMolecules } from '../../components/SelfiesGenerator/InfiniteMolecules';
+import { EveryMolecule } from '../../components/SelfiesGenerator/EveryMolecule';
 
 export default function InfiniteMoleculesPage(): React.JSX.Element {
   return (
     <VizPage
+      titleInPlot
       title="Infinite molecules"
-      description="Page through every molecule that a short SELFIES string can describe"
-      intro="Every string of SELFIES symbols is a valid molecule, so chemical space can be numbered and paged through like a book. Click a SELFIES or SMILES string to copy it."
+      description="Scroll through every molecule a SELFIES string can describe, each with its own address"
     >
-      <InfiniteMolecules />
+      <EveryMolecule title="Infinite molecules" />
 
       <VizExplanation
         aside={
           <>
             <Admonition type="tip" title="Try this">
-              Step through the first few pages of 2-symbol strings: the first symbol changes fastest, so each
-              page walks one atom or bond type through the alphabet.
+              Find benzene (<code>c1ccccc1</code>) and see how far into the 8-symbol block it lives, or turn on{' '}
+              <em>Keep going</em> and go to length 100.
             </Admonition>
-            <Admonition type="note" title="Duplicates">
-              Different strings can decode to the same molecule, and branch or ring symbols with nothing to act on
-              are dropped, so the count is of strings, not distinct molecules.
+            <Admonition type="note" title="What's left out">
+              Only the symbols SELFIES treats as always valid: no stereochemistry, no explicit hydrogens, no metals, one
+              molecule per string. Charged atoms are off by default because they make up most of the alphabet and most
+              of the page.
             </Admonition>
           </>
         }
       >
         <h2>Numbering chemical space</h2>
         <p>
-          SELFIES (self-referencing embedded strings) write a molecule as a sequence of symbols such as{' '}
-          <code>[C]</code>, <code>[=O]</code>, <code>[Branch1]</code> or <code>[Ring1]</code>. Unlike SMILES, the
-          grammar is built so that <em>any</em> sequence of symbols decodes to a valid molecule: a bond that would
-          exceed an atom's valence is reduced, and a ring or branch that can't be formed is skipped.
+          SELFIES write a molecule as a string of symbols such as <code>[C]</code>, <code>[=O]</code>,{' '}
+          <code>[Branch1]</code> or <code>[Ring1]</code>, and the grammar is built so that <em>any</em> string decodes
+          to a valid molecule. So with an alphabet of N symbols, every number names a molecule: write it in base N and
+          read off the symbols. The strings are shuffled with an invertible permutation (the same trick as{' '}
+          <a href="https://everyuuid.com">everyuuid.com</a>), so neighbours look unrelated and any molecule's address
+          can be worked out backwards.
         </p>
         <p>
-          That makes enumeration easy. With an alphabet of N symbols there are N<sup>M</sup> strings of length M;
-          write the index in base N and read each digit as a symbol. Each string is decoded to SMILES and drawn
-          with RDKit, all in your browser.
+          The catch is that most strings are the same molecule written differently, or have symbols that do nothing.
+          With all 69 symbols, about 95% of 3-symbol strings are repeats. So the page only shows a string if it is the
+          one SELFIES that RDKit's canonical SMILES encodes to, which makes every molecule appear exactly once without
+          ever listing them all.
+        </p>
+        <p>
+          That gets sparse quickly (around 1 string in 1,000 at 6 symbols), so past the cap the page stops checking and
+          grows each molecule from its address instead: one atom, ring or branch at a time, keeping only steps that
+          change the molecule. Those can be as long as you like. Repeats are possible in principle; I haven't seen one.
         </p>
       </VizExplanation>
     </VizPage>

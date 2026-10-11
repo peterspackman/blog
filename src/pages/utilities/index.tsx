@@ -44,7 +44,7 @@ const SECTIONS: IndexSection[] = [
       {
         title: 'Infinite molecules',
         href: '/utilities/infinite-molecules',
-        description: 'Generate random valid molecules from SELFIES strings and browse them as a scrolling grid.',
+        description: 'Scroll through every molecule a SELFIES string can describe, each exactly once, or past that forever.',
       },
     ],
   },

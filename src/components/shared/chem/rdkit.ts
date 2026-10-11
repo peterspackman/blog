@@ -4,7 +4,7 @@ import type { VizTheme } from '../viz';
 
 // Loaded from a CDN as a script: bundling the wasm through webpack isn't worth it.
 // Pinned to the version in package.json so the typings match.
-const RDKIT_URL = 'https://unpkg.com/@rdkit/rdkit@2025.3.4-1.0.0/dist/RDKit_minimal.js';
+export const RDKIT_URL = 'https://unpkg.com/@rdkit/rdkit@2025.3.4-1.0.0/dist/RDKit_minimal.js';
 
 let pending: Promise<RDKitModule> | null = null;
 
