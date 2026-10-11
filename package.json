@@ -27,7 +27,7 @@
     "@mdx-js/react": "^3.0.0",
     "@peterspackman/lmpjs": "^0.2.0",
     "@peterspackman/occjs": "^0.9.4",
-    "@peterspackman/selfies": "^0.2.0",
+    "@peterspackman/selfies": "^0.3.0",
     "@rdkit/rdkit": "^2025.3.4-1.0.0",
     "@react-three/drei": "^10.0.3",
     "@react-three/fiber": "^9.0.4",
