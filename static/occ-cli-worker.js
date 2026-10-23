@@ -26,14 +26,71 @@ self.onmessage = async function(e) {
             },
             locateFile: (path) => '/wasm/' + path,
             noInitialRun: true,
+            // Parameter and basis-set data are preloaded at /; say so, since
+            // cg runs from /work and occ otherwise looks relative to the cwd.
+            preRun: [(M) => { M.ENV.OCC_DATA_PATH = '/'; }],
         });
     } catch (error) {
         self.postMessage({ type: 'error', text: `Failed to load occ.js: ${error && error.message}` });
         self.postMessage({ type: 'exit', code: 1, files: {}, stdout: '' });
         return;
     }
-    await executeCommand(Module, commandData);
+    if (commandData.command === 'cg') {
+        await runCrystalGrowth(Module, commandData);
+    } else {
+        await executeCommand(Module, commandData);
+    }
 };
+
+// occ cg: write the CIF into an empty /work and return only the results JSON,
+// not the whole filesystem (which holds the preloaded basis-set data).
+//
+// occ caches the solvent-independent pair energies in subdirectories of the
+// working directory (e.g. <name>_xtb_dimers/). Those come back as `cache` and
+// can be passed in again, so a second solvent skips the dimer calculations.
+async function runCrystalGrowth(Module, { cif, name, model, solvent, dmin, threads, cache }) {
+    const stem = name || 'crystal';
+    let exitCode = 1;
+    const files = {};
+    const cacheOut = {};
+    try {
+        Module.FS.mkdir('/work');
+        Module.FS.chdir('/work');
+        Module.FS.writeFile(`${stem}.cif`, cif);
+        for (const [path, text] of Object.entries(cache || {})) {
+            const dir = path.slice(0, path.lastIndexOf('/'));
+            if (dir && !Module.FS.analyzePath(dir).exists) Module.FS.mkdirTree(dir);
+            Module.FS.writeFile(path, text);
+        }
+        const args = [
+            'cg', `${stem}.cif`,
+            '-m', model || 'gfn2',
+            '-s', solvent || 'water',
+            '--surface-d-min', String(dmin ?? 3),
+            '--morphology',
+        ];
+        if (threads && threads > 1) args.push(`--threads=${threads}`);
+        self.postMessage({ type: 'ready', args });
+        exitCode = await Module.runMain(args);
+    } catch (error) {
+        if (error && error.name === 'ExitStatus') exitCode = error.status;
+        else self.postMessage({ type: 'error', text: `Runtime error: ${error && error.message}` });
+    }
+    try {
+        for (const item of Module.FS.readdir('/work')) {
+            const path = `/work/${item}`;
+            if (item === '.' || item === '..') continue;
+            if (Module.FS.isDir(Module.FS.stat(path).mode)) {
+                for (const f of Module.FS.readdir(path)) {
+                    if (f !== '.' && f !== '..') cacheOut[`${path}/${f}`] = Module.FS.readFile(`${path}/${f}`, { encoding: 'utf8' });
+                }
+            } else if (item.endsWith('_cg_results.json')) {
+                files[item] = Module.FS.readFile(path, { encoding: 'utf8' });
+            }
+        }
+    } catch (e) { /* nothing written */ }
+    self.postMessage({ type: 'exit', code: exitCode, files, cache: cacheOut, stdout: outputBuffer });
+}
 
 async function executeCommand(Module, commandData) {
     const {

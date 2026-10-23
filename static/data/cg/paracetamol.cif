@@ -1,0 +1,266 @@
+#------------------------------------------------------------------------------
+#$Date: 2017-10-13 08:28:26 +0300 (Fri, 13 Oct 2017) $
+#$Revision: 201972 $
+#$URL: file:///home/coder/svn-repositories/cod/cif/2/10/20/2102013.cif $
+#------------------------------------------------------------------------------
+#
+# This file is available in the Crystallography Open Database (COD),
+# http://www.crystallography.net/. The original data for this entry
+# were provided by IUCr Journals, http://journals.iucr.org/.
+#
+# The file may be used within the scientific community so long as
+# proper attribution is given to the journal article from which the
+# data were obtained.
+#
+data_2102013
+loop_
+_publ_author_name
+'Boldyreva, Elena V.'
+'Shakhtshneider, Tatiana P.'
+'Vasilchenko, Marina A.'
+'Ahsbahs, Hans'
+'Uchtmann, H.'
+_publ_section_title
+;
+ Anisotropic crystal structure distortion of the monoclinic polymorph
+ of acetaminophen at high hydrostatic pressures
+;
+_journal_issue                   2
+_journal_name_full               'Acta Crystallographica Section B'
+_journal_page_first              299
+_journal_page_last               309
+_journal_paper_doi               10.1107/S0108768199013634
+_journal_volume                  56
+_journal_year                    2000
+_chemical_formula_moiety         'C8 H9 N O2'
+_chemical_formula_sum            'C8 H9 N O2'
+_chemical_formula_weight         151.16
+_chemical_melting_point          171.5(5)
+_chemical_name_common            Acetaminophen
+_chemical_name_systematic
+;
+ 4-acetaminophenol
+;
+_space_group_IT_number           14
+_symmetry_cell_setting           monoclinic
+_symmetry_space_group_name_Hall  '-P 2yn'
+_symmetry_space_group_name_H-M   'P 1 21/n 1'
+_audit_creation_method           SHELXL-97
+_cell_angle_alpha                90.00
+_cell_angle_beta                 98.54(3)
+_cell_angle_gamma                90.00
+_cell_formula_units_Z            4
+_cell_length_a                   6.9800(10)
+_cell_length_b                   8.915(2)
+_cell_length_c                   11.566(2)
+_cell_measurement_reflns_used    12
+_cell_measurement_temperature    293(2)
+_cell_measurement_theta_max      8.70
+_cell_measurement_theta_min      2.76
+_cell_volume                     711.7(2)
+_computing_cell_refinement       'CRYMIS (Kutoglu, 1995)'
+_computing_data_collection       'MDIF4 (Kutoglu, 1997)'
+_computing_data_reduction        'PROFILE (Naumov and Boldyreva, 1997)'
+_computing_molecular_graphics    'CAVITY (Naumov and Boldyreva, 1999)'
+_computing_publication_material  'SHELXL-97 (Sheldrick, 1997b)'
+_computing_structure_refinement  'SHELXL-97 (Sheldrick, 1997b)'
+_computing_structure_solution    'SHELXS-97 (Sheldrick, 1997a)'
+_diffrn_ambient_temperature      293(2)
+_diffrn_measured_fraction_theta_full .385
+_diffrn_measured_fraction_theta_max .385
+_diffrn_measurement_device_type  'STOE 4-circle diffractometer'
+_diffrn_measurement_method       \w
+_diffrn_radiation_monochromator  graphite
+_diffrn_radiation_source         'fine-focus sealed tube'
+_diffrn_radiation_type           MoK\a
+_diffrn_radiation_wavelength     .71073
+_diffrn_reflns_av_R_equivalents  .0490
+_diffrn_reflns_av_sigmaI/netI    .1190
+_diffrn_reflns_limit_h_max       5
+_diffrn_reflns_limit_h_min       -5
+_diffrn_reflns_limit_k_max       11
+_diffrn_reflns_limit_k_min       -11
+_diffrn_reflns_limit_l_max       14
+_diffrn_reflns_limit_l_min       -14
+_diffrn_reflns_number            2585
+_diffrn_reflns_theta_full        27.49
+_diffrn_reflns_theta_max         27.49
+_diffrn_reflns_theta_min         2.90
+_diffrn_standards_decay_%        0
+_diffrn_standards_interval_time  300
+_diffrn_standards_number         1
+_exptl_absorpt_coefficient_mu    .102
+_exptl_absorpt_correction_type   none
+_exptl_crystal_colour            colourless
+_exptl_crystal_density_diffrn    1.411
+_exptl_crystal_density_method    'not measured'
+_exptl_crystal_description       prism
+_exptl_crystal_F_000             320
+_exptl_crystal_size_max          .25
+_exptl_crystal_size_mid          .15
+_exptl_crystal_size_min          .07
+_refine_diff_density_max         .103
+_refine_diff_density_min         -.074
+_refine_ls_extinction_coef       .014(3)
+_refine_ls_extinction_method     SHELXL
+_refine_ls_goodness_of_fit_ref   .838
+_refine_ls_hydrogen_treatment    combination
+_refine_ls_matrix_type           full
+_refine_ls_number_parameters     113
+_refine_ls_number_reflns         627
+_refine_ls_number_restraints     1
+_refine_ls_restrained_S_all      .837
+_refine_ls_R_factor_all          .1002
+_refine_ls_R_factor_gt           .0352
+_refine_ls_shift/su_max          .000
+_refine_ls_shift/su_mean         .000
+_refine_ls_structure_factor_coef Fsqd
+_refine_ls_weighting_details
+'calc w=1/[\s^2^(Fo^2^)+(0.0189P)^2^+0.0000P] where P=(Fo^2^+2Fc^2^)/3'
+_refine_ls_weighting_scheme      calc
+_refine_ls_wR_factor_ref         .0532
+_reflns_number_gt                328
+_reflns_number_total             627
+_reflns_threshold_expression     >2sigma(I)
+_cod_data_source_file            av0025.cif
+_cod_data_source_block           (1.0GPa)
+_cod_depositor_comments
+;
+The following automatic conversions were performed:
+'_symmetry_cell_setting' value 'Monoclinic' changed to 'monoclinic'
+according to '/home/saulius/struct/CIF-dictionaries/cif_core.dic'
+dictionary named 'cif_core.dic' version 2.4.1 from 2010-06-29.
+
+Automatic conversion script
+Id: cif_fix_enum 1527 2010-12-29 10:47:43Z saulius 
+
+The following automatic conversions were performed:
+
+'_chemical_melting_point' value '171-172' was changed to '171.5(5)' -
+the average value was taken and precision was estimated.
+
+Automatic conversion script
+Id: cif_fix_values 1646 2011-03-28 12:23:43Z adriana 
+
+The following automatic conversions were performed:
+
+'_chemical_melting_point' value '171-172' was changed to '171.5(5)' -
+the average value was taken and precision was
+estimated.
+
+'_symmetry_cell_setting' value 'Monoclinic' changed to
+'monoclinic' according to
+/home/saulius/struct/CIF-dictionaries/cif_core.dic dictionary named
+'cif_core.dic' version 2.4.1 from 2010-06-29.
+
+Automatic conversion script
+Id: cif_fix_values 1715 2011-07-08 13:25:40Z adriana 
+;
+_cod_database_code               2102013
+loop_
+_symmetry_equiv_pos_as_xyz
+'x, y, z'
+'-x+1/2, y+1/2, -z+1/2'
+'-x, -y, -z'
+'x-1/2, -y-1/2, z-1/2'
+loop_
+_atom_site_label
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_U_iso_or_equiv
+_atom_site_adp_type
+_atom_site_calc_flag
+_atom_site_refinement_flags
+_atom_site_occupancy
+_atom_site_type_symbol
+O1 .1594(6) .9332(2) .2213(3) .050(3) Uani d D 1 O
+H1' .071(5) .981(5) .240(3) .060 Uiso d D 1 H
+C1 .1298(8) .8364(3) .1280(3) .029(3) Uani d . 1 C
+C2 -.0470(7) .8305(2) .0547(3) .038(4) Uani d . 1 C
+H2 -.161(4) .896(2) .0704(5) .046 Uiso calc R 1 H
+C3 -.0652(8) .7338(3) -.0400(3) .031(3) Uani d . 1 C
+H3 -.181(3) .7307(3) -.0907(12) .038 Uiso calc R 1 H
+C4 .0824(7) .6436(3) -.0606(3) .023(4) Uani d . 1 C
+C5 .2575(6) .6468(3) .0148(2) .025(3) Uani d . 1 C
+H5 .356(3) .586(2) .0026(5) .030 Uiso calc R 1 H
+C6 .2784(8) .7444(3) .1088(3) .032(3) Uani d . 1 C
+H6 .398(3) .7474(3) .1607(12) .039 Uiso calc R 1 H
+N1 .0475(9) .5488(3) -.1608(3) .032(4) Uani d . 1 N
+H2' -.080(5) .5317(6) -.1893(10) .039 Uiso calc R 1 H
+C7 .1765(12) .4814(4) -.2188(4) .024(4) Uani d . 1 C
+O2 .3515(7) .4873(2) -.1883(3) .047(3) Uani d . 1 O
+C8 .0868(9) .3948(3) -.3257(3) .057(4) Uani d . 1 C
+H8A -.045(2) .419(3) -.3430(14) .085 Uiso calc R 1 H
+H8B .101(4) .2917(17) -.3110(11) .085 Uiso calc R 1 H
+H8C .149(2) .420(2) -.3893(13) .085 Uiso calc R 1 H
+loop_
+_atom_site_aniso_label
+_atom_site_aniso_U_11
+_atom_site_aniso_U_22
+_atom_site_aniso_U_33
+_atom_site_aniso_U_12
+_atom_site_aniso_U_13
+_atom_site_aniso_U_23
+O1 .051(6) .0438(14) .050(2) .0029(16) -.011(4) -.0182(13)
+C1 .026(8) .0294(16) .031(3) .001(2) .006(4) .0013(15)
+C2 .032(8) .0347(16) .044(3) .0117(19) -.006(5) -.0017(15)
+C3 .026(8) .0375(17) .030(3) .008(2) -.001(4) -.0029(17)
+C4 .018(8) .0265(15) .026(3) -.002(2) .006(5) .0056(15)
+C5 .012(8) .0331(17) .032(3) .0076(17) .010(5) .0048(14)
+C6 .024(8) .0372(19) .033(3) .000(2) -.004(5) .0022(16)
+N1 .028(8) .0338(17) .032(3) .002(2) -.003(5) -.0014(13)
+C7 .011(11) .031(2) .034(4) .005(3) .015(6) .0048(18)
+O2 .028(8) .0685(17) .045(3) .005(2) .006(4) -.0022(13)
+C8 .082(9) .0418(17) .043(3) .004(2) -.002(5) -.0113(16)
+loop_
+_atom_type_symbol
+_atom_type_description
+_atom_type_scat_dispersion_real
+_atom_type_scat_dispersion_imag
+_atom_type_scat_source
+C C .0033 .0016 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+H H .0000 .0000 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+N N .0061 .0033 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+O O .0106 .0060 'International Tables Vol C Tables 4.2.6.8 and 6.1.1.4'
+loop_
+_geom_angle_atom_site_label_1
+_geom_angle_atom_site_label_2
+_geom_angle_atom_site_label_3
+_geom_angle
+_geom_angle_publ_flag
+O1 C1 C2 121.3(4) yes
+C1 C2 C3 118.4(4) yes
+C2 C3 C4 121.7(3) yes
+C3 C4 C5 119.8(3) yes
+C3 C4 N1 116.8(3) yes
+C5 C4 N1 123.3(4) yes
+C4 C5 C6 119.1(4) yes
+C5 C6 C1 120.8(3) yes
+C6 C1 O1 118.4(3) yes
+C6 C1 C2 120.3(3) yes
+C4 N1 C7 128.7(6) yes
+N1 C7 O2 123.6(4) yes
+N1 C7 C8 114.2(6) yes
+O2 C7 C8 122.2(7) yes
+loop_
+_geom_bond_atom_site_label_1
+_geom_bond_atom_site_label_2
+_geom_bond_distance
+_geom_bond_publ_flag
+O1 C1 1.373(3) yes
+C1 C2 1.391(4) yes
+C2 C3 1.385(4) yes
+C3 C4 1.356(6) yes
+C4 C5 1.392(4) yes
+C5 C6 1.383(4) yes
+C6 C1 1.366(6) yes
+C4 N1 1.426(4) yes
+N1 C7 1.342(10) yes
+C7 O2 1.221(8) yes
+C7 C8 1.511(4) yes
+loop_
+_cod_related_entry_id
+_cod_related_entry_database
+_cod_related_entry_code
+1 ChemSpider 1906

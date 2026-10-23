@@ -1,0 +1,477 @@
+.page {
+  width: 100%;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2.5rem var(--ifm-spacing-horizontal) 4rem;
+}
+
+/* Title block ----------------------------------------------------------- */
+.header {
+  text-align: center;
+  margin: 0 auto 2rem;
+  max-width: 48rem;
+}
+
+.kicker {
+  margin: 0 0 0.75rem;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+.title {
+  font-size: clamp(1.75rem, 1.3rem + 1.8vw, 2.6rem);
+  line-height: 1.15;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  text-wrap: balance;
+}
+
+.subtitle {
+  margin: 0 auto 1.25rem;
+  max-width: 40rem;
+  font-size: 1.05rem;
+  color: var(--viz-muted);
+  text-wrap: balance;
+}
+
+.authors {
+  margin: 0 0 0.25rem;
+}
+
+.author {
+  white-space: nowrap;
+}
+
+.affiliations {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 1rem;
+  margin: 0 0 1rem;
+  font-size: var(--viz-font-xs);
+  color: var(--viz-muted);
+}
+
+.links {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.linkButton {
+  padding: 0.3rem 0.85rem;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-text);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius);
+}
+
+.linkButton:hover {
+  color: var(--viz-accent);
+  border-color: var(--viz-accent);
+  text-decoration: none;
+}
+
+.abstract {
+  max-width: 70ch;
+  margin: 0 auto 2rem;
+}
+
+.abstractTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.abstract p {
+  margin: 0;
+}
+
+.runIntro {
+  margin: 0;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+/* Run card -------------------------------------------------------------- */
+.runCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1rem;
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: var(--viz-shadow);
+}
+
+.runControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 9rem;
+  gap: 0.75rem 1rem;
+  align-items: end;
+}
+
+@media (max-width: 800px) {
+  .runControls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fieldWide,
+  .runButton {
+    grid-column: 1 / -1;
+  }
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.field > span {
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chips > :last-child:not(.chip) {
+  width: 11rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.6rem;
+  font-size: var(--viz-font-sm);
+  background: var(--viz-accent-soft);
+  border: 1px solid var(--viz-border);
+  border-radius: 999px;
+}
+
+.chipEmpty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--viz-muted);
+}
+
+.chipPending {
+  border-style: solid;
+  border-color: var(--viz-accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chipPending {
+    animation: none;
+  }
+}
+
+.chipRemove {
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--viz-muted);
+  background: none;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.chipRemove:hover:not(:disabled) {
+  color: var(--viz-text);
+  background: var(--viz-surface-subtle);
+}
+
+.chipRemove:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.runMeta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+@media (max-width: 640px) {
+  .runMeta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.command {
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: var(--viz-font-xs);
+  white-space: nowrap;
+  background: var(--viz-surface-subtle);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-sm);
+  padding: 0.3rem 0.5rem;
+}
+
+.status {
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+.statusError {
+  color: var(--viz-danger);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--viz-border);
+}
+
+@media (max-width: 640px) {
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.stat {
+  text-align: center;
+}
+
+.stat dt {
+  color: var(--viz-muted);
+  font-weight: 400;
+}
+
+.stat dd {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.statUnit {
+  color: var(--viz-muted);
+  font-size: var(--viz-font-xs);
+}
+
+.log {
+  max-height: 22rem;
+  overflow: auto;
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+/* Results ------------------------------------------------------------------- */
+.results {
+  background: var(--viz-surface);
+  border: 1px solid var(--viz-border);
+  border-radius: var(--viz-radius-lg);
+  box-shadow: var(--viz-shadow);
+}
+
+.hero {
+  padding: 1.25rem 1.1rem 1rem;
+}
+
+.resultsTitle {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.resultsText {
+  margin: 0 auto 1rem;
+  max-width: 44rem;
+  text-align: center;
+  color: var(--viz-muted);
+}
+
+.switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+}
+
+.stepButton {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.clickRow {
+  cursor: pointer;
+}
+
+.clickRow:hover td {
+  background: var(--viz-surface-subtle);
+}
+
+.selectedRow td {
+  background: var(--viz-accent-soft);
+  font-weight: 600;
+}
+
+.selectedRow:hover td {
+  background: var(--viz-accent-soft);
+}
+
+.topFace {
+  margin-left: 0.85rem;
+}
+
+.faceLegend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem 1rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--viz-font-sm);
+}
+
+.tabBar {
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--viz-border);
+  background: var(--viz-surface-subtle);
+  overflow-x: auto;
+}
+
+.tabPanel {
+  padding: 1rem 1.1rem 1.1rem;
+  min-height: 22rem;
+}
+
+.tabText {
+  margin: 0 0 0.75rem;
+  max-width: 70ch;
+}
+
+.equation {
+  position: relative;
+  overflow-x: auto;
+  margin: 0 0 0.75rem;
+}
+
+/* KaTeX's hidden MathML copy is absolutely positioned; keep it inside. */
+.equation :global(.katex) {
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .hero,
+  .tabPanel {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
+  }
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.footer {
+  margin-top: 3rem;
+  text-align: center;
+  font-size: var(--viz-font-sm);
+  color: var(--viz-muted);
+}
+
+.footer code {
+  font-size: var(--viz-font-xs);
+}
+
+/* Figures -------------------------------------------------------------------- */
+.wulffRow {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.wulffPanel {
+  position: relative;
+  margin: 0;
+}
+
+.wulffLabel {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.65rem;
+  z-index: 1;
+  font-size: var(--viz-font-sm);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.facetTable {
+  display: table;
+  width: 100%;
+  margin: 0.75rem 0 0;
+  font-size: var(--viz-font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.facetTable th,
+.facetTable td {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-bottom: 1px solid var(--viz-border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.facetTable th {
+  color: var(--viz-muted);
+  font-weight: 500;
+}
+
+.facetTable th:first-child,
+.facetTable td:first-child {
+  text-align: left;
+}
+
+.facetTable tr {
+  background: none !important;
+}
+
+.swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.5rem;
+  border-radius: 2px;
+  vertical-align: -0.05rem;
+}
+
+.fitReadout {
+  margin: 0.25rem 0 0;
+  font-size: var(--viz-font-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--viz-muted);
+}
