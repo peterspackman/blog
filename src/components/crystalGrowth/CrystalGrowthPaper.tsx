@@ -25,9 +25,9 @@ const MODEL = 'gfn2';
 const PRECOMPUTED = '/data/cg/paracetamol.json';
 const DEFAULT_CIF = '/data/cg/paracetamol.cif';
 const DEFAULT_CACHE = '/data/cg/paracetamol_cache.json';
-// Placeholders until the preprint and the paper are out.
-const PREPRINT_URL = '#';
-const PAPER_URL = '#';
+const PREPRINT_URL = 'https://chemrxiv.org/doi/full/10.26434/chemrxiv.15011118';
+// Set once the paper is out; the Paper button is hidden until then.
+const PAPER_URL: string | null = null;
 
 /** Precomputed, and the starting set. */
 const DEFAULT_SOLVENTS = ['water', 'methanol', 'ethanol', 'acetone', 'ethylethanoate', 'toluene', 'n-hexane'];
@@ -36,6 +36,10 @@ const ALL_SOLVENTS = [
     'ethylethanoate', 'tetrahydrofuran', 'dimethylsulfoxide', 'dichloromethane', 'chloroform', 'toluene',
     'benzene', 'cyclohexane', 'n-hexane', 'n-heptane',
 ];
+
+const TITLE = 'Predicting molecular crystal growth';
+const SUBTITLE =
+    'Automated surface terminations, interchangeable interaction energy models and finite particles in the CrystalClear protocol';
 
 const AUTHORS = [
     { name: 'James R. Brookes', aff: [1] },
@@ -49,6 +53,85 @@ const AFFILIATIONS = [
     'The University of Manchester',
     'Crystogen',
 ];
+
+// The DOI is not registered yet, so this is built from the page rather than fetched.
+const BIBTEX = `@article{brookes2026crystalgrowth,
+  title   = {{${TITLE}: ${SUBTITLE}}},
+  author  = {${AUTHORS.map((a) => a.name).join(' and ')}},
+  journal = {ChemRxiv},
+  year    = {2026},
+  doi     = {10.26434/chemrxiv.15011118},
+  note    = {Preprint}
+}`;
+
+/** First two sentences of the abstract, shown before it is expanded. */
+const ABSTRACT_LEDE =
+    'The incorporation of crystal growth processes extends the utility of predictive techniques beyond simply ' +
+    'crystal geometry and a thermodynamic ranking with the ultimate goal being actionable information to target ' +
+    'specific crystallisation. Pairwise model interaction energies with implicit solvation have been previously ' +
+    'demonstrated in the CrystalClear protocol to provide a computationally efficient route to incorporate such ' +
+    'processes, though some limitations restricted its use.';
+const ABSTRACT_REST =
+    'We present several advancements to overcome these limitations, incorporating a native implementation of the ' +
+    'semi-empirical GFN2-xTB model with SMD solvation, and validating both GFN2-xTB and the CE-1p model against ' +
+    'reference lattice energies and solubilities. Further, automated enumeration of symmetry-unique faces and ' +
+    'construction of solvated surface energies as part of the same protocol facilitates direct prediction of ' +
+    'solvent-dependent equilibrium crystal shapes while eliminating the tedium and errors frequently associated ' +
+    'with manual construction of surface geometries required to evaluate surface free energies. To demonstrate the ' +
+    'potential of these advancements we present two case studies, oxindole and ritonavir, evaluating the accuracy ' +
+    'of the crystal growth protocol in reproducing experimental results for particle size effects, polymorph ' +
+    'stability and more. All methods presented here are freely available and implemented in open source software, ' +
+    'ensuring accessibility, extendability and transferability to the broader community.';
+
+function Abstract() {
+    const [open, setOpen] = useState(false);
+    return (
+        <section className={styles.abstract}>
+            <h2 className={styles.abstractTitle}>Abstract</h2>
+            <p>
+                {ABSTRACT_LEDE}
+                {open && ` ${ABSTRACT_REST}`}{' '}
+                <button type="button" className={styles.abstractToggle} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+                    {open ? 'Show less' : 'Read full abstract'}
+                </button>
+            </p>
+        </section>
+    );
+}
+
+function CiteButton() {
+    const [copied, setCopied] = useState(false);
+    useEffect(() => {
+        if (!copied) return;
+        const id = setTimeout(() => setCopied(false), 1500);
+        return () => clearTimeout(id);
+    }, [copied]);
+    return (
+        <button
+            type="button"
+            className={styles.linkButton}
+            title="Copy BibTeX"
+            onClick={() => navigator.clipboard.writeText(BIBTEX).then(() => setCopied(true))}
+        >
+            {copied ? 'Copied BibTeX' : 'Cite'}
+        </button>
+    );
+}
+
+/** Dropping a file anywhere else on the page would otherwise navigate away to it. */
+function useBlockStrayDrops() {
+    useEffect(() => {
+        const block = (e: DragEvent) => {
+            if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+        };
+        window.addEventListener('dragover', block);
+        window.addEventListener('drop', block);
+        return () => {
+            window.removeEventListener('dragover', block);
+            window.removeEventListener('drop', block);
+        };
+    }, []);
+}
 
 function useThreads() {
     const [threads, setThreads] = useState(1);
@@ -107,7 +190,10 @@ export default function CrystalGrowthPaper() {
     const [solvents, setSolvents] = useState(DEFAULT_SOLVENTS);
     const [selected, setSelected] = useState('water');
     const fileInput = useRef<HTMLInputElement>(null);
+    const [dragging, setDragging] = useState(false);
+    const [fileError, setFileError] = useState<string | null>(null);
     const elapsed = useElapsed(busy?.started ?? null);
+    useBlockStrayDrops();
 
     // Solvents in the set that have a result, in set order.
     const available = useMemo(() => solvents.filter((s) => results[s]), [solvents, results]);
@@ -121,14 +207,53 @@ export default function CrystalGrowthPaper() {
     };
     const removeSolvent = (s: string) => setSolvents((prev) => (prev.length > 1 ? prev.filter((x) => x !== s) : prev));
 
-    const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
+    const loadCif = (file: File) => {
+        if (!/\.cif$/i.test(file.name)) {
+            setFileError(`${file.name} is not a .cif file`);
+            return;
+        }
+        setFileError(null);
         file.text().then((cif) => {
             const name = file.name.replace(/\.cif$/i, '').replace(/[^A-Za-z0-9_-]+/g, '_') || 'crystal';
             setStructure({ name, cif });
         });
+    };
+
+    const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) loadCif(file);
         e.target.value = '';
+    };
+
+    // dragenter/dragleave fire for every child, so count them to know when the pointer has left the card.
+    const dragDepth = useRef(0);
+    const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
+    const dropHandlers = {
+        onDragEnter: (e: React.DragEvent) => {
+            if (!hasFiles(e) || busy) return;
+            e.preventDefault();
+            dragDepth.current += 1;
+            setDragging(true);
+        },
+        onDragOver: (e: React.DragEvent) => {
+            if (!hasFiles(e) || busy) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        },
+        onDragLeave: (e: React.DragEvent) => {
+            if (!hasFiles(e)) return;
+            dragDepth.current = Math.max(0, dragDepth.current - 1);
+            if (dragDepth.current === 0) setDragging(false);
+        },
+        onDrop: (e: React.DragEvent) => {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            dragDepth.current = 0;
+            setDragging(false);
+            if (busy) return;
+            const file = e.dataTransfer.files[0];
+            if (file) loadCif(file);
+        },
     };
 
     const command = cgCommand({ name: structure.name, model: MODEL, solvent: current ?? 'water', dmin });
@@ -137,20 +262,143 @@ export default function CrystalGrowthPaper() {
 
     let status: React.ReactNode = null;
     if (busy) status = `${solventLabel(busy.solvent)} (${busy.done + 1} of ${busy.total}) · ${elapsed?.toFixed(1)} s`;
+    else if (fileError) status = <span className={styles.statusError}>{fileError}</span>;
     else if (error) status = <span className={styles.statusError}>{error}</span>;
     else if (stale) status = 'inputs changed: press Run to recompute';
     else if (lastRun) status = `${lastRun.count} solvent${lastRun.count > 1 ? 's' : ''} in ${lastRun.seconds.toFixed(1)} s on ${threads} thread${plural}`;
     else if (!live) status = 'showing precomputed results';
 
+    const runPanel = (
+        <section className={clsx(styles.runCard, dragging && styles.runCardDragging)} aria-label="Calculation" {...dropHandlers}>
+            {dragging && (
+                <div className={styles.dropOverlay} aria-hidden="true">
+                    Drop a CIF to use it as the structure
+                </div>
+            )}
+            <p className={styles.runIntro}>
+                The results below come from <code>occ cg</code> running in this tab (WebAssembly), with GFN2-xTB
+                and SMD solvation. The pair energies are computed once per structure, so each extra solvent takes
+                a second or so. To use your own structure, drop a CIF onto this panel.
+            </p>
+            <div className={styles.runControls}>
+                <label className={styles.field}>
+                    <span>Structure</span>
+                    <Select
+                        aria-label="Structure"
+                        value={structure.cif ? 'upload' : 'paracetamol'}
+                        onChange={(v) => {
+                            setFileError(null);
+                            if (v === 'paracetamol') setStructure({ name: 'paracetamol', cif: null });
+                            else fileInput.current?.click();
+                        }}
+                        options={[
+                            { value: 'paracetamol', label: 'paracetamol, form I' },
+                            { value: 'upload', label: structure.cif ? `${structure.name}.cif` : 'your own CIF…' },
+                        ]}
+                        disabled={!!busy}
+                    />
+                    <input ref={fileInput} type="file" accept=".cif" hidden onChange={onFile} />
+                </label>
+                <div className={clsx(styles.field, styles.fieldWide)}>
+                    <SliderWithInput
+                        label={<>Faces down to d<sub>min</sub></>}
+                        value={dmin}
+                        onChange={setDmin}
+                        min={2}
+                        max={5}
+                        step={0.25}
+                        decimals={2}
+                        unit="Å"
+                        disabled={!!busy}
+                    />
+                </div>
+                <div className={styles.runButton}>
+                    {busy ? (
+                        <VizButton variant="secondary" block onClick={session.cancel}>
+                            Cancel
+                        </VizButton>
+                    ) : (
+                        <VizButton variant="primary" block onClick={() => session.runAll(solvents)}>
+                            Run {solvents.length > 1 ? `all ${solvents.length}` : ''}
+                        </VizButton>
+                    )}
+                </div>
+            </div>
+
+            <div className={styles.field}>
+                <span>Solvents</span>
+                <div className={styles.chips}>
+                    {solvents.map((s) => {
+                        const pending = busy?.solvent === s;
+                        return (
+                            <span
+                                key={s}
+                                className={clsx(styles.chip, !results[s] && styles.chipEmpty, pending && styles.chipPending)}
+                            >
+                                {solventLabel(s)}
+                                <button
+                                    type="button"
+                                    className={styles.chipRemove}
+                                    aria-label={`Remove ${solventLabel(s)}`}
+                                    onClick={() => removeSolvent(s)}
+                                    disabled={solvents.length <= 1}
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        );
+                    })}
+                    {addable.length > 0 && (
+                        <Select
+                            aria-label="Add a solvent"
+                            value={'' as string}
+                            onChange={(v) => v && addSolvent(v)}
+                            options={[
+                                { value: '', label: 'add a solvent…' },
+                                ...addable.map((s) => ({ value: s, label: solventLabel(s) })),
+                            ]}
+                        />
+                    )}
+                </div>
+            </div>
+
+            <div className={styles.runMeta}>
+                <code className={styles.command}>{command}</code>
+                <span className={styles.status} role="status">
+                    {status}
+                </span>
+            </div>
+
+            {result && (
+                <dl className={styles.stats}>
+                    <Stat label={<M tex="U_\mathrm{lat}" />} value={signed(result.totals.latticeEnergy)} unit="kJ/mol" />
+                    <Stat label={<M tex="\Delta H_\mathrm{sub}" />} value={signed(result.totals.dHsub)} unit="kJ/mol" />
+                    <Stat
+                        label={<M tex="\Delta G_\mathrm{solv}" />}
+                        value={signed(result.totals.solvation)}
+                        unit="kJ/mol"
+                    />
+                    <Stat
+                        label={<M tex="\log S_0" />}
+                        value={signed(result.totals.logS, 2)}
+                    />
+                </dl>
+            )}
+
+            {log && (
+                <CollapsibleSection title="occ output">
+                    <pre className={styles.log}>{log}</pre>
+                </CollapsibleSection>
+            )}
+        </section>
+    );
+
     return (
         <main className={styles.page}>
             <header className={styles.header}>
-                <p className={styles.kicker}>Crystal Growth &amp; Design (forthcoming)</p>
-                <h1 className={styles.title}>Predicting molecular crystal growth</h1>
-                <p className={styles.subtitle}>
-                    Automated surface terminations, interchangeable interaction energy models and finite particles in
-                    the CrystalClear protocol
-                </p>
+                <p className={styles.kicker}>ChemRxiv preprint, 2026</p>
+                <h1 className={styles.title}>{TITLE}</h1>
+                <p className={styles.subtitle}>{SUBTITLE}</p>
                 <p className={styles.authors}>
                     {AUTHORS.map((a, i) => (
                         <React.Fragment key={a.name}>
@@ -177,155 +425,30 @@ export default function CrystalGrowthPaper() {
                     <Link className={styles.linkButton} to={PREPRINT_URL}>
                         Preprint
                     </Link>
-                    <Link className={styles.linkButton} to={PAPER_URL}>
-                        Paper
-                    </Link>
+                    <CiteButton />
+                    {PAPER_URL && (
+                        <Link className={styles.linkButton} to={PAPER_URL}>
+                            Paper
+                        </Link>
+                    )}
                     <Link className={styles.linkButton} to="https://getocc.xyz">
                         occ
                     </Link>
                 </div>
             </header>
 
-            <section className={styles.abstract}>
-                <h2 className={styles.abstractTitle}>Abstract</h2>
-                <p>
-                    The incorporation of crystal growth processes extends the utility of predictive techniques beyond
-                    simply crystal geometry and a thermodynamic ranking with the ultimate goal being actionable
-                    information to target specific crystallisation. Pairwise model interaction energies with implicit
-                    solvation have been previously demonstrated in the CrystalClear protocol to provide a computationally
-                    efficient route to incorporate such processes, though some limitations restricted its use.
-                    We present several advancements to overcome these limitations, incorporating a native
-                    implementation of the semi-empirical GFN2-xTB model with SMD solvation, and validating both GFN2-xTB
-                    and the CE-1p model against reference lattice energies and solubilities. Further, automated
-                    enumeration of symmetry-unique faces and construction of solvated surface energies as part of the
-                    same protocol facilitates direct prediction of solvent-dependent equilibrium crystal shapes while
-                    eliminating the tedium and errors frequently associated with manual construction of surface
-                    geometries required to evaluate surface free energies. To demonstrate the potential of these
-                    advancements we present two case studies, oxindole and ritonavir, evaluating the accuracy of the
-                    crystal growth protocol in reproducing experimental results for particle size effects, polymorph
-                    stability and more. All methods presented here are freely available and implemented in open source
-                    software, ensuring accessibility, extendability and transferability to the broader community.
-                </p>
-            </section>
+            <Abstract />
 
-            <section className={styles.runCard} aria-label="Calculation">
-                <p className={styles.runIntro}>
-                    The results below come from <code>occ cg</code> running in this tab (WebAssembly), with GFN2-xTB
-                    and SMD solvation. The pair energies are computed once per structure, so each extra solvent takes
-                    a second or so.
-                </p>
-                <div className={styles.runControls}>
-                    <label className={styles.field}>
-                        <span>Structure</span>
-                        <Select
-                            aria-label="Structure"
-                            value={structure.cif ? 'upload' : 'paracetamol'}
-                            onChange={(v) =>
-                                v === 'paracetamol' ? setStructure({ name: 'paracetamol', cif: null }) : fileInput.current?.click()
-                            }
-                            options={[
-                                { value: 'paracetamol', label: 'paracetamol, form I' },
-                                { value: 'upload', label: structure.cif ? `${structure.name}.cif` : 'your own CIF…' },
-                            ]}
-                            disabled={!!busy}
-                        />
-                        <input ref={fileInput} type="file" accept=".cif" hidden onChange={onFile} />
-                    </label>
-                    <div className={clsx(styles.field, styles.fieldWide)}>
-                        <SliderWithInput
-                            label={<>Faces down to d<sub>min</sub></>}
-                            value={dmin}
-                            onChange={setDmin}
-                            min={2}
-                            max={5}
-                            step={0.25}
-                            decimals={2}
-                            unit="Å"
-                            disabled={!!busy}
-                        />
-                    </div>
-                    <div className={styles.runButton}>
-                        {busy ? (
-                            <VizButton variant="secondary" block onClick={session.cancel}>
-                                Cancel
-                            </VizButton>
-                        ) : (
-                            <VizButton variant="primary" block onClick={() => session.runAll(solvents)}>
-                                Run {solvents.length > 1 ? `all ${solvents.length}` : ''}
-                            </VizButton>
-                        )}
-                    </div>
-                </div>
-
-                <div className={styles.field}>
-                    <span>Solvents</span>
-                    <div className={styles.chips}>
-                        {solvents.map((s) => {
-                            const pending = busy?.solvent === s;
-                            return (
-                                <span
-                                    key={s}
-                                    className={clsx(styles.chip, !results[s] && styles.chipEmpty, pending && styles.chipPending)}
-                                >
-                                    {solventLabel(s)}
-                                    <button
-                                        type="button"
-                                        className={styles.chipRemove}
-                                        aria-label={`Remove ${solventLabel(s)}`}
-                                        onClick={() => removeSolvent(s)}
-                                        disabled={solvents.length <= 1}
-                                    >
-                                        ×
-                                    </button>
-                                </span>
-                            );
-                        })}
-                        {addable.length > 0 && (
-                            <Select
-                                aria-label="Add a solvent"
-                                value={'' as string}
-                                onChange={(v) => v && addSolvent(v)}
-                                options={[
-                                    { value: '', label: 'add a solvent…' },
-                                    ...addable.map((s) => ({ value: s, label: solventLabel(s) })),
-                                ]}
-                            />
-                        )}
-                    </div>
-                </div>
-
-                <div className={styles.runMeta}>
-                    <code className={styles.command}>{command}</code>
-                    <span className={styles.status} role="status">
-                        {status}
-                    </span>
-                </div>
-
-                {result && (
-                    <dl className={styles.stats}>
-                        <Stat label={<M tex="U_\mathrm{lat}" />} value={signed(result.totals.latticeEnergy)} unit="kJ/mol" />
-                        <Stat label={<M tex="\Delta H_\mathrm{sub}" />} value={signed(result.totals.dHsub)} unit="kJ/mol" />
-                        <Stat
-                            label={<M tex="\Delta G_\mathrm{solv}" />}
-                            value={signed(result.totals.solvation)}
-                            unit="kJ/mol"
-                        />
-                        <Stat
-                            label={<M tex="\log S_0" />}
-                            value={signed(result.totals.logS, 2)}
-                        />
-                    </dl>
-                )}
-
-                {log && (
-                    <CollapsibleSection title="occ output">
-                        <pre className={styles.log}>{log}</pre>
-                    </CollapsibleSection>
-                )}
-            </section>
-
-            {result && current && (
-                <Results results={results} order={available} selected={current} onSelect={setSelected} />
+            {result && current ? (
+                <Results
+                    results={results}
+                    order={available}
+                    selected={current}
+                    onSelect={setSelected}
+                    runPanel={runPanel}
+                />
+            ) : (
+                runPanel
             )}
 
             <footer className={styles.footer}>
@@ -402,11 +525,14 @@ function Results({
     order,
     selected,
     onSelect,
+    runPanel,
 }: {
     results: Record<string, CGResult>;
     order: string[];
     selected: string;
     onSelect: (s: string) => void;
+    /** Shown between the shapes and the detail tabs. */
+    runPanel: React.ReactNode;
 }) {
     const wulff = useWulffSet(results);
     const extents = useMemo(() => sharedExtents(order.map((s) => results[s])), [results, order]);
@@ -416,8 +542,8 @@ function Results({
     if (!wulff || !wulff.solv[selected]) return null;
 
     return (
-        <section className={styles.results} aria-label="Results">
-            <div className={styles.hero}>
+        <>
+            <section className={clsx(styles.results, styles.hero)} aria-label="Predicted crystal shape">
                 <h2 className={styles.resultsTitle}>Predicted crystal shape</h2>
                 <p className={styles.resultsText}>
                     The equilibrium (Wulff) shape of {result.title} in vacuum and in solution, from the surface energy
@@ -425,24 +551,28 @@ function Results({
                 </p>
                 <SolventSwitcher order={order} selected={selected} onSelect={onSelect} />
                 <WulffShapes result={result} data={wulff} />
-            </div>
+            </section>
 
-            <div className={styles.tabBar}>
-                <SegmentedControl<Tab> aria-label="Detail" value={tab} onChange={setTab} options={tabs} />
-            </div>
+            {runPanel}
 
-            <div className={styles.tabPanel}>
-                <TabBody
-                    tab={tab}
-                    result={result}
-                    results={results}
-                    order={order}
-                    wulff={wulff}
-                    extents={extents}
-                    onSelect={onSelect}
-                />
-            </div>
-        </section>
+            <section className={styles.results} aria-label="Details">
+                <div className={styles.tabBar}>
+                    <SegmentedControl<Tab> aria-label="Detail" value={tab} onChange={setTab} options={tabs} />
+                </div>
+
+                <div className={styles.tabPanel}>
+                    <TabBody
+                        tab={tab}
+                        result={result}
+                        results={results}
+                        order={order}
+                        wulff={wulff}
+                        extents={extents}
+                        onSelect={onSelect}
+                    />
+                </div>
+            </section>
+        </>
     );
 }
 

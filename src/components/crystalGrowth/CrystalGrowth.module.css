@@ -59,6 +59,9 @@
 }
 
 .linkButton {
+  background: none;
+  font: inherit;
+  cursor: pointer;
   padding: 0.3rem 0.85rem;
   font-size: var(--viz-font-sm);
   color: var(--viz-text);
@@ -87,6 +90,20 @@
   margin: 0;
 }
 
+.abstractToggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--viz-accent);
+  cursor: pointer;
+}
+
+.abstractToggle:hover {
+  text-decoration: underline;
+}
+
 .runIntro {
   margin: 0;
   font-size: var(--viz-font-sm);
@@ -104,6 +121,26 @@
   border: 1px solid var(--viz-border);
   border-radius: var(--viz-radius-lg);
   box-shadow: var(--viz-shadow);
+}
+
+.runCardDragging {
+  position: relative;
+  border-color: var(--viz-accent);
+}
+
+.dropOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--viz-accent);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--viz-surface) 85%, transparent);
+  color: var(--viz-accent);
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .runControls {
@@ -293,6 +330,7 @@
 
 .hero {
   padding: 1.25rem 1.1rem 1rem;
+  margin-bottom: 1rem;
 }
 
 .resultsTitle {
@@ -342,6 +380,13 @@
 
 .topFace {
   margin-left: 0.85rem;
+}
+
+.linkToggle {
+  display: flex;
+  justify-content: center;
+  margin-top: 0.6rem;
+  font-size: var(--viz-font-sm);
 }
 
 .faceLegend {

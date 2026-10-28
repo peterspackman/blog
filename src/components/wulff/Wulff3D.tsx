@@ -2,7 +2,9 @@ import React, { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { WulffShape3D } from './geometry';
+import type { CameraLink } from './cameraLink';
 
 export interface Wulff3DProps {
     shape: WulffShape3D;
@@ -15,6 +17,8 @@ export interface Wulff3DProps {
     curvedFamilies?: number[];
     width: number;
     height: number;
+    /** Share the camera orientation with other views on the same link. */
+    link?: CameraLink;
 }
 
 function Polyhedron({ shape, colors, edgeColor, showEdges, curvedFamilies = [] }: Omit<Wulff3DProps, 'width' | 'height' | 'background'>) {
@@ -81,7 +85,46 @@ function Polyhedron({ shape, colors, edgeColor, showEdges, curvedFamilies = [] }
 }
 
 /** The 3D equilibrium shape, coloured by facet family. Renders on demand. */
-export default function Wulff3D({ width, height, background, ...rest }: Wulff3DProps) {
+function LinkedCamera({ link }: { link: CameraLink }) {
+    const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
+    const camera = useThree((s) => s.camera);
+    const invalidate = useThree((s) => s.invalidate);
+
+    useEffect(() => {
+        if (!controls) return;
+        const id = {};
+        const apply = (position: THREE.Vector3) => {
+            camera.position.copy(position);
+            controls.update();
+            invalidate();
+        };
+        // Joining a link snaps this view to one that is already on it.
+        const existing = link.views.values().next().value;
+        if (existing) apply(existing.camera.position);
+        link.views.set(id, { camera, apply });
+
+        const onStart = () => {
+            link.driver = id;
+        };
+        // Only the driving view broadcasts, so the update() calls on the others don't echo back.
+        const onChange = () => {
+            if (link.driver !== id) return;
+            link.views.forEach((view, other) => other !== id && view.apply(camera.position));
+        };
+        controls.addEventListener('start', onStart);
+        controls.addEventListener('change', onChange);
+        return () => {
+            controls.removeEventListener('start', onStart);
+            controls.removeEventListener('change', onChange);
+            link.views.delete(id);
+            if (link.driver === id) link.driver = null;
+        };
+    }, [controls, camera, invalidate, link]);
+
+    return null;
+}
+
+export default function Wulff3D({ width, height, background, link, ...rest }: Wulff3DProps) {
     return (
         <div style={{ width, height, borderRadius: 'var(--viz-radius)', overflow: 'hidden' }}>
             <Canvas
@@ -96,6 +139,7 @@ export default function Wulff3D({ width, height, background, ...rest }: Wulff3DP
                 <directionalLight position={[-5, -2, -3]} intensity={0.45} />
                 <Polyhedron {...rest} />
                 <OrbitControls makeDefault enablePan={false} minDistance={2.5} maxDistance={12} />
+                {link && <LinkedCamera link={link} />}
             </Canvas>
         </div>
     );

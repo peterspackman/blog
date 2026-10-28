@@ -61,7 +61,9 @@ export function useCGSession(opts: {
                 setResults(parsed);
                 setResultsKey(key({ name: set.name, cif: null }, set.dmin));
             })
-            .catch(() => undefined);
+            .catch((err) => {
+                if (alive) setError(`Could not load the precomputed results: ${(err as Error).message}`);
+            });
         return () => {
             alive = false;
             queue.current = [];

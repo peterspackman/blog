@@ -16,7 +16,7 @@ export default function CrystalGrowthPaperPage() {
     return (
         <Layout
             title="Predicting molecular crystal growth"
-            description="Interactive version of our Crystal Growth & Design paper: a full occ cg crystal growth calculation on paracetamol with GFN2-xTB, running in the browser"
+            description="Interactive companion to our crystal growth preprint: a full occ cg crystal growth calculation on paracetamol with GFN2-xTB, running in the browser"
         >
             <CrystalGrowthPaper />
         </Layout>

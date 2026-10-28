@@ -1,8 +1,10 @@
-import React, { lazy, Suspense, useMemo } from 'react';
+import React, { lazy, Suspense, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import type * as echarts from 'echarts';
 import { echartsAxis, echartsBase, echartsLegend, useContainerSize, useVizTheme, type VizTheme } from '../shared/viz';
 import { useEChart } from '../shared/viz/useEChart';
+import { ToggleSwitch } from '../shared/controls';
+import { createCameraLink } from '../wulff/cameraLink';
 import { wulff3D, type WulffShape3D } from '../wulff/geometry';
 import { bestCut, fitExcess, wulffPlanes, type CGFace, type CGResult } from './parse';
 import styles from './CrystalGrowth.module.css';
@@ -233,6 +235,9 @@ export function WulffShapes({ result, data }: { result: CGResult; data: WulffSet
     const narrow = size.width < 560;
     const w = narrow ? size.width : Math.floor((size.width - gap) / 2);
     const h = Math.max(260, Math.min(440, Math.round(w * 0.9)));
+    const [linked, setLinked] = useState(true);
+    // A fresh link each time it is switched on, so the views re-snap to each other.
+    const link = useMemo(() => (linked ? createCameraLink() : undefined), [linked]);
     const panels = [
         { key: 'vac', label: 'in vacuum', shape: data.vac },
         { key: 'solv', label: `in ${solventLabel(result.solvent)}`, shape: data.solv[result.solvent] },
@@ -253,10 +258,14 @@ export function WulffShapes({ result, data }: { result: CGResult; data: WulffSet
                                     edgeColor={theme.text}
                                     background={theme.surfaceSubtle}
                                     showEdges
+                                    link={link}
                                 />
                             </Suspense>
                         </figure>
                     ))}
+            </div>
+            <div className={styles.linkToggle}>
+                <ToggleSwitch label="Same orientation" checked={linked} onChange={setLinked} />
             </div>
             <ul className={styles.faceLegend}>
                 {data.shown.map((i) => (
