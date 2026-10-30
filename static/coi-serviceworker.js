@@ -1,4 +1,5 @@
 /*! coi-serviceworker v0.1.7 - Guido Zuidhof and contributors, licensed under MIT */
+// Modified: skips cross-origin requests and returns Response.error() when a fetch fails.
 let coepCredentialless = false;
 if (typeof window === 'undefined') {
     self.addEventListener("install", () => self.skipWaiting());
@@ -23,6 +24,12 @@ if (typeof window === 'undefined') {
 
     self.addEventListener("fetch", function (event) {
         const r = event.request;
+        // Only this origin's responses need the headers. Leaving cross-origin
+        // requests (analytics, fonts) to the browser means one an extension
+        // blocks fails on its own instead of throwing inside the worker.
+        if (new URL(r.url).origin !== self.location.origin) {
+            return;
+        }
         if (r.cache === "only-if-cached" && r.mode !== "same-origin") {
             return;
         }
@@ -54,7 +61,10 @@ if (typeof window === 'undefined') {
                         headers: newHeaders,
                     });
                 })
-                .catch((e) => console.error(e))
+                .catch((e) => {
+                    console.error(e);
+                    return Response.error();
+                })
         );
     });
 
