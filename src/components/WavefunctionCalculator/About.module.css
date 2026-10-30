@@ -1,0 +1,81 @@
+.dialog {
+    width: min(640px, calc(100vw - 2rem));
+    max-height: calc(100vh - 4rem);
+    padding: 0;
+    border: 1px solid var(--viz-border);
+    border-radius: 10px;
+    background: var(--viz-surface);
+    color: var(--viz-text);
+    box-shadow: var(--viz-shadow);
+}
+
+.dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+}
+
+.body {
+    padding: 1rem 1.25rem 1.25rem;
+    font-size: 0.92rem;
+    line-height: 1.55;
+}
+
+.body p {
+    margin: 0 0 0.75rem;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.body h3 {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.95rem;
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.25rem 1rem;
+    margin: 0.5rem 0 0;
+    padding: 0.6rem 0.75rem;
+    border-radius: 8px;
+    background: var(--viz-surface-subtle);
+    font-size: 0.85rem;
+}
+
+.facts dt {
+    color: var(--viz-muted);
+}
+
+.facts dd {
+    margin: 0;
+}
+
+.citation {
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.credit {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: var(--viz-muted);
+}
+
+.linkButton {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--viz-accent);
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+}

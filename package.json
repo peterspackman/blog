@@ -6,7 +6,7 @@
     "docusaurus": "docusaurus",
     "prebuild": "npm run copy-wasm",
     "prestart": "npm run copy-wasm",
-    "copy-wasm": "mkdir -p static/wasm && cp node_modules/@peterspackman/occjs/dist/occ.js node_modules/@peterspackman/occjs/dist/occ.wasm node_modules/@peterspackman/occjs/dist/occ.data static/wasm/",
+    "copy-wasm": "mkdir -p static/wasm && cp node_modules/@peterspackman/occjs/dist/occ.js node_modules/@peterspackman/occjs/dist/occ.wasm node_modules/@peterspackman/occjs/dist/occ.data static/wasm/ && cp node_modules/@peterspackman/ce-calc/assets/occ-cli-worker.js static/wasm/",
     "start": "docusaurus start",
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
@@ -25,8 +25,11 @@
     "@fontsource-variable/source-code-pro": "^5.3.0",
     "@fontsource-variable/source-sans-3": "^5.3.0",
     "@mdx-js/react": "^3.0.0",
+    "@peterspackman/ce-calc": "^26.10.1",
+    "@peterspackman/ce-chem": "^26.10.1",
+    "@peterspackman/ce-viewer": "^26.10.1",
     "@peterspackman/lmpjs": "^0.2.0",
-    "@peterspackman/occjs": "^0.9.4",
+    "@peterspackman/occjs": "^0.9.6",
     "@peterspackman/selfies": "^0.3.0",
     "@rdkit/rdkit": "^2025.3.4-1.0.0",
     "@react-three/drei": "^10.0.3",
@@ -42,13 +45,13 @@
     "react-dom": "^19.0.0",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0",
-    "three": "^0.174.0"
+    "three": "^0.183.0"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.8.1",
     "@docusaurus/tsconfig": "3.8.1",
     "@docusaurus/types": "3.8.1",
-    "@types/three": "^0.173.0",
+    "@types/three": "^0.183.0",
     "string-replace-loader": "^3.2.0",
     "typescript": "~5.6.2",
     "vitest": "^4.0.14"

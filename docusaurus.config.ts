@@ -11,6 +11,23 @@ const occVersion: string = JSON.parse(
   readFileSync(path.join(__dirname, 'node_modules/@peterspackman/occjs/package.json'), 'utf8'),
 ).version;
 
+// Docusaurus's ChunkAssetPlugin adds `__webpack_require__.gca = ...` to every
+// chunk with a runtime, without declaring that it needs `__webpack_require__`,
+// `.p` and `.u`. A fully concatenated worker bundle (ce-calc's task worker)
+// then defines none of them and throws on load in production builds.
+const workerRuntimeFix = {
+  apply(compiler: import('webpack').Compiler) {
+    const { RuntimeGlobals } = compiler.webpack;
+    compiler.hooks.thisCompilation.tap('WorkerRuntimeFix', (compilation) => {
+      compilation.hooks.additionalTreeRuntimeRequirements.tap('WorkerRuntimeFix', (_chunk, set) => {
+        set.add(RuntimeGlobals.require);
+        set.add(RuntimeGlobals.publicPath);
+        set.add(RuntimeGlobals.getChunkScriptFilename);
+      });
+    });
+  },
+};
+
 const config: Config = {
   title: 'Peter R. Spackman',
   tagline: 'computational chemist & software enthusiast',
@@ -67,6 +84,7 @@ const config: Config = {
         name: 'occjs-webpack-plugin',
         configureWebpack(config, isServer, utils) {
           return {
+            plugins: isServer ? [] : [workerRuntimeFix],
             devServer: {
               headers: {
                 'Cross-Origin-Embedder-Policy': 'require-corp',

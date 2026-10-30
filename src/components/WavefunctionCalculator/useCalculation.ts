@@ -1,262 +1,118 @@
-/**
- * Custom hook encapsulating all calculation state and orchestration.
- * Owns: worker lifecycle, results, logs, errors, cube cache, trajectories.
- */
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { orbitalTablesFromOwf } from '@peterspackman/ce-chem/compute';
+import type { OrbitalTables, VibMode } from '@peterspackman/ce-chem/compute';
+import type { StructureData } from '@peterspackman/ce-chem/data';
+import type { TaskProgress } from '@peterspackman/ce-chem/tasks.js';
+import type { WavefunctionResult } from '@peterspackman/ce-calc/occ';
+import type { OccOptimizeResult, OptimizationTrace } from '@peterspackman/ce-calc/occ/optimize.js';
+import { xtbCharges } from './charges';
+import type { Molecule } from './molecule';
+import { loadCe, runTask, TaskCancelledError } from './runtime';
+import { effectiveBasis, type CalculationSettings } from './settings';
 
-import { useState, useRef, useCallback } from 'react';
-import { parseCalculationResults } from './resultParser';
-import {
-    runSCFWorker, runCubeWorker,
-    buildSCFCommandPreview, buildCubeCommandPreview,
-} from './workerClient';
-import { NormalModeTrajectory } from './NormalModeTrajectory';
-import type {
-    CalculationResult,
-    SCFSettings,
-    CubeGeometrySettings,
-    GridInfo,
-    LogEntry,
-} from './types';
+export interface CalculationResult {
+    /** Distinguishes runs, so caches keyed on it never mix results. */
+    id: number;
+    settings: CalculationSettings;
+    /** The geometry the wavefunction belongs to: optimised if optimisation ran. */
+    structure: StructureData;
+    wavefunction: WavefunctionResult;
+    orbitals: OrbitalTables;
+    optimization?: OptimizationTrace;
+    /** Present whenever frequencies were asked for; `vibrations` only when occ also wrote the modes. */
+    frequenciesCm?: number[];
+    vibrations?: VibMode[];
+    /** GFN2-xTB charges stored in the wavefunction file, for xTB runs. */
+    xtbCharges?: number[];
+    elapsedMs: number;
+}
 
+export type CalculationPhase = 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
+
+export interface CalculationState {
+    phase: CalculationPhase;
+    /** occ's output so far; kept after the run for the log tab. */
+    log: string;
+    progress: TaskProgress | null;
+    result: CalculationResult | null;
+    error: string | null;
+}
+
+const IDLE: CalculationState = { phase: 'idle', log: '', progress: null, result: null, error: null };
+
+let nextRunId = 1;
+
+/** Runs one calculation at a time; starting another cancels the first. */
 export function useCalculation() {
-    // ── State ──────────────────────────────────────────────────────────────
-    const [isCalculating, setIsCalculating] = useState(false);
-    const [isCubeComputing, setIsCubeComputing] = useState(false);
-    const [results, setResults] = useState<CalculationResult | null>(null);
-    const [logs, setLogs] = useState<LogEntry[]>([]);
-    const [error, setError] = useState('');
-    const [cubeResults, setCubeResults] = useState<Map<string, string>>(new Map());
-    const [cubeGridInfo, setCubeGridInfo] = useState<GridInfo | null>(null);
-    const [wavefunctionData, setWavefunctionData] = useState<Uint8Array | null>(null);
-    const [precomputedTrajectories, setPrecomputedTrajectories] = useState<Map<number, string>>(new Map());
+    const [state, setState] = useState<CalculationState>(IDLE);
+    const abortRef = useRef<AbortController | null>(null);
 
-    const workerHandleRef = useRef<{ terminate: () => void } | null>(null);
+    useEffect(() => () => abortRef.current?.abort(), []);
 
-    // ── Logging ────────────────────────────────────────────────────────────
-    const addLog = useCallback((message: string, level: string) => {
-        setLogs(prev => [...prev, { message, level, timestamp: new Date() }]);
+    const run = useCallback(async (molecule: Molecule, settings: CalculationSettings) => {
+        abortRef.current?.abort();
+        const abort = new AbortController();
+        abortRef.current = abort;
+        setState({ ...IDLE, phase: 'running' });
+
+        const started = performance.now();
+        const params = {
+            atoms: molecule.data.atoms,
+            method: settings.method,
+            basis: effectiveBasis(settings.method, settings.basis),
+            charge: settings.charge,
+            multiplicity: settings.multiplicity,
+            unrestricted: settings.unrestricted || settings.multiplicity > 1,
+            scfMaxIter: settings.maxScfIterations,
+        };
+        const onUpdate = (s: { log?: string; progress: TaskProgress }) => {
+            if (abort.signal.aborted) return;
+            setState((prev) => ({ ...prev, log: s.log ?? prev.log, progress: s.progress }));
+        };
+
+        try {
+            const { occ } = await loadCe();
+            const wantsDriver = settings.optimize || settings.frequencies;
+            const result: OccOptimizeResult | WavefunctionResult = wantsDriver
+                ? await runTask(
+                      occ.occOptimizeComputation.request({
+                          ...params,
+                          optimize: settings.optimize ? { maxIterations: settings.maxOptSteps } : undefined,
+                          frequencies: settings.frequencies,
+                      }),
+                      { onUpdate, signal: abort.signal },
+                  )
+                : await runTask(occ.occWavefunctionComputation.request(params), { onUpdate, signal: abort.signal });
+
+            // A plain SCF result has none of the optimisation fields.
+            const driven = result as WavefunctionResult & Partial<Pick<OccOptimizeResult, 'atoms' | 'optimization' | 'vibrations' | 'frequenciesCm'>>;
+            const finalAtoms = driven.atoms ?? molecule.data.atoms;
+            const owf: unknown = JSON.parse(new TextDecoder().decode(result.owfJson));
+            const calc: CalculationResult = {
+                id: nextRunId++,
+                settings,
+                structure: { ...molecule.data, atoms: finalAtoms.map((a) => ({ ...a, position: { ...a.position } })) },
+                wavefunction: result,
+                orbitals: orbitalTablesFromOwf(owf),
+                xtbCharges: xtbCharges(owf),
+                optimization: driven.optimization,
+                frequenciesCm: driven.frequenciesCm,
+                vibrations: driven.vibrations,
+                elapsedMs: performance.now() - started,
+            };
+            if (!abort.signal.aborted) setState((prev) => ({ ...prev, phase: 'done', progress: null, result: calc }));
+        } catch (error) {
+            if (abortRef.current !== abort) return;
+            if (error instanceof TaskCancelledError) {
+                setState((prev) => ({ ...prev, phase: 'cancelled', progress: null }));
+            } else {
+                const message = error instanceof Error ? error.message : String(error);
+                setState((prev) => ({ ...prev, phase: 'failed', progress: null, error: message }));
+            }
+        }
     }, []);
 
-    const clearLogs = useCallback(() => setLogs([]), []);
+    const cancel = useCallback(() => abortRef.current?.abort(), []);
 
-    // ── SCF Calculation ────────────────────────────────────────────────────
-    const runCalculation = useCallback((xyzData: string, settings: SCFSettings) => {
-        setResults(null);
-        setLogs([]);
-        setError('');
-        setIsCalculating(true);
-        setPrecomputedTrajectories(new Map());
-
-        addLog('Starting calculation via CLI...', 'info');
-        addLog(`Running: ${buildSCFCommandPreview(settings)}`, 'info');
-
-        if (settings.optimize) addLog('Optimization enabled (max 50 steps)', 'info');
-        if (settings.computeFrequencies && settings.optimize) addLog('Frequency calculation enabled', 'info');
-
-        const handle = runSCFWorker(
-            { xyzData, settings },
-            {
-                onOutput: (text) => addLog(text, 'info'),
-                onError: (text) => addLog(text, 'error'),
-                onReady: () => addLog('CLI worker ready, executing command...', 'info'),
-            },
-            (response) => {
-                if (response.code !== 0) {
-                    setError(`Calculation failed with exit code ${response.code}`);
-                    setIsCalculating(false);
-                    workerHandleRef.current = null;
-                    return;
-                }
-
-                addLog('Calculation completed, parsing results...', 'info');
-
-                try {
-                    const { result, owfData, logs: parseLogs } = parseCalculationResults(
-                        response.files, response.stdout,
-                    );
-
-                    for (const pl of parseLogs) addLog(pl.message, pl.level);
-
-                    if (owfData) setWavefunctionData(owfData);
-
-                    setResults(result);
-                    addLog(`Energy: ${result.energy.toFixed(8)} Ha (${result.energyInEV.toFixed(4)} eV)`, 'info');
-                    addLog('Calculation completed successfully!', 'info');
-
-                    // Pre-compute normal mode trajectories
-                    if (result.frequencies?.normalModes && result.optimization?.finalXYZ) {
-                        precomputeTrajectories(result);
-                    }
-                } catch (err: any) {
-                    setError(`Failed to parse results: ${err.message}`);
-                    addLog(`Error: ${err.message}`, 'error');
-                }
-
-                setIsCalculating(false);
-                workerHandleRef.current = null;
-            },
-        );
-
-        workerHandleRef.current = handle;
-    }, [addLog]);
-
-    // ── Cancel ─────────────────────────────────────────────────────────────
-    const cancelCalculation = useCallback(() => {
-        if (workerHandleRef.current) {
-            workerHandleRef.current.terminate();
-            workerHandleRef.current = null;
-            addLog('Calculation cancelled by user', 'warn');
-            setIsCalculating(false);
-            setIsCubeComputing(false);
-        }
-    }, [addLog]);
-
-    // ── Clear results ──────────────────────────────────────────────────────
-    const clearResults = useCallback(() => {
-        setResults(null);
-        setCubeResults(new Map());
-        setCubeGridInfo(null);
-        setPrecomputedTrajectories(new Map());
-    }, []);
-
-    // ── Cube computation ───────────────────────────────────────────────────
-    const requestCubeComputation = useCallback((
-        cubeType: string,
-        cubeSettings: CubeGeometrySettings,
-        orbitalIndex?: number,
-        gridStepsOverride?: number,
-        spin?: 'alpha' | 'beta',
-    ) => {
-        if (!wavefunctionData) {
-            setError('No wavefunction data available for cube computation.');
-            return;
-        }
-
-        // Map cubeType to property/orbital
-        let property = 'density';
-        let orbital: string | null = null;
-        const spinChannel = spin || null;
-
-        if (cubeType === 'molecular_orbital' && orbitalIndex !== undefined) {
-            property = 'density';
-            orbital = (orbitalIndex + 1).toString(); // CLI uses 1-based
-        } else if (cubeType === 'electron_density') {
-            property = 'density';
-        } else if (cubeType === 'electric_potential') {
-            property = 'esp';
-        }
-
-        const gridSteps = gridStepsOverride || cubeSettings.gridSteps;
-
-        addLog(`Requesting ${cubeType} cube via CLI...`, 'info');
-        addLog(`Running: ${buildCubeCommandPreview(property, orbital, spinChannel, cubeSettings, gridSteps)}`, 'info');
-
-        setIsCubeComputing(true);
-
-        const handle = runCubeWorker(
-            {
-                owfData: wavefunctionData,
-                property,
-                orbital,
-                spin: spinChannel,
-                cubeSettings,
-                gridStepsOverride,
-            },
-            {
-                onOutput: (text) => addLog(text, 'info'),
-                onError: (text) => addLog(text, 'error'),
-            },
-            (response) => {
-                setIsCubeComputing(false);
-
-                if (response.code !== 0 || !response.cubeData) {
-                    setError(`Cube generation failed with exit code ${response.code}`);
-                    addLog('Cube generation failed', 'error');
-                    workerHandleRef.current = null;
-                    return;
-                }
-
-                // Build cache key
-                let key: string;
-                if (orbitalIndex !== undefined) {
-                    key = spin
-                        ? `molecular_orbital_${orbitalIndex}_${spin}_${gridSteps}`
-                        : `molecular_orbital_${orbitalIndex}_${gridSteps}`;
-                } else {
-                    key = cubeType;
-                }
-
-                setCubeResults(prev => new Map(prev.set(key, response.cubeData!)));
-
-                if (response.gridInfo) {
-                    setCubeGridInfo(response.gridInfo as GridInfo);
-                    addLog(`Grid info: ${response.gridInfo.nx}x${response.gridInfo.ny}x${response.gridInfo.nz} points`, 'info');
-                }
-
-                const spinLabel = spin ? ` (${spin})` : '';
-                addLog(`Cube completed: ${property}${orbital ? ` (orbital ${orbital}${spinLabel})` : ''}`, 'info');
-                workerHandleRef.current = null;
-            },
-        );
-
-        workerHandleRef.current = handle;
-    }, [wavefunctionData, addLog]);
-
-    // ── Normal mode trajectories ───────────────────────────────────────────
-    const precomputeTrajectories = useCallback((calcResults: CalculationResult) => {
-        if (!calcResults.frequencies?.normalModes || !calcResults.optimization?.finalXYZ) return;
-
-        const finalXYZ = calcResults.optimization.finalXYZ;
-        const modes = calcResults.frequencies.normalModes;
-        const frequencies = calcResults.frequencies.frequencies;
-        const newTrajectories = new Map<number, string>();
-
-        const trajectories = NormalModeTrajectory.precomputeAllTrajectories(
-            finalXYZ, frequencies, modes,
-        );
-        for (const [k, v] of trajectories) {
-            newTrajectories.set(k, v);
-        }
-
-        if (newTrajectories.size > 0) {
-            setPrecomputedTrajectories(newTrajectories);
-            addLog(`Pre-computed ${newTrajectories.size} normal mode trajectories`, 'info');
-        }
-    }, [addLog]);
-
-    // ── Restore a saved session ───────────────────────────────────────────
-    const restoreSession = useCallback((savedResults: CalculationResult, savedWfnData?: Uint8Array) => {
-        setResults(savedResults);
-        if (savedWfnData) {
-            setWavefunctionData(savedWfnData);
-        }
-        if (savedResults.frequencies?.normalModes && savedResults.optimization?.finalXYZ) {
-            precomputeTrajectories(savedResults);
-        }
-        addLog('Restored previous session from local storage', 'info');
-    }, [addLog, precomputeTrajectories]);
-
-    return {
-        // State
-        isCalculating,
-        isCubeComputing,
-        isWorking: isCalculating || isCubeComputing,
-        results,
-        logs,
-        error,
-        setError,
-        cubeResults,
-        cubeGridInfo,
-        wavefunctionData,
-        precomputedTrajectories,
-
-        // Actions
-        runCalculation,
-        cancelCalculation,
-        clearResults,
-        restoreSession,
-        requestCubeComputation,
-        addLog,
-        clearLogs,
-    };
+    return { ...state, run, cancel };
 }
