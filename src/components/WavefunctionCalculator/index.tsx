@@ -154,8 +154,9 @@ export default function WavefunctionCalculator({ occVersion }: { occVersion?: st
     ];
     const outputTabs: TabOption<OutputTab>[] = [
         { value: 'summary', label: 'Results', disabled: !result },
-        { value: 'convergence', label: 'Convergence', disabled: !calculation.log },
-        { value: 'log', label: 'Log', disabled: !calculation.log },
+        // Enabled while running, so the tabs don't blink off before occ's first output.
+        { value: 'convergence', label: 'Convergence', disabled: !calculation.log && !running },
+        { value: 'log', label: 'Log', disabled: !calculation.log && !running },
     ];
     const shownInspectorTab = activeTab(inspectorTab, inspectorTabs);
     const shownOutputTab = activeTab(outputTab, outputTabs);

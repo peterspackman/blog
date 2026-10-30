@@ -56,7 +56,10 @@ function optOption(theme: ReturnType<typeof useVizTheme>, trace: OptimizationTra
 
 export function ConvergencePanel({ scf, optimization }: ConvergencePanelProps) {
     const theme = useVizTheme();
-    const scfChart = useMemo(() => (scf.length > 1 ? scfOption(theme, scf) : null), [theme, scf]);
+    // Draw from the first iteration: the convergence measure has a point there,
+    // and hiding the chart until a second one flashes it at every new SCF of
+    // an optimisation or frequency run.
+    const scfChart = useMemo(() => (scf.length > 0 ? scfOption(theme, scf) : null), [theme, scf]);
     const optChart = useMemo(() => (optimization && optimization.frames.length > 1 ? optOption(theme, optimization) : null), [theme, optimization]);
     const [scfRef] = useEChart(scfChart);
     const [optRef] = useEChart(optChart);
