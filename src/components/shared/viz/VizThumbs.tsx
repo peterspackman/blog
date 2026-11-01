@@ -260,6 +260,80 @@ function Gcmc() {
     );
 }
 
+// Equatorial ⇌ axial methylcyclohexane as perspective chairs: the page's GFN2
+// chairs projected from 15° above the ring's mean plane, [x, y, depth] per
+// carbon (px, px, Å towards the viewer). Bonds taper with depth, as chairs are
+// drawn with a heavy near edge. Atom 0 is the methyl carbon, 1–6 the ring.
+type Pt3 = [number, number, number];
+const CHAIRS: Record<'eq' | 'ax', Pt3[]> = {
+    eq: [[-58.1, -4.7, 0.07], [-29.2, 4.7, -0.06], [-14.4, -11.1, -1.15], [14.5, -1.8, -1.27], [29.1, -4.6, 0.06], [14.5, 11.2, 1.15], [-14.4, 1.8, 1.27]],
+    ax: [[-35.2, -33.2, 0.45], [-29.6, -4.2, 0.06], [-14.4, -2.1, -1.27], [14.7, -11.2, -1.15], [29.0, 4.8, -0.06], [14.7, 1.8, 1.27], [-14.4, 10.9, 1.15]],
+};
+const CHAIR_BONDS = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 1]];
+
+function Chair({ atoms, cx, cy }: { atoms: Pt3[]; cx: number; cy: number }) {
+    const at = (i: number): Pt3 => [cx + atoms[i][0], cy + atoms[i][1], atoms[i][2]];
+    const width = (z: number) => Math.min(4.2, Math.max(0.8, 2.3 + 0.9 * z));
+    const wedges = CHAIR_BONDS.map(([i, j]) => {
+        const a = at(i), b = at(j);
+        const wa = width(a[2]) / 2, wb = width(b[2]) / 2;
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const nx = -(b[1] - a[1]) / len, ny = (b[0] - a[0]) / len;
+        const d = path([
+            [a[0] + nx * wa, a[1] + ny * wa],
+            [b[0] + nx * wb, b[1] + ny * wb],
+            [b[0] - nx * wb, b[1] - ny * wb],
+            [a[0] - nx * wa, a[1] - ny * wa],
+        ], true);
+        const cls = i === 0 ? styles.wedgeAccent : styles.wedge;
+        return { d, z: (a[2] + b[2]) / 2, cls, key: `${i}-${j}` };
+    });
+    wedges.sort((p, q) => p.z - q.z);
+    // Round joints at the ring carbons, sized to the bonds meeting there.
+    const joints = [1, 2, 3, 4, 5, 6].map((i) => {
+        const [x, y, z] = at(i);
+        return <circle key={i} cx={x} cy={y} r={width(z) / 2} className={styles.wedge} />;
+    });
+    return (
+        <>
+            {wedges.map((w) => (
+                <path key={w.key} d={w.d} className={w.cls} />
+            ))}
+            {joints}
+        </>
+    );
+}
+
+function ChairFlip() {
+    const x0 = 108, x1 = 132, y = 60;
+    return (
+        <Svg label="Methylcyclohexane: the chair with the methyl equatorial in equilibrium with the axial chair">
+            <Chair atoms={CHAIRS.eq} cx={66} cy={62} />
+            <Chair atoms={CHAIRS.ax} cx={190} cy={72} />
+            <path d={`M${x0} ${y - 3}H${x1}l-6 -5`} className={styles.line} />
+            <path d={`M${x1} ${y + 3}H${x0}l6 5`} className={styles.line} />
+        </Svg>
+    );
+}
+
+// Two routes over different barriers to products at nearly the same depth.
+function Markovnikov() {
+    const curve = (barrier: number, product: number) =>
+        range(81).map((i): Pt => {
+            const t = i / 80;
+            const bump = barrier * Math.exp(-((t - 0.45) ** 2) / 0.012);
+            const drop = product / (1 + Math.exp(-(t - 0.55) / 0.04));
+            return [24 + t * 192, 52 - bump - drop];
+        });
+    return (
+        <Svg label="Energy profiles for the two ways HBr can add to propene, one barrier lower than the other">
+            <line x1={24} x2={216} y1={52} y2={52} className={styles.faint} />
+            <path d={path(curve(40, -52))} className={styles.traceB} />
+            <path d={path(curve(24, -56))} className={styles.trace} />
+        </Svg>
+    );
+}
+
 export const VIZ_THUMBS: Record<string, React.FC> = {
     '/qm1d': Qm1d,
     '/qm2d': Qm2d,
@@ -272,4 +346,6 @@ export const VIZ_THUMBS: Record<string, React.FC> = {
     '/fourier': Fourier,
     '/md': Md,
     '/gcmc': Gcmc,
+    '/visualisations/chair-flip': ChairFlip,
+    '/visualisations/markovnikov': Markovnikov,
 };

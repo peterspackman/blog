@@ -125,6 +125,15 @@
   dominant-baseline: central;
 }
 
+/* Perspective chairs: bonds as filled wedges, thicker towards the viewer. */
+.wedge {
+  fill: var(--viz-text);
+}
+
+.wedgeAccent {
+  fill: var(--viz-series-2);
+}
+
 /* Motion */
 .slosh {
   animation: fade 2s ease-in-out infinite alternate;

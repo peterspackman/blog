@@ -1,0 +1,147 @@
+.viewport {
+  position: relative;
+  width: 100%;
+  height: min(560px, 62vh);
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--viz-canvas);
+}
+
+/* ViewerStage sizes itself from this element and observes it. */
+.canvasHost {
+  position: absolute;
+  inset: 0;
+}
+
+.message {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--viz-muted);
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.profile {
+  width: 100%;
+  height: 230px;
+}
+
+/* PathStage: viewers over the profile, or the viewers filling the screen
+   with the profile floating over their foot. */
+.stage {
+  border-top: 1px solid var(--viz-border);
+}
+
+.stageViewers {
+  position: relative;
+}
+
+.stageDock > * {
+  border-top: 1px solid var(--viz-border);
+}
+
+.stageCaption {
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.expand {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--viz-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--viz-surface) 85%, transparent);
+  color: var(--viz-muted);
+  cursor: pointer;
+}
+
+.expand:hover {
+  color: var(--viz-text);
+}
+
+.expand:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 1px;
+}
+
+.expand svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.full {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  border: 0;
+  background: var(--viz-canvas);
+}
+
+/* The viewers end where the dock begins, so it never covers a structure. */
+.full .stageViewers {
+  position: absolute;
+  inset: 0 0 calc(var(--stage-dock, 0px) + 1rem);
+}
+
+.stageBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+}
+
+.stageButtons {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.stageBar .stageCaption {
+  flex: 1 1 16rem;
+}
+
+/* Exit at the far end whether or not there is a caption. */
+.stageBar > :last-child {
+  margin-left: auto;
+}
+
+
+.full .stageDock {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 2;
+  width: min(60rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  border: 1px solid var(--viz-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--viz-surface) 82%, transparent);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+
+.full .stageDock > :first-child {
+  border-top: 0;
+}
+
+.full .profile {
+  height: 190px;
+}
+
+/* A viewport filling the screen above the dock. */
+.fullViewport {
+  height: calc(100dvh - var(--stage-dock, 0px) - 1rem);
+  min-height: 0;
+}

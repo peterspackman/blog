@@ -2,9 +2,9 @@ import React from 'react';
 import { CardIndex, type IndexCard } from '@site/src/components/shared/viz/CardIndex';
 import { VIZ_THUMBS } from '@site/src/components/shared/viz/VizThumbs';
 
-type Category = 'Quantum' | 'Crystallography' | 'Simulation';
+type Category = 'Quantum' | 'Chemistry' | 'Crystallography' | 'Simulation';
 
-const CATEGORY_ORDER: Category[] = ['Quantum', 'Crystallography', 'Simulation'];
+const CATEGORY_ORDER: Category[] = ['Quantum', 'Chemistry', 'Crystallography', 'Simulation'];
 
 const VISUALISATIONS: (IndexCard & { tag: Category })[] = [
   {
@@ -37,6 +37,18 @@ const VISUALISATIONS: (IndexCard & { tag: Category })[] = [
     href: '/bandstructure',
     tag: 'Quantum',
     description: 'Hückel chains and rings: discrete MO levels merging into a band, with filling, doping and Peierls gaps.',
+  },
+  {
+    title: 'Cyclohexane ring flip',
+    href: '/visualisations/chair-flip',
+    tag: 'Chemistry',
+    description: 'Methylcyclohexane from equatorial to axial chair along a GFN2-xTB path, through half-chairs, twist-boats and a boat.',
+  },
+  {
+    title: "Markovnikov's rule",
+    href: '/visualisations/markovnikov',
+    tag: 'Chemistry',
+    description: 'HBr adding to propene both ways, side by side: where the positive charge goes and why one barrier is lower.',
   },
   {
     title: "Bragg's law",

@@ -1,0 +1,89 @@
+.viewerSection {
+  position: relative;
+  padding: 0;
+}
+
+.caption {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  max-width: min(32rem, calc(100% - 1.5rem));
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--viz-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--viz-surface) 88%, transparent);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+/* Full screen: out of the profile's way. */
+.captionTop {
+  top: 0.75rem;
+  bottom: auto;
+}
+
+.captionTitle {
+  display: block;
+  font-weight: 600;
+}
+
+.captionDetail {
+  margin-left: 0.5rem;
+  color: var(--viz-muted);
+  font-weight: 400;
+}
+
+.pointList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pointButton {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--viz-text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pointButton:hover {
+  background: var(--viz-surface-subtle);
+}
+
+.pointButton:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 1px;
+}
+
+.pointButton[aria-current] {
+  background: var(--viz-accent-soft);
+  border-color: var(--ifm-color-primary);
+}
+
+.pointName {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.tsMark {
+  color: var(--viz-muted);
+  width: 0.6rem;
+}
+
+.pointEnergy {
+  color: var(--viz-muted);
+  font-variant-numeric: tabular-nums;
+}

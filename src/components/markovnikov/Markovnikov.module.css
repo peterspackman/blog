@@ -1,0 +1,86 @@
+.routeSection {
+  padding: 0;
+}
+
+.routeSection > :first-child {
+  padding: 0.6rem 0.75rem 0;
+}
+
+.noteTitle {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.stopList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.stopButton {
+  display: flex;
+  width: 100%;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--viz-text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stopButton:hover {
+  background: var(--viz-surface-subtle);
+}
+
+.stopButton:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 1px;
+}
+
+.stopButton[aria-current] {
+  background: var(--viz-accent-soft);
+  border-color: var(--ifm-color-primary);
+}
+
+.tsMark {
+  color: var(--viz-muted);
+  width: 0.6rem;
+}
+
+.routeName {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch {
+  width: 22px;
+  height: 10px;
+  flex: none;
+}
+
+.readout {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  align-items: center;
+}
+
+
+/* Full screen: each viewer under its header, side by side or stacked. */
+.fullViewport {
+  height: calc(100dvh - var(--stage-dock, 0px) - 1rem - 2.6rem);
+  min-height: 0;
+}
+
+@container (max-width: 40rem) {
+  .fullViewport {
+    height: calc((100dvh - var(--stage-dock, 0px) - 1rem) / 2 - 2.6rem);
+  }
+}
